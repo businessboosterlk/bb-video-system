@@ -262,6 +262,32 @@ a:hover{text-decoration:underline}
 .detail-meta-item{background:var(--surface-2);padding:11px 13px;border-radius:9px;border:1px solid var(--border)}
 .timestamp-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3);font-weight:500;letter-spacing:0.02em}
 .timestamp-tag::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--text-3)}
+.daily-pillars-panel{background:linear-gradient(135deg,var(--accent-soft) 0%,rgba(168,85,247,0.02) 100%);border:1px solid var(--accent);border-radius:14px;padding:18px 22px;margin-bottom:22px}
+.daily-pillars-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.daily-pillars-title{font-size:13px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:0.12em}
+.daily-pillars-progress{font-size:11px;color:var(--text-2);font-weight:600}
+.daily-pillars-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.daily-pillar-item{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--surface);border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;user-select:none}
+.daily-pillar-item:hover{border-color:var(--accent);transform:translateY(-1px)}
+.daily-pillar-item.done{background:var(--green-soft);border-color:var(--green)}
+.daily-pillar-item.done .daily-pillar-label{text-decoration:line-through;color:var(--text-3)}
+.daily-pillar-check{width:18px;height:18px;border:2px solid var(--text-3);border-radius:5px;flex-shrink:0;display:grid;place-items:center;transition:all 0.15s;background:var(--surface)}
+.daily-pillar-item.done .daily-pillar-check{background:var(--green);border-color:var(--green)}
+.daily-pillar-item.done .daily-pillar-check::after{content:"✓";color:white;font-weight:800;font-size:12px;line-height:1}
+.daily-pillar-label{font-size:12.5px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.04em}
+.videos-progress{display:inline-flex;align-items:center;gap:8px;font-weight:700}
+.videos-progress-bar{display:inline-block;width:60px;height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden;vertical-align:middle}
+.videos-progress-fill{display:block;height:100%;background:linear-gradient(90deg,var(--accent) 0%,var(--accent-2) 100%);border-radius:3px}
+.videos-progress.complete .videos-progress-fill{background:linear-gradient(90deg,var(--green) 0%,#16a34a 100%)}
+.videos-progress.over .videos-progress-fill{background:linear-gradient(90deg,var(--amber) 0%,#d97706 100%)}
+.time-breakdown{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
+.time-breakdown-item{background:var(--surface-2);padding:10px 12px;border-radius:8px;border-left:3px solid var(--text-3)}
+.time-breakdown-item.editing{border-left-color:var(--amber)}
+.time-breakdown-item.changes{border-left-color:var(--red)}
+.time-breakdown-item.total{border-left-color:var(--accent)}
+.time-breakdown-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px}
+.time-breakdown-value{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.chat-source-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-left:8px;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:4px}
@@ -317,7 +343,7 @@ a:hover{text-decoration:underline}
 </div>
 <div id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
-<div class="version-marker">v10</div>
+<div class="version-marker">v11</div>
 <script>
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
@@ -326,6 +352,8 @@ const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
   { name: 'USHANE',  pin: '1111', role: 'video_head' },
+  { name: 'KENULI',  pin: '2001', role: 'smm' },
+  { name: 'KANEESHA',pin: '2002', role: 'smm' },
   { name: 'RAJEEWA', pin: '1234', role: 'editor' },
   { name: 'THARUKA', pin: '1234', role: 'editor' },
 ];
@@ -388,6 +416,85 @@ function initials(name){if(!name)return'?';const p=name.trim().split(/\s+/);if(p
 function secsToHrs(s){if(!s)return'0h';const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);if(h===0)return m+'m';return h+'h '+m+'m'}
 function isAdmin(){return currentUser&&(currentUser.role==='admin'||currentUser.role==='video_head')}
 function isEditor(){return currentUser&&currentUser.role==='editor'}
+function isSmm(){return currentUser&&currentUser.role==='smm'}
+function isVideoHead(){return currentUser&&currentUser.role==='video_head'}
+function canEdit(){return isAdmin()}
+
+// === VIDEO COUNT HELPER ===
+// Returns {posted, target, progressClass} for a client this month
+function clientVideoCount(clientId){
+  const monthStart=startOfMonth();
+  const posted=(DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=monthStart).length;
+  const cl=getClient(clientId);
+  // Try common column names — gracefully fall back
+  const target=cl?.videos_per_month||cl?.monthly_videos||cl?.video_target||null;
+  let progressClass='';
+  if(target){
+    if(posted>=target)progressClass='complete';
+    if(posted>target)progressClass='over';
+  }
+  return {posted,target,progressClass};
+}
+function videoCountHtml(clientId){
+  const {posted,target,progressClass}=clientVideoCount(clientId);
+  if(!target)return `<span class="muted">${posted} this month</span>`;
+  const pct=Math.min(100,(posted/target)*100);
+  return `<span class="videos-progress ${progressClass}">${posted}/${target}<span class="videos-progress-bar"><span class="videos-progress-fill" style="width:${pct}%"></span></span></span>`;
+}
+
+// === TIME BREAKDOWN (from video_stage_history) ===
+async function getProjectTimeBreakdown(pid){
+  try{
+    const {data}=await sb.from('video_stage_history').select('stage,duration_seconds,entered_at,exited_at').eq('video_project_id',pid);
+    if(!data||!data.length)return {editing:0,changes:0,total:0,hasOpen:false};
+    let editing=0,changes=0,total=0,hasOpen=false;
+    data.forEach(r=>{
+      let secs=r.duration_seconds;
+      if(!secs&&r.entered_at&&!r.exited_at){
+        secs=Math.floor((Date.now()-new Date(r.entered_at).getTime())/1000);
+        hasOpen=true;
+      }
+      if(!secs)return;
+      total+=secs;
+      if(r.stage==='editing'||r.stage==='cutting_color_grading')editing+=secs;
+      if(r.stage==='changes'||r.stage==='client_changes')changes+=secs;
+    });
+    return {editing,changes,total,hasOpen};
+  }catch(_){return {editing:0,changes:0,total:0,hasOpen:false}}
+}
+// Returns the team_members.id for current user (used to filter editor visibility). null if not in team_members.
+function currentEditorId(){if(!isEditor()||!DATA.teamMembers)return null;const m=DATA.teamMembers.find(x=>x.name&&x.name.toUpperCase()===currentUser.name.toUpperCase());return m?m.id:null}
+// Filter projects: editors only see projects assigned to them. Everyone else sees all.
+function visibleProjects(){if(!isEditor())return DATA.projects||[];const eid=currentEditorId();if(!eid)return [];return (DATA.projects||[]).filter(p=>p.assigned_editor_id===eid)}
+// Returns the monthly video target for a client. Tries multiple column names then falls back to summing smm_shoots.vids for current month.
+function videoTarget(client){
+  if(!client)return 0;
+  const cols=['videos_per_month','monthly_videos','video_count','videos_mo','monthly_video_target','vids_per_month'];
+  for(const c of cols){if(client[c]!=null&&!isNaN(parseInt(client[c])))return parseInt(client[c])}
+  // Fallback: sum smm_shoots.vids for this client this month
+  if(DATA.shoots){
+    const mStart=startOfMonth();
+    const mEnd=new Date(mStart.getFullYear(),mStart.getMonth()+1,1);
+    const sh=DATA.shoots.filter(s=>s.client_id===client.id&&s.shoot_date&&new Date(s.shoot_date)>=mStart&&new Date(s.shoot_date)<mEnd);
+    return sh.reduce((sum,s)=>sum+(parseInt(s.vids)||0),0);
+  }
+  return 0;
+}
+// Returns count of projects posted this month for a client
+function videosPostedThisMonth(clientId){
+  const mStart=startOfMonth();
+  return (DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=mStart).length;
+}
+// Returns total seconds spent in given stages for a project (from video_stage_history)
+function stageDurationSecs(projectId,stageKeys){
+  if(!DATA.stageHistory)return 0;
+  const stages=Array.isArray(stageKeys)?stageKeys:[stageKeys];
+  return DATA.stageHistory
+    .filter(h=>h.video_project_id===projectId&&stages.includes(h.stage)&&h.duration_seconds)
+    .reduce((sum,h)=>sum+(h.duration_seconds||0),0);
+}
+// Format seconds as "Xh Ym" or "Xm" or "—"
+function fmtDuration(secs){if(!secs||secs<0)return '—';const h=Math.floor(secs/3600);const m=Math.floor((secs%3600)/60);if(h>0)return `${h}h ${m}m`;return `${m}m`;}
 function getClient(id){return DATA.clients.find(c=>c.id===id)}
 function getMember(id){return DATA.teamMembers.find(m=>m.id===id)}
 function getProject(id){return DATA.projects.find(p=>p.id===id)}
@@ -524,15 +631,17 @@ function navTo(page){
 // === DATA FETCH ===
 async function fetchAll(silent=false){
   try{
-    const [pr,cr,tr,llr,slr,clr,tkr,inr]=await Promise.all([
+    const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
-      sb.from('clients').select('id, name'),
+      sb.from('clients').select('*'),
       sb.from('team_members').select('id, name, role'),
       sb.from('video_project_links').select('*').order('created_at',{ascending:false}),
       sb.from('smm_shoots').select('*').order('shoot_date',{ascending:true}),
       sb.from('video_chat_messages').select('*').order('created_at',{ascending:true}),
       sb.from('tasks').select('*').order('created_at',{ascending:false}).limit(500),
       sb.from('video_inspo').select('*').order('created_at',{ascending:false}),
+      sb.from('video_stage_history').select('*').order('entered_at',{ascending:true}),
+      sb.from('video_project_comments').select('*').order('created_at',{ascending:true}),
     ]);
     DATA.projects=pr.data||[];
     DATA.clients=cr.data||[];
@@ -542,6 +651,8 @@ async function fetchAll(silent=false){
     DATA.chats=clr.data||[];
     DATA.tasks=tkr.data||[];
     DATA.inspo=inr.data||[];
+    DATA.stageHistory=shr.data||[];
+    DATA.projectComments=pcr.data||[];
     // Filter projects for editors
     if(isEditor()){
       const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
@@ -604,6 +715,7 @@ function renderDashboard(){
       ${statCard('In Editing',inEditing,'currently being cut')}
       ${statCard('Sent to Client',sentToClient,sentToClient>0?'awaiting feedback':'—')}
     </div>
+    ${currentUser.name==='USHANE'?ushaneDailyPillarsHtml():''}
     <div class="pillars">
       ${pillar('Pipeline Health',pillarPipeline,stuckCount===0?'No stuck projects':stuckCount+' stuck >3 days')}
       ${pillar('Quality Review','green',inReview+' in review')}
@@ -638,10 +750,39 @@ function renderDashboard(){
       </div>
     </div>
   `;
-  $('#pageContent').onclick=e=>{const r=e.target.closest('[data-pid]');if(r)openProjectDetail(parseInt(r.dataset.pid))};
+  $('#pageContent').onclick=e=>{
+    const r=e.target.closest('[data-pid]');if(r){openProjectDetail(parseInt(r.dataset.pid));return}
+    const pb=e.target.closest('[data-ushane-pillar]');if(pb){const k=pb.dataset.ushanePillar;toggleUshanePillar(k);return}
+    if(e.target.closest('[data-ushane-reset]')){resetUshanePillars();return}
+  };
 }
 function statCard(label,value,sub='',cls=''){return `<div class="stat-card"><div class="stat-card-label">${esc(label)}</div><div class="stat-card-value">${value}</div>${sub?`<div class="stat-card-sub ${cls}">${esc(sub)}</div>`:''}</div>`}
 function pillar(title,status,note){const txt=status==='green'?'On track':status==='amber'?'Watch':status==='red'?'Needs attention':'—';return `<div class="pillar ${status}"><div class="pillar-title">${esc(title)}</div><div class="pillar-status">${txt}</div><div class="pillar-note">${esc(note)}</div></div>`}
+
+// === USHANE DAILY PILLARS ===
+const USHANE_PILLARS=[
+  {key:'system_update',label:'System Update',sub:'Check all BB systems are running'},
+  {key:'team_check',label:'Team Check',sub:'Touch base with each editor'},
+  {key:'shiara_brief',label:'Shiara Brief',sub:'Brief Shiara on the day'},
+  {key:'shoot_check',label:'Shoot Check',sub:'Confirm today\'s shoots are on track'},
+  {key:'folder_update',label:'Folder Update',sub:'Update Drive folders + raw footage links'},
+  {key:'close_day',label:'Close Day',sub:'Review system + log any issues'},
+];
+function ushanePillarKey(){const today=new Date().toISOString().slice(0,10);return `bb_video_ushane_pillars_${today}`}
+function getUshanePillarState(){try{return JSON.parse(localStorage.getItem(ushanePillarKey())||'{}')}catch{return {}}}
+function setUshanePillarState(s){localStorage.setItem(ushanePillarKey(),JSON.stringify(s))}
+function toggleUshanePillar(k){const s=getUshanePillarState();s[k]=!s[k];setUshanePillarState(s);renderDashboard()}
+function resetUshanePillars(){localStorage.removeItem(ushanePillarKey());renderDashboard()}
+function ushaneDailyPillarsHtml(){
+  const s=getUshanePillarState();
+  const done=USHANE_PILLARS.filter(p=>s[p.key]).length;
+  return `<div class="panel" style="margin-bottom:22px;border:1px solid var(--accent);background:linear-gradient(180deg,var(--accent-soft) 0%,var(--surface) 50%)">
+    <div class="panel-head"><div class="panel-title">🎯 Daily Pillars — Ushane</div><div style="display:flex;align-items:center;gap:10px"><span class="text-3 fs-11">${done}/${USHANE_PILLARS.length} done today</span><button class="btn btn-ghost btn-sm" data-ushane-reset>Reset</button></div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;padding:14px">
+      ${USHANE_PILLARS.map(p=>{const checked=!!s[p.key];return `<div class="up-card ${checked?'up-done':''}" data-ushane-pillar="${p.key}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;${checked?'opacity:0.55':''}"><div style="width:22px;height:22px;border-radius:50%;border:2px solid ${checked?'var(--accent)':'var(--border-strong)'};background:${checked?'var(--accent)':'transparent'};display:grid;place-items:center;flex-shrink:0;color:white;font-size:13px;font-weight:700">${checked?'✓':''}</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text);${checked?'text-decoration:line-through':''}">${esc(p.label)}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${esc(p.sub)}</div></div></div>`}).join('')}
+    </div>
+  </div>`;
+}
 
 // === PAGE: PIPELINE ===
 function renderPipeline(){
@@ -751,6 +892,34 @@ async function saveProject(id){
 async function deleteProject(id){if(!confirm('Delete this project?'))return;try{const {error}=await sb.from('video_projects').delete().eq('id',id);if(error)throw error;toast('Deleted','success');closeModal();await fetchAll()}catch(err){toast('Delete failed','error')}}
 
 // === PROJECT DETAIL ===
+// Builds the time tracking section showing how long the project spent in editing / changes stages
+function stageTimingSection(projectId){
+  if(!DATA.stageHistory)return '';
+  const hist=DATA.stageHistory.filter(h=>h.video_project_id===projectId);
+  if(!hist.length)return '<div class="detail-section"><div class="detail-section-title">Time Tracking</div><div class="link-empty">No stage history yet — timing starts tracking once the project moves between stages</div></div>';
+  const editingSecs=stageDurationSecs(projectId,'editing');
+  const changesSecs=stageDurationSecs(projectId,'changes');
+  const cuttingSecs=stageDurationSecs(projectId,'cutting_color_grading');
+  const reviewSecs=stageDurationSecs(projectId,['team_review','coo_check']);
+  // Build a per-stage list showing entered/exited timestamps
+  const histRows=hist.map(h=>{
+    const lbl=STAGES.find(s=>s.key===h.stage)?.label||h.stage;
+    const dur=h.duration_seconds?fmtDuration(h.duration_seconds):(h.exited_at?fmtDuration((new Date(h.exited_at)-new Date(h.entered_at))/1000):'in progress');
+    return `<tr><td>${esc(lbl)}</td><td class="muted">${fmtDateTime(h.entered_at)}</td><td class="muted">${h.exited_at?fmtDateTime(h.exited_at):'<span style="color:var(--accent)">currently here</span>'}</td><td><strong>${dur}</strong></td></tr>`;
+  }).join('');
+  return `<div class="detail-section"><div class="detail-section-title">Time Tracking</div>
+    <div class="detail-meta-grid" style="margin-bottom:14px">
+      <div class="detail-meta-item"><div class="detail-meta-label">Editing Time</div><div class="detail-meta-value">${fmtDuration(editingSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Cutting/Color</div><div class="detail-meta-value">${fmtDuration(cuttingSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Changes Time</div><div class="detail-meta-value">${fmtDuration(changesSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Review Time</div><div class="detail-meta-value">${fmtDuration(reviewSecs)}</div></div>
+    </div>
+    <details><summary style="cursor:pointer;font-size:12px;color:var(--text-3);padding:6px 0">Show full stage history (${hist.length})</summary>
+    <table class="tbl" style="margin-top:8px"><thead><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Duration</th></tr></thead><tbody>${histRows}</tbody></table>
+    </details>
+  </div>`;
+}
+
 async function openProjectDetail(id){
   const p=getProject(id);if(!p)return;
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id),st=STAGES.find(s=>s.key===p.current_stage);
@@ -764,12 +933,15 @@ async function openProjectDetail(id){
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
   const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(p.title)}</div><div class="modal-sub">${esc(cl?.name||'No client')} · ${st?.label||p.current_stage}</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
     <div class="detail-section"><div class="detail-section-title">Overview</div><div class="detail-meta-grid">
+      <div class="detail-meta-item"><div class="detail-meta-label">Added</div><div class="detail-meta-value">${p.created_at?fmtDate(p.created_at):'—'}<div class="timestamp-tag" style="margin-top:3px">${p.created_at?timeAgo(p.created_at):''}</div></div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Due</div><div class="detail-meta-value" style="${ov?'color:var(--red)':''}">${p.deadline?fmtDate(p.deadline):'—'}${ov?' (overdue)':''}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Priority</div><div class="detail-meta-value" style="text-transform:capitalize"><span class="priority-dot priority-${p.priority||'medium'}" style="display:inline-block;margin-right:6px"></span>${p.priority||'medium'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Type</div><div class="detail-meta-value" style="text-transform:capitalize">${p.type||'—'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Editor</div><div class="detail-meta-value">${esc(ed?.name||'Unassigned')}</div></div>
-      <div class="detail-meta-item"><div class="detail-meta-label">Deadline</div><div class="detail-meta-value" style="${ov?'color:var(--red)':''}">${p.deadline?fmtDate(p.deadline):'—'}${ov?' (overdue)':''}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Current Stage</div><div class="detail-meta-value">${esc(st?.label||'')}</div></div>
       ${p.formula?`<div class="detail-meta-item" style="grid-column:1/-1"><div class="detail-meta-label">Formula</div><div class="detail-meta-value">${esc(p.formula)}</div></div>`:''}
     </div></div>
+    ${stageTimingSection(id)}
     ${p.description?`<div class="detail-section"><div class="detail-section-title">Description</div><div class="detail-description">${esc(p.description)}</div></div>`:''}
     <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Raw Footage</div>${isAdmin()?`<button class="btn btn-ghost btn-sm" data-add-link="raw_footage">+ Add raw link</button>`:''}</div>${linkListHtml(rawLinks,'raw_footage')}</div>
     <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Final Video</div>${isAdmin()?`<button class="btn btn-ghost btn-sm" data-add-link="final_cut">+ Add final link</button>`:''}</div>${linkListHtml(finalLinks,'final_cut')}</div>
@@ -947,17 +1119,29 @@ function renderClients(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   const monthStart=startOfMonth();
+  const monthLabel=new Date().toLocaleDateString('en-GB',{month:'long'});
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
     const active=proj.filter(p=>p.current_stage!=='posted').length;
+    const postedThisMonth=videosPostedThisMonth(c.id);
+    const target=videoTarget(c);
     const doneMonth=proj.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;
     const lastAct=proj.map(p=>p.updated_at||p.created_at).sort().pop();
-    return {client:c,active,doneMonth,total:proj.length,lastAct};
+    return {client:c,active,doneMonth,postedThisMonth,target,total:proj.length,lastAct};
   }).sort((a,b)=>b.active-a.active);
-  $('#pageSub').textContent=`${rows.length} client${rows.length===1?'':'s'} in system`;
+  $('#pageSub').textContent=`${rows.length} client${rows.length===1?'':'s'} in system · video progress for ${monthLabel}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Clients</div><div class="page-sub">All clients with their video work · click to drill in</div></div></div>
-    <table class="tbl"><thead><tr><th>Client</th><th>Active Projects</th><th>Done This Month</th><th>Total Projects</th><th>Last Activity</th></tr></thead><tbody>
-    ${rows.map(r=>`<tr class="clickable" data-cid="${r.client.id}"><td><strong>${esc(r.client.name)}</strong></td><td>${r.active}</td><td>${r.doneMonth}</td><td class="muted">${r.total}</td><td class="muted">${r.lastAct?timeAgo(r.lastAct):'—'}</td></tr>`).join('')}
+    <table class="tbl"><thead><tr><th>Client</th><th>Active</th><th>${monthLabel} Progress</th><th>Total Projects</th><th>Last Activity</th></tr></thead><tbody>
+    ${rows.map(r=>{
+      const tgt=r.target||0;
+      const posted=r.postedThisMonth;
+      const pct=tgt>0?Math.min(100,(posted/tgt)*100):0;
+      const barColor=tgt===0?'var(--text-3)':(pct>=100?'var(--green)':(pct>=50?'var(--accent)':'var(--amber)'));
+      const progressHtml=tgt>0
+        ? `<div style="display:flex;align-items:center;gap:10px;min-width:140px"><div style="font-size:13px;font-weight:700;color:var(--text);min-width:40px"><span style="color:${barColor}">${posted}</span><span style="color:var(--text-3)">/${tgt}</span></div><div style="flex:1;height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;min-width:60px"><div style="height:100%;width:${pct}%;background:${barColor};transition:width 0.3s"></div></div></div>`
+        : `<span class="muted">${posted} posted · no target set</span>`;
+      return `<tr class="clickable" data-cid="${r.client.id}"><td><strong>${esc(r.client.name)}</strong></td><td>${r.active}</td><td>${progressHtml}</td><td class="muted">${r.total}</td><td class="muted">${r.lastAct?timeAgo(r.lastAct):'—'}</td></tr>`;
+    }).join('')}
     </tbody></table>`;
   $('#pageContent').onclick=e=>{const r=e.target.closest('[data-cid]');if(r)openClientDetail(parseInt(r.dataset.cid))};
 }
@@ -1047,16 +1231,27 @@ function renderTeamChat(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   if(!FILTERS.chatClient&&DATA.clients.length)FILTERS.chatClient=DATA.clients[0].id;
-  const msgs=(DATA.chats||[]).filter(m=>m.client_id===FILTERS.chatClient);
+  // Direct chat messages for this client
+  const chatMsgs=(DATA.chats||[]).filter(m=>m.client_id===FILTERS.chatClient).map(m=>({...m,_kind:'chat'}));
+  // Project comments from projects belonging to this client
+  const clientProjectIds=new Set((DATA.projects||[]).filter(p=>p.client_id===FILTERS.chatClient).map(p=>p.id));
+  const projComments=(DATA.projectComments||[]).filter(c=>clientProjectIds.has(c.video_project_id)).map(c=>({...c,_kind:'comment'}));
+  // Merge + sort chronologically
+  const merged=[...chatMsgs,...projComments].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const cl=getClient(FILTERS.chatClient);
-  $('#pageSub').textContent=cl?`Chat for ${cl.name}`:'Select a client';
-  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team Chat</div><div class="page-sub">One chat per client · video team only</div></div></div>
+  $('#pageSub').textContent=cl?`Chat for ${cl.name} · includes project discussions`:'Select a client';
+  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team Chat</div><div class="page-sub">One chat per client · merged with project comments chronologically</div></div></div>
     <div class="filters">
       <select class="filter-select" id="chatClientPick" style="min-width:240px">${DATA.clients.map(c=>`<option value="${c.id}" ${FILTERS.chatClient===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     </div>
-    <div class="panel"><div class="panel-head"><div class="panel-title">${esc(cl?.name||'')}</div><span class="text-3 fs-11">${msgs.length} message${msgs.length===1?'':'s'}</span></div>
+    <div class="panel"><div class="panel-head"><div class="panel-title">${esc(cl?.name||'')}</div><span class="text-3 fs-11">${chatMsgs.length} chat · ${projComments.length} project comment${projComments.length===1?'':'s'}</span></div>
       <div class="panel-body">
-        <div class="comment-list" style="max-height:50vh">${msgs.length?msgs.map(m=>`<div class="comment"><div class="comment-head"><div class="comment-author">${esc(m.author||m.from||'')}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${m.image_url?`<img class="comment-img" src="${esc(m.image_url)}" onerror="this.style.display='none'">`:''}</div>`).join(''):'<div class="comment-empty">No messages for this client yet — start the conversation</div>'}</div>
+        <div class="comment-list" style="max-height:55vh">${merged.length?merged.map(m=>{
+          const isProj=m._kind==='comment';
+          const proj=isProj?getProject(m.video_project_id):null;
+          const tagHtml=isProj?`<span class="tag" style="font-size:9px;background:var(--accent-soft);color:var(--accent);margin-left:8px;cursor:pointer" data-jump-pid="${m.video_project_id}">↗ ${esc(proj?.title||'project')}</span>`:'';
+          return `<div class="comment" style="${isProj?'border-left:3px solid var(--accent)':''}"><div class="comment-head"><div class="comment-author">${esc(m.author||'')}${tagHtml}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${m.image_url?`<img class="comment-img" src="${esc(m.image_url)}" onerror="this.style.display='none'">`:''}</div>`;
+        }).join(''):'<div class="comment-empty">Nothing yet — start the conversation. Project comments will also appear here.</div>'}</div>
         <div class="comment-form">
           <textarea id="chatBody" class="field-textarea" placeholder="Type a message… (you can paste an image with Cmd+V)" rows="2"></textarea>
           ${imageAttachHtml('chat')}
@@ -1068,6 +1263,7 @@ function renderTeamChat(){
   wireImageAttach('chat','#chatBody');
   $('#pageContent').onclick=async e=>{
     const ci=e.target.closest('[data-clear-img]');if(ci){clearPendingImg(ci.dataset.clearImg);return}
+    const jp=e.target.closest('[data-jump-pid]');if(jp){openProjectDetail(parseInt(jp.dataset.jumpPid));return}
     if(e.target.closest('[data-send-chat]')){
       const body=$('#chatBody').value.trim();
       const img=PENDING_IMG['chat']||null;
