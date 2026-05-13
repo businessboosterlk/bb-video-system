@@ -847,7 +847,7 @@
     <button class="login-btn" id="loginBtn">ENTER</button>
     <div class="login-error" id="loginError"></div>
   </div>
-  <div class="version-marker">v4</div>
+  <div class="version-marker">v5</div>
 </div>
 
 <!-- ===== MAIN APP ===== -->
@@ -978,7 +978,7 @@ const STAGES = [
    STATE
    ============================================================ */
 
-let supabase = null;
+let sb = null;
 let currentUser = null;
 let projects = [];
 let clients = [];
@@ -1058,7 +1058,7 @@ function canDeleteProject() {
 
 function initSupabase() {
   if (!window.supabase) { console.error('Supabase SDK not loaded'); return; }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 /* ============================================================
@@ -1158,9 +1158,9 @@ function logout() {
 async function fetchAll() {
   try {
     const [projRes, clientRes, teamRes] = await Promise.all([
-      supabase.from('video_projects').select('*').eq('is_archived', false).order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, name'),
-      supabase.from('team_members').select('id, name, role'),
+      sb.from('video_projects').select('*').eq('is_archived', false).order('created_at', { ascending: false }),
+      sb.from('clients').select('id, name'),
+      sb.from('team_members').select('id, name, role'),
     ]);
     if (projRes.error) throw projRes.error;
     if (clientRes.error) throw clientRes.error;
@@ -1297,7 +1297,7 @@ async function moveProject(project, newStage) {
 
   try {
     // 1. Close any open stage_history row
-    const { data: openRows } = await supabase
+    const { data: openRows } = await sb
       .from('video_stage_history')
       .select('*')
       .eq('video_project_id', project.id)
@@ -1308,14 +1308,14 @@ async function moveProject(project, newStage) {
       const exited = new Date();
       const entered = new Date(open.entered_at);
       const durationSec = Math.floor((exited - entered) / 1000);
-      await supabase
+      await sb
         .from('video_stage_history')
         .update({ exited_at: exited.toISOString(), duration_seconds: durationSec })
         .eq('id', open.id);
     }
 
     // 2. Insert new stage_history row
-    await supabase.from('video_stage_history').insert({
+    await sb.from('video_stage_history').insert({
       video_project_id: project.id,
       stage: newStage,
       moved_by: currentUser.name,
@@ -1324,7 +1324,7 @@ async function moveProject(project, newStage) {
     // 3. Update project current_stage
     const updates = { current_stage: newStage, updated_at: new Date().toISOString() };
     if (newStage === 'posted') updates.completed_at = new Date().toISOString();
-    const { error } = await supabase.from('video_projects').update(updates).eq('id', project.id);
+    const { error } = await sb.from('video_projects').update(updates).eq('id', project.id);
     if (error) throw error;
 
     toast(`Moved to ${STAGES.find(s => s.key === newStage)?.label}`, 'success');
@@ -1444,15 +1444,15 @@ async function saveProject(id) {
         await moveProject(original, data.current_stage);
       }
       data.updated_at = new Date().toISOString();
-      const { error } = await supabase.from('video_projects').update(data).eq('id', id);
+      const { error } = await sb.from('video_projects').update(data).eq('id', id);
       if (error) throw error;
       toast('Project updated', 'success');
     } else {
       data.created_by = currentUser.name;
-      const { data: inserted, error } = await supabase.from('video_projects').insert(data).select().single();
+      const { data: inserted, error } = await sb.from('video_projects').insert(data).select().single();
       if (error) throw error;
       // Create initial stage history
-      await supabase.from('video_stage_history').insert({
+      await sb.from('video_stage_history').insert({
         video_project_id: inserted.id,
         stage: inserted.current_stage,
         moved_by: currentUser.name,
@@ -1470,7 +1470,7 @@ async function saveProject(id) {
 async function deleteProject(id) {
   if (!confirm('Delete this project? This cannot be undone.')) return;
   try {
-    const { error } = await supabase.from('video_projects').delete().eq('id', id);
+    const { error } = await sb.from('video_projects').delete().eq('id', id);
     if (error) throw error;
     toast('Project deleted', 'success');
     closeModal();
@@ -1497,7 +1497,7 @@ async function openProjectDetail(id) {
   // Fetch comments for this project
   let comments = [];
   try {
-    const { data } = await supabase
+    const { data } = await sb
       .from('video_project_comments')
       .select('*')
       .eq('video_project_id', id)
@@ -1593,7 +1593,7 @@ async function postComment(projectId) {
   const body = $('#newComment').value.trim();
   if (!body) return;
   try {
-    const { error } = await supabase.from('video_project_comments').insert({
+    const { error } = await sb.from('video_project_comments').insert({
       video_project_id: projectId,
       body,
       author: currentUser.name,
