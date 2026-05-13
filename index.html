@@ -12,819 +12,131 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  /* ============================================================
-     BB VIDEO SYSTEM — PURPLE THEME
-     Single HTML file. GitHub Pages compatible.
-     ============================================================ */
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    /* Surfaces */
-    --bg: #0a0a0f;
-    --surface: #14141d;
-    --surface-2: #1d1d2a;
-    --surface-3: #262635;
-    --border: rgba(255, 255, 255, 0.06);
-    --border-strong: rgba(255, 255, 255, 0.12);
-
-    /* Purple accent */
-    --accent: #a855f7;
-    --accent-2: #7c3aed;
-    --accent-glow: rgba(168, 85, 247, 0.15);
-    --accent-soft: rgba(168, 85, 247, 0.08);
-
-    /* Text */
-    --text: #f1f5f9;
-    --text-2: #94a3b8;
-    --text-3: #64748b;
-
-    /* Status */
-    --green: #22c55e;
-    --amber: #f59e0b;
-    --red: #ef4444;
-    --blue: #3b82f6;
-
-    /* Layout */
-    --sidebar-w: 240px;
-    --topbar-h: 64px;
-    --radius: 10px;
-    --radius-sm: 6px;
+    --bg: #0a0a0f; --surface: #14141d; --surface-2: #1d1d2a; --surface-3: #262635;
+    --border: rgba(255, 255, 255, 0.06); --border-strong: rgba(255, 255, 255, 0.12);
+    --accent: #a855f7; --accent-2: #7c3aed; --accent-glow: rgba(168, 85, 247, 0.15); --accent-soft: rgba(168, 85, 247, 0.08);
+    --text: #f1f5f9; --text-2: #94a3b8; --text-3: #64748b;
+    --green: #22c55e; --amber: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+    --sidebar-w: 240px; --topbar-h: 64px; --radius: 10px; --radius-sm: 6px;
   }
-
   html, body { height: 100%; }
-  body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
-  }
-
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow: hidden; }
   button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
   input, select, textarea { font-family: inherit; }
-
-  /* ===== LOGIN SCREEN ===== */
-  .login {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg);
-    z-index: 100;
-    padding: 20px;
-  }
-  .login-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 56px 48px 40px;
-    width: 100%;
-    max-width: 440px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-  }
-  .login-wordmark {
-    text-align: center;
-    margin-bottom: 6px;
-    line-height: 0.92;
-  }
-  .wordmark-line1, .wordmark-line2 {
-    font-size: 44px;
-    font-weight: 900;
-    letter-spacing: -0.02em;
-    color: var(--text);
-    text-transform: uppercase;
-  }
-  .login-subtitle {
-    text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.32em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-top: 10px;
-    margin-bottom: 24px;
-  }
-  .login-date {
-    text-align: center;
-    color: var(--text-3);
-    font-size: 13px;
-    margin-bottom: 28px;
-    font-weight: 400;
-  }
-  .login-input-big {
-    width: 100%;
-    background: var(--surface-2);
-    border: 1px solid transparent;
-    border-radius: 10px;
-    padding: 18px 20px;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-    transition: all 0.15s ease;
-    display: block;
-  }
-  .login-input-big::placeholder {
-    color: var(--text-3);
-    letter-spacing: 0.24em;
-    font-weight: 500;
-  }
-  .login-input-big:focus {
-    outline: none;
-    border-color: var(--accent);
-    background: var(--surface-3);
-  }
-  .login-btn {
-    width: 100%;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    color: white;
-    font-weight: 800;
-    padding: 18px 20px;
-    border-radius: 10px;
-    margin-top: 4px;
-    font-size: 14px;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-    transition: all 0.15s ease;
-    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.3);
-    cursor: pointer;
-  }
-  .login-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 28px rgba(168, 85, 247, 0.45);
-  }
+  .login { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); z-index: 100; padding: 20px; }
+  .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 56px 48px 40px; width: 100%; max-width: 440px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5); }
+  .login-wordmark { text-align: center; margin-bottom: 6px; line-height: 0.92; }
+  .wordmark-line1, .wordmark-line2 { font-size: 44px; font-weight: 900; letter-spacing: -0.02em; color: var(--text); text-transform: uppercase; }
+  .login-subtitle { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.32em; color: var(--accent); text-transform: uppercase; margin-top: 10px; margin-bottom: 24px; }
+  .login-date { text-align: center; color: var(--text-3); font-size: 13px; margin-bottom: 28px; font-weight: 400; }
+  .login-input-big { width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 18px 20px; color: var(--text); font-size: 13px; font-weight: 600; text-align: center; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; transition: all 0.15s ease; display: block; }
+  .login-input-big::placeholder { color: var(--text-3); letter-spacing: 0.24em; font-weight: 500; }
+  .login-input-big:focus { outline: none; border-color: var(--accent); background: var(--surface-3); }
+  .login-btn { width: 100%; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); color: white; font-weight: 800; padding: 18px 20px; border-radius: 10px; margin-top: 4px; font-size: 14px; letter-spacing: 0.24em; text-transform: uppercase; transition: all 0.15s ease; box-shadow: 0 8px 24px rgba(168, 85, 247, 0.3); cursor: pointer; }
+  .login-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(168, 85, 247, 0.45); }
   .login-btn:active { transform: translateY(0); }
-  .login-error {
-    color: var(--red);
-    font-size: 12px;
-    margin-top: 14px;
-    text-align: center;
-    min-height: 16px;
-    font-weight: 500;
-  }
-  .version-marker {
-    position: fixed;
-    bottom: 10px;
-    right: 14px;
-    font-size: 9px;
-    color: var(--text-3);
-    letter-spacing: 0.1em;
-    font-weight: 500;
-    opacity: 0.5;
-  }
-
-  /* ===== LOGIN SCREEN ===== */
-  .login {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg);
-    z-index: 100;
-  }
-  .login-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 40px 36px;
-    width: 380px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
-    position: relative;
-    z-index: 1;
-  }
-  .login-brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 32px;
-  }
-  .login-logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 18px;
-    box-shadow: 0 4px 16px var(--accent-glow);
-  }
-  .login-title {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    color: var(--text-2);
-    text-transform: uppercase;
-  }
-  .login-subtitle {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--text);
-    margin-top: 2px;
-  }
-  .login-field { margin-bottom: 16px; }
-  .login-label {
-    display: block;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-2);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 8px;
-  }
-  .login-input, .login-select {
-    width: 100%;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 12px 14px;
-    color: var(--text);
-    font-size: 14px;
-    transition: all 0.15s ease;
-  }
-  .login-input:focus, .login-select:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-  }
-  .login-btn {
-    width: 100%;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    color: white;
-    font-weight: 600;
-    padding: 12px 20px;
-    border-radius: var(--radius);
-    margin-top: 8px;
-    font-size: 14px;
-    transition: all 0.15s ease;
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.25);
-  }
-  .login-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(168, 85, 247, 0.4);
-  }
-  .login-btn:active { transform: translateY(0); }
-  .login-error {
-    color: var(--red);
-    font-size: 12px;
-    margin-top: 12px;
-    text-align: center;
-    min-height: 16px;
-  }
-
-  /* ===== APP SHELL ===== */
+  .login-error { color: var(--red); font-size: 12px; margin-top: 14px; text-align: center; min-height: 16px; font-weight: 500; }
+  .version-marker { position: fixed; bottom: 10px; right: 14px; font-size: 9px; color: var(--text-3); letter-spacing: 0.1em; font-weight: 500; opacity: 0.5; }
   .app { display: flex; height: 100vh; position: relative; z-index: 1; }
-
-  /* ===== SIDEBAR ===== */
-  .sidebar {
-    width: var(--sidebar-w);
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-  }
-  .sidebar-header {
-    height: var(--topbar-h);
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border-bottom: 1px solid var(--border);
-  }
-  .sidebar-logo {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 14px;
-    box-shadow: 0 2px 12px var(--accent-glow);
-  }
-  .sidebar-title {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    color: var(--text);
-    text-transform: uppercase;
-  }
-  .sidebar-nav {
-    flex: 1;
-    padding: 16px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .nav-section {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 12px 12px 6px;
-  }
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 9px 12px;
-    border-radius: 8px;
-    color: var(--text-2);
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.15s ease;
-    text-align: left;
-    width: 100%;
-  }
+  .sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-header { height: var(--topbar-h); padding: 0 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); display: grid; place-items: center; font-weight: 800; font-size: 14px; box-shadow: 0 2px 12px var(--accent-glow); }
+  .sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: var(--text); text-transform: uppercase; }
+  .sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-section { font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; padding: 12px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 8px; color: var(--text-2); font-size: 13px; font-weight: 500; transition: all 0.15s ease; text-align: left; width: 100%; }
   .nav-item:hover { background: var(--surface-2); color: var(--text); }
-  .nav-item.active {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  .nav-item.active::before {
-    content: '';
-    position: absolute;
-    width: 3px;
-    height: 16px;
-    background: var(--accent);
-    border-radius: 2px;
-    margin-left: -15px;
-  }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent); }
   .nav-item.disabled { opacity: 0.4; cursor: not-allowed; }
   .nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
-
-  .sidebar-footer {
-    padding: 12px;
-    border-top: 1px solid var(--border);
-  }
-  .user-chip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: var(--surface-2);
-    margin-bottom: 8px;
-  }
-  .user-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    display: grid;
-    place-items: center;
-    font-weight: 700;
-    font-size: 11px;
-    flex-shrink: 0;
-  }
+  .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
+  .user-chip { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); margin-bottom: 8px; }
+  .user-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); display: grid; place-items: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
   .user-info { flex: 1; min-width: 0; }
-  .user-name {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .user-role {
-    font-size: 10px;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .logout-btn {
-    width: 100%;
-    padding: 8px;
-    border-radius: 6px;
-    color: var(--text-3);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    transition: all 0.15s ease;
-  }
+  .user-name { font-size: 12px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-role { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .logout-btn { width: 100%; padding: 8px; border-radius: 6px; color: var(--text-3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.15s ease; }
   .logout-btn:hover { background: var(--surface-2); color: var(--text-2); }
-
-  /* ===== MAIN ===== */
-  .main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-  }
-
-  .topbar {
-    height: var(--topbar-h);
-    padding: 0 28px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    background: var(--surface);
-  }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .topbar { height: var(--topbar-h); padding: 0 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface); }
   .topbar-title { font-size: 18px; font-weight: 700; color: var(--text); }
   .topbar-subtitle { font-size: 12px; color: var(--text-3); margin-top: 2px; }
   .topbar-actions { display: flex; gap: 10px; align-items: center; }
-
-  /* ===== BUTTONS ===== */
-  .btn {
-    padding: 9px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    transition: all 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    white-space: nowrap;
-  }
-  .btn-primary {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    color: white;
-    box-shadow: 0 2px 12px rgba(168, 85, 247, 0.25);
-  }
-  .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
-  }
-  .btn-secondary {
-    background: var(--surface-2);
-    color: var(--text);
-    border: 1px solid var(--border-strong);
-  }
+  .btn { padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); color: white; box-shadow: 0 2px 12px rgba(168, 85, 247, 0.25); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4); }
+  .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); }
   .btn-secondary:hover { background: var(--surface-3); border-color: var(--accent); }
-  .btn-ghost {
-    color: var(--text-2);
-    padding: 8px 12px;
-    font-size: 12px;
-  }
+  .btn-ghost { color: var(--text-2); padding: 8px 12px; font-size: 12px; }
   .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
   .btn-danger { color: var(--red); }
   .btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
-
-  /* ===== PIPELINE BOARD ===== */
-  .pipeline-wrap {
-    flex: 1;
-    overflow: auto;
-    padding: 20px;
-  }
-  .pipeline-board {
-    display: flex;
-    gap: 14px;
-    min-height: 100%;
-  }
-  .stage-col {
-    width: 280px;
-    flex-shrink: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    max-height: 100%;
-  }
-  .stage-header {
-    padding: 14px 16px 10px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    border-bottom: 1px solid var(--border);
-  }
-  .stage-title {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-2);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    flex: 1;
-  }
-  .stage-count {
-    background: var(--surface-2);
-    color: var(--text-2);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-    min-width: 24px;
-    text-align: center;
-  }
-  .stage-cards {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overflow-y: auto;
-    flex: 1;
-  }
+  .pipeline-wrap { flex: 1; overflow: auto; padding: 20px; }
+  .pipeline-board { display: flex; gap: 14px; min-height: 100%; }
+  .stage-col { width: 280px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; max-height: 100%; }
+  .stage-header { padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--border); }
+  .stage-title { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; flex: 1; }
+  .stage-count { background: var(--surface-2); color: var(--text-2); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; min-width: 24px; text-align: center; }
+  .stage-cards { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
   .stage-cards.drop-target { background: var(--accent-soft); }
-  .stage-empty {
-    padding: 20px 10px;
-    text-align: center;
-    color: var(--text-3);
-    font-size: 11px;
-    font-style: italic;
-  }
-
-  /* ===== PROJECT CARD ===== */
-  .card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    cursor: grab;
-    transition: all 0.15s ease;
-  }
-  .card:hover {
-    border-color: var(--accent);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-soft);
-  }
+  .stage-empty { padding: 20px 10px; text-align: center; color: var(--text-3); font-size: 11px; font-style: italic; }
+  .card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; cursor: grab; transition: all 0.15s ease; }
+  .card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); }
   .card.dragging { opacity: 0.4; cursor: grabbing; }
-  .card-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 6px;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .card-client {
-    font-size: 11px;
-    color: var(--text-3);
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .card-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    margin-top: 8px;
-  }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-client { font-size: 11px; color: var(--text-3); margin-bottom: 10px; }
+  .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 8px; }
   .card-meta-left { display: flex; align-items: center; gap: 6px; }
-  .priority-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
+  .priority-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .priority-urgent { background: var(--red); box-shadow: 0 0 8px var(--red); }
   .priority-high { background: var(--amber); }
   .priority-medium { background: var(--blue); }
   .priority-low { background: var(--text-3); }
-
-  .card-deadline {
-    font-size: 10px;
-    color: var(--text-3);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
+  .card-deadline { font-size: 10px; color: var(--text-3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
   .card-deadline.overdue { color: var(--red); font-weight: 600; }
-  .card-avatar {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--surface-3);
-    display: grid;
-    place-items: center;
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .card-avatar.assigned {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-  }
-
-  /* ===== MODAL ===== */
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    z-index: 90;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    animation: fadeIn 0.15s ease;
-  }
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 14px;
-    width: 100%;
-    max-width: 540px;
-    max-height: 90vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    animation: slideUp 0.2s ease;
-  }
+  .card-avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--surface-3); display: grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--text); }
+  .card-avatar.assigned { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); z-index: 90; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.15s ease; }
+  .modal { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 14px; width: 100%; max-width: 540px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); animation: slideUp 0.2s ease; }
   .modal-large { max-width: 720px; }
-  .modal-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .modal-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .modal-close {
-    color: var(--text-3);
-    font-size: 20px;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    display: grid;
-    place-items: center;
-    transition: all 0.15s ease;
-  }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .modal-close { color: var(--text-3); font-size: 20px; width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; transition: all 0.15s ease; }
   .modal-close:hover { background: var(--surface-2); color: var(--text); }
-  .modal-body {
-    padding: 20px 24px;
-    overflow-y: auto;
-    flex: 1;
-  }
-  .modal-footer {
-    padding: 16px 24px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-
-  /* ===== FORMS ===== */
+  .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
   .form-grid { display: grid; gap: 14px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .field-label {
-    display: block;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-2);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
-  }
-  .field-input, .field-select, .field-textarea {
-    width: 100%;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: var(--text);
-    font-size: 13px;
-    transition: all 0.15s ease;
-  }
-  .field-input:focus, .field-select:focus, .field-textarea:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-  }
+  .field-label { display: block; font-size: 11px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .field-input, .field-select, .field-textarea { width: 100%; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; transition: all 0.15s ease; }
+  .field-input:focus, .field-select:focus, .field-textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .field-textarea { resize: vertical; min-height: 70px; font-family: inherit; }
-
-  /* ===== TOAST ===== */
-  .toasts {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 200;
-  }
-  .toast {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-left: 3px solid var(--accent);
-    color: var(--text);
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    animation: slideInRight 0.2s ease;
-    max-width: 360px;
-  }
+  .toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
+  .toast { background: var(--surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); color: var(--text); padding: 12px 16px; border-radius: 8px; font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); animation: slideInRight 0.2s ease; max-width: 360px; }
   .toast.error { border-left-color: var(--red); }
   .toast.success { border-left-color: var(--green); }
-
-  /* ===== DETAIL POPUP ===== */
   .detail-section { margin-bottom: 22px; }
-  .detail-section-title {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 10px;
-  }
-  .detail-meta-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  .detail-meta-item {
-    background: var(--surface-2);
-    padding: 10px 12px;
-    border-radius: 8px;
-  }
-  .detail-meta-label {
-    font-size: 10px;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 3px;
-  }
-  .detail-meta-value {
-    font-size: 13px;
-    color: var(--text);
-    font-weight: 500;
-  }
-  .detail-description {
-    font-size: 13px;
-    color: var(--text-2);
-    line-height: 1.6;
-    white-space: pre-wrap;
-  }
-
-  /* Comments */
+  .detail-section-title { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+  .detail-meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .detail-meta-item { background: var(--surface-2); padding: 10px 12px; border-radius: 8px; }
+  .detail-meta-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+  .detail-meta-value { font-size: 13px; color: var(--text); font-weight: 500; }
+  .detail-description { font-size: 13px; color: var(--text-2); line-height: 1.6; white-space: pre-wrap; }
   .comment-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-  .comment {
-    background: var(--surface-2);
-    border-radius: 8px;
-    padding: 10px 12px;
-  }
-  .comment-head {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-  .comment-author {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent);
-    letter-spacing: 0.04em;
-  }
+  .comment { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+  .comment-head { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .comment-author { font-size: 11px; font-weight: 600; color: var(--accent); letter-spacing: 0.04em; }
   .comment-time { font-size: 10px; color: var(--text-3); }
   .comment-body { font-size: 13px; color: var(--text); white-space: pre-wrap; }
-  .comment-empty {
-    text-align: center;
-    color: var(--text-3);
-    font-size: 12px;
-    padding: 12px;
-    font-style: italic;
-  }
+  .comment-empty { text-align: center; color: var(--text-3); font-size: 12px; padding: 12px; font-style: italic; }
   .comment-form { display: flex; gap: 8px; }
   .comment-form .field-textarea { min-height: 40px; }
-
-  /* ===== EMPTY STATE ===== */
-  .empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-3);
-  }
-  .empty-state-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
-  .empty-state-text { font-size: 14px; margin-bottom: 16px; }
-
-  /* ===== UTILITY ===== */
   [hidden] { display: none !important; }
-  .skeleton {
-    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s infinite;
-    border-radius: 6px;
-  }
-
-  /* ===== ANIMATIONS ===== */
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-  /* ===== SCROLLBARS ===== */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 4px; }
@@ -832,14 +144,9 @@
 </style>
 </head>
 <body>
-
-<!-- ===== LOGIN SCREEN ===== -->
 <div class="login" id="loginScreen">
   <div class="login-card">
-    <div class="login-wordmark">
-      <div class="wordmark-line1">BUSINESS</div>
-      <div class="wordmark-line2">BOOSTER</div>
-    </div>
+    <div class="login-wordmark"><div class="wordmark-line1">BUSINESS</div><div class="wordmark-line2">BOOSTER</div></div>
     <div class="login-subtitle">VIDEO SYSTEM</div>
     <div class="login-date" id="loginDate"></div>
     <input type="text" class="login-input-big" id="loginName" placeholder="YOUR NAME" autocomplete="off" autocapitalize="characters" spellcheck="false">
@@ -847,803 +154,92 @@
     <button class="login-btn" id="loginBtn">ENTER</button>
     <div class="login-error" id="loginError"></div>
   </div>
-  <div class="version-marker">v5</div>
+  <div class="version-marker">v6</div>
 </div>
-
-<!-- ===== MAIN APP ===== -->
 <div class="app" id="app" hidden>
   <aside class="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-logo">V</div>
-      <div class="sidebar-title">BB Video</div>
-    </div>
+    <div class="sidebar-header"><div class="sidebar-logo">V</div><div class="sidebar-title">BB Video</div></div>
     <nav class="sidebar-nav">
       <div class="nav-section">Workspace</div>
-      <button class="nav-item active" data-page="pipeline">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="10" rx="1"/>
-        </svg>
-        Pipeline
-      </button>
-      <button class="nav-item disabled" disabled>
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>
-        </svg>
-        Tasks <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P2</span>
-      </button>
-      <button class="nav-item disabled" disabled>
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
-        </svg>
-        Time Tracking <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P2</span>
-      </button>
-      <button class="nav-item disabled" disabled>
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/>
-        </svg>
-        Analytics <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P3</span>
-      </button>
+      <button class="nav-item active"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="10" rx="1"/></svg>Pipeline</button>
+      <button class="nav-item disabled" disabled><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>Tasks <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P2</span></button>
+      <button class="nav-item disabled" disabled><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>Time Tracking <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P2</span></button>
+      <button class="nav-item disabled" disabled><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>Analytics <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P3</span></button>
       <div class="nav-section">Team</div>
-      <button class="nav-item disabled" disabled>
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0114 0v2"/>
-        </svg>
-        Team <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P4</span>
-      </button>
-      <button class="nav-item disabled" disabled>
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
-        </svg>
-        Team Chat <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P4</span>
-      </button>
+      <button class="nav-item disabled" disabled><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0114 0v2"/></svg>Team <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P4</span></button>
+      <button class="nav-item disabled" disabled><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>Team Chat <span style="font-size:9px;margin-left:auto;color:var(--text-3)">P4</span></button>
     </nav>
     <div class="sidebar-footer">
-      <div class="user-chip">
-        <div class="user-avatar" id="userAvatar">?</div>
-        <div class="user-info">
-          <div class="user-name" id="userName">—</div>
-          <div class="user-role" id="userRole">—</div>
-        </div>
-      </div>
+      <div class="user-chip"><div class="user-avatar" id="userAvatar">?</div><div class="user-info"><div class="user-name" id="userName">—</div><div class="user-role" id="userRole">—</div></div></div>
       <button class="logout-btn" id="logoutBtn">Sign out</button>
     </div>
   </aside>
-
   <main class="main">
     <header class="topbar">
-      <div>
-        <div class="topbar-title">Pipeline Board</div>
-        <div class="topbar-subtitle" id="pipelineSubtitle">Loading…</div>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn btn-ghost" id="refreshBtn" title="Refresh">↻ Refresh</button>
-        <button class="btn btn-primary" id="newProjectBtn">+ New Project</button>
-      </div>
+      <div><div class="topbar-title">Pipeline Board</div><div class="topbar-subtitle" id="pipelineSubtitle">Loading…</div></div>
+      <div class="topbar-actions"><button class="btn btn-ghost" id="refreshBtn">↻ Refresh</button><button class="btn btn-primary" id="newProjectBtn">+ New Project</button></div>
     </header>
-
-    <div class="pipeline-wrap">
-      <div class="pipeline-board" id="pipelineBoard">
-        <!-- columns rendered here -->
-      </div>
-    </div>
+    <div class="pipeline-wrap"><div class="pipeline-board" id="pipelineBoard"></div></div>
   </main>
 </div>
-
-<!-- ===== MODALS ===== -->
 <div id="modalRoot"></div>
-
-<!-- ===== TOASTS ===== -->
 <div class="toasts" id="toasts"></div>
-
 <script>
-/* ============================================================
-   CONFIG — UPDATE THESE THREE THINGS BEFORE DEPLOYING
-   ============================================================ */
-
-// 1. Supabase connection (anon key only — never paste service_role key)
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
-const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
-
-// 2. User PINs and roles. Add/remove users as needed.
-//    role: 'admin' | 'video_head' | 'editor'
+const SUPABASE_ANON_KEY = 'sb_publishable_RkGimnQ1rzRrU4Io5qn9xg_Fgi4LxiO';
 const USERS = [
-  { name: 'THULAIB',  pin: '1031', role: 'admin' },
-  { name: 'SHIARA',   pin: '1006', role: 'admin' },
-  { name: 'USHANE',   pin: '1234', role: 'video_head' },  // CHANGE PIN
-  { name: 'RAJEEWA',  pin: '1234', role: 'editor' },      // CHANGE PIN
-  { name: 'THARUKA',  pin: '1234', role: 'editor' },      // CHANGE PIN
+  { name: 'THULAIB', pin: '1031', role: 'admin' },
+  { name: 'SHIARA',  pin: '1006', role: 'admin' },
+  { name: 'USHANE',  pin: '1234', role: 'video_head' },
+  { name: 'RAJEEWA', pin: '1234', role: 'editor' },
+  { name: 'THARUKA', pin: '1234', role: 'editor' },
 ];
-
-// 3. Refresh interval (milliseconds) — how often to poll Supabase
 const REFRESH_MS = 15000;
-
-/* ============================================================
-   STAGE DEFINITIONS — order matters
-   ============================================================ */
-
 const STAGES = [
-  { key: 'video_shot',           label: 'Video Shot' },
-  { key: 'cutting_color_grading',label: 'Cutting & Color' },
-  { key: 'editing',              label: 'Editing' },
-  { key: 'team_review',          label: 'Team Review' },
-  { key: 'changes',              label: 'Changes' },
-  { key: 'coo_check',            label: 'COO Check' },
-  { key: 'sent_to_client',       label: 'Sent to Client' },
-  { key: 'client_changes',       label: 'Client Changes' },
-  { key: 'add_to_drive',         label: 'Add to Drive' },
-  { key: 'posted',               label: 'Posted' },
+  { key: 'video_shot', label: 'Video Shot' },
+  { key: 'cutting_color_grading', label: 'Cutting & Color' },
+  { key: 'editing', label: 'Editing' },
+  { key: 'team_review', label: 'Team Review' },
+  { key: 'changes', label: 'Changes' },
+  { key: 'coo_check', label: 'COO Check' },
+  { key: 'sent_to_client', label: 'Sent to Client' },
+  { key: 'client_changes', label: 'Client Changes' },
+  { key: 'add_to_drive', label: 'Add to Drive' },
+  { key: 'posted', label: 'Posted' },
 ];
-
-/* ============================================================
-   STATE
-   ============================================================ */
-
-let sb = null;
-let currentUser = null;
-let projects = [];
-let clients = [];
-let teamMembers = [];
-let refreshTimer = null;
-
-/* ============================================================
-   HELPERS
-   ============================================================ */
-
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-
-function toast(msg, type = '') {
-  const el = document.createElement('div');
-  el.className = 'toast' + (type ? ' ' + type : '');
-  el.textContent = msg;
-  $('#toasts').appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(20px)'; }, 2800);
-  setTimeout(() => el.remove(), 3100);
-}
-
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function formatDate(d) {
-  if (!d) return '';
-  const date = new Date(d);
-  const today = new Date();
-  const tomorrow = new Date(today.getTime() + 86400000);
-  if (date.toDateString() === today.toDateString()) return 'Today';
-  if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-function isOverdue(d) {
-  if (!d) return false;
-  const date = new Date(d);
-  date.setHours(23, 59, 59);
-  return date < new Date();
-}
-
-function timeAgo(d) {
-  const diff = Date.now() - new Date(d).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function canEditProjects() {
-  return currentUser && (currentUser.role === 'admin' || currentUser.role === 'video_head');
-}
-
-function canMoveStages() {
-  return canEditProjects();
-}
-
-function canDeleteProject() {
-  return currentUser && currentUser.role === 'admin';
-}
-
-/* ============================================================
-   SUPABASE INIT
-   ============================================================ */
-
-function initSupabase() {
-  if (!window.supabase) { console.error('Supabase SDK not loaded'); return; }
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
-/* ============================================================
-   AUTH (PIN-based, BB pattern)
-   ============================================================ */
-
-function setupLogin() {
-  console.log('[BB Video] setupLogin running');
-
-  // Show today's date (CC pattern)
-  const dateEl = $('#loginDate');
-  if (dateEl) {
-    dateEl.textContent = new Date().toLocaleDateString('en-GB', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    });
-  }
-
-  $('#loginBtn').onclick = doLogin;
-
-  // Enter key on either input submits
-  ['#loginName', '#loginPin'].forEach(sel => {
-    const el = $(sel);
-    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  });
-
-  // Try restore session
-  const saved = sessionStorage.getItem('bb_video_user');
-  if (saved) {
-    try {
-      const u = JSON.parse(saved);
-      const exists = USERS.find(x => x.name === u.name);
-      if (exists) { console.log('[BB Video] Restoring session:', exists.name); onLoginSuccess(exists); return; }
-    } catch (_) {}
-  }
-
-  // Auto-focus name field
-  setTimeout(() => $('#loginName')?.focus(), 100);
-
-  console.log('[BB Video] Login ready. Valid users:', USERS.map(u => u.name).join(', '));
-}
-
-function doLogin() {
-  const nameRaw = $('#loginName').value.trim().toUpperCase();
-  const pin = $('#loginPin').value.trim();
-  const errEl = $('#loginError');
-
-  console.log('[BB Video] Login attempt:', nameRaw, 'PIN length:', pin.length);
-
-  if (!nameRaw) { errEl.textContent = 'Enter your name'; $('#loginName').focus(); return; }
-  if (!pin) { errEl.textContent = 'Enter your PIN'; $('#loginPin').focus(); return; }
-
-  const user = USERS.find(u => u.name === nameRaw);
-  if (!user) {
-    errEl.textContent = `User "${nameRaw}" not found. Try: ${USERS.map(u => u.name).join(', ')}`;
-    return;
-  }
-  if (user.pin !== pin) {
-    errEl.textContent = 'Wrong PIN';
-    $('#loginPin').value = '';
-    $('#loginPin').focus();
-    return;
-  }
-
-  errEl.textContent = '';
-  console.log('[BB Video] Login success:', user.name);
-  onLoginSuccess(user);
-}
-
-function onLoginSuccess(user) {
-  currentUser = user;
-  sessionStorage.setItem('bb_video_user', JSON.stringify({ name: user.name }));
-  $('#loginScreen').hidden = true;
-  $('#app').hidden = false;
-  $('#userName').textContent = user.name;
-  $('#userRole').textContent = user.role.replace('_', ' ');
-  $('#userAvatar').textContent = getInitials(user.name);
-
-  // Hide create button for editors
-  if (!canEditProjects()) $('#newProjectBtn').style.display = 'none';
-
-  bootApp();
-}
-
-function logout() {
-  sessionStorage.removeItem('bb_video_user');
-  if (refreshTimer) clearInterval(refreshTimer);
-  currentUser = null;
-  $('#app').hidden = true;
-  $('#loginScreen').hidden = false;
-  $('#loginPin').value = '';
-}
-
-/* ============================================================
-   DATA FETCH
-   ============================================================ */
-
-async function fetchAll() {
-  try {
-    const [projRes, clientRes, teamRes] = await Promise.all([
-      sb.from('video_projects').select('*').eq('is_archived', false).order('created_at', { ascending: false }),
-      sb.from('clients').select('id, name'),
-      sb.from('team_members').select('id, name, role'),
-    ]);
-    if (projRes.error) throw projRes.error;
-    if (clientRes.error) throw clientRes.error;
-    if (teamRes.error) throw teamRes.error;
-
-    projects = projRes.data || [];
-    clients = clientRes.data || [];
-    teamMembers = teamRes.data || [];
-
-    // Filter for editors — only own assigned projects
-    if (currentUser.role === 'editor') {
-      const myMember = teamMembers.find(m => m.name && m.name.toUpperCase() === currentUser.name.toUpperCase());
-      if (myMember) {
-        projects = projects.filter(p => p.assigned_editor_id === myMember.id);
-      } else {
-        projects = []; // editor not in team_members yet
-      }
-    }
-
-    renderPipeline();
-    updateSubtitle();
-  } catch (err) {
-    console.error(err);
-    toast('Failed to load data — check Supabase config', 'error');
-  }
-}
-
-function updateSubtitle() {
-  const total = projects.length;
-  const overdue = projects.filter(p => p.deadline && isOverdue(p.deadline) && p.current_stage !== 'posted').length;
-  let s = `${total} active project${total === 1 ? '' : 's'}`;
-  if (overdue > 0) s += ` · ${overdue} overdue`;
-  $('#pipelineSubtitle').textContent = s;
-}
-
-/* ============================================================
-   PIPELINE BOARD RENDER
-   ============================================================ */
-
-function renderPipeline() {
-  const board = $('#pipelineBoard');
-  board.innerHTML = STAGES.map(stage => {
-    const stageProjects = projects.filter(p => p.current_stage === stage.key);
-    const cardsHtml = stageProjects.length
-      ? stageProjects.map(p => projectCardHtml(p)).join('')
-      : `<div class="stage-empty">No projects</div>`;
-    return `
-      <div class="stage-col" data-stage="${stage.key}">
-        <div class="stage-header">
-          <div class="stage-title">${stage.label}</div>
-          <div class="stage-count">${stageProjects.length}</div>
-        </div>
-        <div class="stage-cards" data-drop-stage="${stage.key}">
-          ${cardsHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  attachCardListeners();
-  attachDropListeners();
-}
-
-function projectCardHtml(p) {
-  const client = clients.find(c => c.id === p.client_id);
-  const editor = teamMembers.find(m => m.id === p.assigned_editor_id);
-  const overdue = p.deadline && isOverdue(p.deadline) && p.current_stage !== 'posted';
-  const draggable = canMoveStages() ? 'draggable="true"' : '';
-
-  return `
-    <div class="card" data-project-id="${p.id}" ${draggable}>
-      <div class="card-title">${escapeHtml(p.title)}</div>
-      <div class="card-client">${escapeHtml(client?.name || '— No client —')}</div>
-      <div class="card-meta">
-        <div class="card-meta-left">
-          <div class="priority-dot priority-${p.priority || 'medium'}" title="${p.priority || 'medium'}"></div>
-          ${p.deadline ? `<div class="card-deadline ${overdue ? 'overdue' : ''}">${formatDate(p.deadline)}</div>` : ''}
-        </div>
-        <div class="card-avatar ${editor ? 'assigned' : ''}" title="${editor?.name || 'Unassigned'}">${editor ? getInitials(editor.name) : '?'}</div>
-      </div>
-    </div>
-  `;
-}
-
-function attachCardListeners() {
-  $$('.card').forEach(card => {
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('[draggable]') && card.classList.contains('dragging')) return;
-      openProjectDetail(parseInt(card.dataset.projectId));
-    });
-
-    if (canMoveStages()) {
-      card.addEventListener('dragstart', (e) => {
-        card.classList.add('dragging');
-        e.dataTransfer.setData('text/project-id', card.dataset.projectId);
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      card.addEventListener('dragend', () => card.classList.remove('dragging'));
-    }
-  });
-}
-
-function attachDropListeners() {
-  if (!canMoveStages()) return;
-  $$('.stage-cards').forEach(zone => {
-    zone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      zone.classList.add('drop-target');
-    });
-    zone.addEventListener('dragleave', () => zone.classList.remove('drop-target'));
-    zone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      zone.classList.remove('drop-target');
-      const projectId = parseInt(e.dataTransfer.getData('text/project-id'));
-      const newStage = zone.dataset.dropStage;
-      const project = projects.find(p => p.id === projectId);
-      if (!project || project.current_stage === newStage) return;
-      await moveProject(project, newStage);
-    });
-  });
-}
-
-/* ============================================================
-   STAGE MOVE (with history tracking — Manus pattern)
-   ============================================================ */
-
-async function moveProject(project, newStage) {
-  const oldStage = project.current_stage;
-  // Optimistic update
-  project.current_stage = newStage;
-  if (newStage === 'posted') project.completed_at = new Date().toISOString();
-  renderPipeline();
-
-  try {
-    // 1. Close any open stage_history row
-    const { data: openRows } = await sb
-      .from('video_stage_history')
-      .select('*')
-      .eq('video_project_id', project.id)
-      .is('exited_at', null);
-
-    if (openRows && openRows.length > 0) {
-      const open = openRows[0];
-      const exited = new Date();
-      const entered = new Date(open.entered_at);
-      const durationSec = Math.floor((exited - entered) / 1000);
-      await sb
-        .from('video_stage_history')
-        .update({ exited_at: exited.toISOString(), duration_seconds: durationSec })
-        .eq('id', open.id);
-    }
-
-    // 2. Insert new stage_history row
-    await sb.from('video_stage_history').insert({
-      video_project_id: project.id,
-      stage: newStage,
-      moved_by: currentUser.name,
-    });
-
-    // 3. Update project current_stage
-    const updates = { current_stage: newStage, updated_at: new Date().toISOString() };
-    if (newStage === 'posted') updates.completed_at = new Date().toISOString();
-    const { error } = await sb.from('video_projects').update(updates).eq('id', project.id);
-    if (error) throw error;
-
-    toast(`Moved to ${STAGES.find(s => s.key === newStage)?.label}`, 'success');
-  } catch (err) {
-    console.error(err);
-    toast('Move failed — reverting', 'error');
-    project.current_stage = oldStage;
-    renderPipeline();
-  }
-}
-
-/* ============================================================
-   PROJECT FORM (CREATE / EDIT)
-   ============================================================ */
-
-function openProjectForm(existing = null) {
-  if (!canEditProjects()) return;
-  const isEdit = !!existing;
-  const html = `
-    <div class="modal-backdrop" id="modal">
-      <div class="modal">
-        <div class="modal-header">
-          <div class="modal-title">${isEdit ? 'Edit Project' : 'New Project'}</div>
-          <button class="modal-close" onclick="closeModal()">&times;</button>
-        </div>
-        <form id="projectForm" class="modal-body">
-          <div class="form-grid">
-            <div>
-              <label class="field-label">Title</label>
-              <input class="field-input" name="title" required value="${escapeHtml(existing?.title || '')}" autofocus>
-            </div>
-            <div class="form-row">
-              <div>
-                <label class="field-label">Client</label>
-                <select class="field-select" name="client_id">
-                  <option value="">— None —</option>
-                  ${clients.map(c => `<option value="${c.id}" ${existing?.client_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Assigned Editor</label>
-                <select class="field-select" name="assigned_editor_id">
-                  <option value="">— Unassigned —</option>
-                  ${teamMembers.map(m => `<option value="${m.id}" ${existing?.assigned_editor_id === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div>
-                <label class="field-label">Priority</label>
-                <select class="field-select" name="priority">
-                  ${['low','medium','high','urgent'].map(p => `<option value="${p}" ${(existing?.priority || 'medium') === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)}</option>`).join('')}
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Type</label>
-                <select class="field-select" name="type">
-                  ${['reel','ad','testimonial','product','educational'].map(t => `<option value="${t}" ${(existing?.type || 'reel') === t ? 'selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div>
-                <label class="field-label">Stage</label>
-                <select class="field-select" name="current_stage">
-                  ${STAGES.map(s => `<option value="${s.key}" ${(existing?.current_stage || 'video_shot') === s.key ? 'selected' : ''}>${s.label}</option>`).join('')}
-                </select>
-              </div>
-              <div>
-                <label class="field-label">Deadline</label>
-                <input class="field-input" type="date" name="deadline" value="${existing?.deadline || ''}">
-              </div>
-            </div>
-            <div>
-              <label class="field-label">Formula (optional)</label>
-              <input class="field-input" name="formula" placeholder="e.g. F02 — The Journey" value="${escapeHtml(existing?.formula || '')}">
-            </div>
-            <div>
-              <label class="field-label">Description / Notes</label>
-              <textarea class="field-textarea" name="description" rows="3">${escapeHtml(existing?.description || '')}</textarea>
-            </div>
-          </div>
-        </form>
-        <div class="modal-footer">
-          ${isEdit && canDeleteProject() ? `<button class="btn btn-ghost btn-danger" onclick="deleteProject(${existing.id})">Delete</button>` : ''}
-          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveProject(${isEdit ? existing.id : 'null'})">${isEdit ? 'Save' : 'Create'}</button>
-        </div>
-      </div>
-    </div>
-  `;
-  $('#modalRoot').innerHTML = html;
-}
-
-async function saveProject(id) {
-  const form = $('#projectForm');
-  const fd = new FormData(form);
-  const data = {
-    title: fd.get('title').trim(),
-    client_id: fd.get('client_id') ? parseInt(fd.get('client_id')) : null,
-    assigned_editor_id: fd.get('assigned_editor_id') ? parseInt(fd.get('assigned_editor_id')) : null,
-    priority: fd.get('priority'),
-    type: fd.get('type'),
-    current_stage: fd.get('current_stage'),
-    deadline: fd.get('deadline') || null,
-    formula: fd.get('formula').trim() || null,
-    description: fd.get('description').trim() || null,
-  };
-
-  if (!data.title) { toast('Title required', 'error'); return; }
-
-  try {
-    if (id) {
-      // Edit — also handle stage change with history
-      const original = projects.find(p => p.id === id);
-      if (original && original.current_stage !== data.current_stage) {
-        await moveProject(original, data.current_stage);
-      }
-      data.updated_at = new Date().toISOString();
-      const { error } = await sb.from('video_projects').update(data).eq('id', id);
-      if (error) throw error;
-      toast('Project updated', 'success');
-    } else {
-      data.created_by = currentUser.name;
-      const { data: inserted, error } = await sb.from('video_projects').insert(data).select().single();
-      if (error) throw error;
-      // Create initial stage history
-      await sb.from('video_stage_history').insert({
-        video_project_id: inserted.id,
-        stage: inserted.current_stage,
-        moved_by: currentUser.name,
-      });
-      toast('Project created', 'success');
-    }
-    closeModal();
-    await fetchAll();
-  } catch (err) {
-    console.error(err);
-    toast('Save failed: ' + (err.message || 'unknown'), 'error');
-  }
-}
-
-async function deleteProject(id) {
-  if (!confirm('Delete this project? This cannot be undone.')) return;
-  try {
-    const { error } = await sb.from('video_projects').delete().eq('id', id);
-    if (error) throw error;
-    toast('Project deleted', 'success');
-    closeModal();
-    await fetchAll();
-  } catch (err) {
-    console.error(err);
-    toast('Delete failed', 'error');
-  }
-}
-
+let sb = null, currentUser = null, projects = [], clients = [], teamMembers = [], refreshTimer = null;
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+function toast(msg, type = '') { const el = document.createElement('div'); el.className = 'toast' + (type ? ' ' + type : ''); el.textContent = msg; $('#toasts').appendChild(el); setTimeout(() => { el.style.opacity = '0'; }, 2800); setTimeout(() => el.remove(), 3100); }
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function formatDate(d) { if (!d) return ''; const date = new Date(d); const today = new Date(); const tom = new Date(today.getTime() + 86400000); if (date.toDateString() === today.toDateString()) return 'Today'; if (date.toDateString() === tom.toDateString()) return 'Tomorrow'; return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
+function isOverdue(d) { if (!d) return false; const date = new Date(d); date.setHours(23, 59, 59); return date < new Date(); }
+function timeAgo(d) { const diff = Date.now() - new Date(d).getTime(); const m = Math.floor(diff / 60000); if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; return `${Math.floor(h / 24)}d ago`; }
+function getInitials(name) { if (!name) return '?'; const p = name.trim().split(/\s+/); if (p.length === 1) return p[0].slice(0, 2).toUpperCase(); return (p[0][0] + p[p.length - 1][0]).toUpperCase(); }
+function canEditProjects() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'video_head'); }
+function canMoveStages() { return canEditProjects(); }
+function canDeleteProject() { return currentUser && currentUser.role === 'admin'; }
+function initSupabase() { if (!window.supabase) { console.error('Supabase SDK not loaded'); return; } sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+function setupLogin() { const dateEl = $('#loginDate'); if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); $('#loginBtn').onclick = doLogin; ['#loginName', '#loginPin'].forEach(s => { const el = $(s); if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }); }); const saved = sessionStorage.getItem('bb_video_user'); if (saved) { try { const u = JSON.parse(saved); const ex = USERS.find(x => x.name === u.name); if (ex) { onLoginSuccess(ex); return; } } catch (_) {} } setTimeout(() => $('#loginName')?.focus(), 100); }
+function doLogin() { const n = $('#loginName').value.trim().toUpperCase(); const p = $('#loginPin').value.trim(); const e = $('#loginError'); if (!n) { e.textContent = 'Enter your name'; return; } if (!p) { e.textContent = 'Enter your PIN'; return; } const u = USERS.find(x => x.name === n); if (!u) { e.textContent = `User "${n}" not found`; return; } if (u.pin !== p) { e.textContent = 'Wrong PIN'; $('#loginPin').value = ''; return; } e.textContent = ''; onLoginSuccess(u); }
+function onLoginSuccess(user) { currentUser = user; sessionStorage.setItem('bb_video_user', JSON.stringify({ name: user.name })); $('#loginScreen').hidden = true; $('#app').hidden = false; $('#userName').textContent = user.name; $('#userRole').textContent = user.role.replace('_', ' '); $('#userAvatar').textContent = getInitials(user.name); if (!canEditProjects()) $('#newProjectBtn').style.display = 'none'; bootApp(); }
+function logout() { sessionStorage.removeItem('bb_video_user'); if (refreshTimer) clearInterval(refreshTimer); currentUser = null; $('#app').hidden = true; $('#loginScreen').hidden = false; $('#loginPin').value = ''; }
+async function fetchAll() { try { const [pr, cr, tr] = await Promise.all([ sb.from('video_projects').select('*').eq('is_archived', false).order('created_at', { ascending: false }), sb.from('clients').select('id, name'), sb.from('team_members').select('id, name, role') ]); if (pr.error) throw pr.error; if (cr.error) throw cr.error; if (tr.error) throw tr.error; projects = pr.data || []; clients = cr.data || []; teamMembers = tr.data || []; if (currentUser.role === 'editor') { const me = teamMembers.find(m => m.name && m.name.toUpperCase() === currentUser.name.toUpperCase()); projects = me ? projects.filter(p => p.assigned_editor_id === me.id) : []; } renderPipeline(); updateSubtitle(); } catch (err) { console.error(err); toast('Failed to load data: ' + (err.message || ''), 'error'); } }
+function updateSubtitle() { const t = projects.length; const o = projects.filter(p => p.deadline && isOverdue(p.deadline) && p.current_stage !== 'posted').length; let s = `${t} active project${t === 1 ? '' : 's'}`; if (o) s += ` · ${o} overdue`; $('#pipelineSubtitle').textContent = s; }
+function renderPipeline() { const b = $('#pipelineBoard'); b.innerHTML = STAGES.map(st => { const sp = projects.filter(p => p.current_stage === st.key); const h = sp.length ? sp.map(p => projectCardHtml(p)).join('') : `<div class="stage-empty">No projects</div>`; return `<div class="stage-col" data-stage="${st.key}"><div class="stage-header"><div class="stage-title">${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${h}</div></div>`; }).join(''); attachCardListeners(); attachDropListeners(); }
+function projectCardHtml(p) { const cl = clients.find(c => c.id === p.client_id); const ed = teamMembers.find(m => m.id === p.assigned_editor_id); const ov = p.deadline && isOverdue(p.deadline) && p.current_stage !== 'posted'; const dr = canMoveStages() ? 'draggable="true"' : ''; return `<div class="card" data-project-id="${p.id}" ${dr}><div class="card-title">${escapeHtml(p.title)}</div><div class="card-client">${escapeHtml(cl?.name || '— No client —')}</div><div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${p.priority || 'medium'}"></div>${p.deadline ? `<div class="card-deadline ${ov ? 'overdue' : ''}">${formatDate(p.deadline)}</div>` : ''}</div><div class="card-avatar ${ed ? 'assigned' : ''}">${ed ? getInitials(ed.name) : '?'}</div></div></div>`; }
+function attachCardListeners() { $$('.card').forEach(c => { c.addEventListener('click', e => { if (c.classList.contains('dragging')) return; openProjectDetail(parseInt(c.dataset.projectId)); }); if (canMoveStages()) { c.addEventListener('dragstart', e => { c.classList.add('dragging'); e.dataTransfer.setData('text/project-id', c.dataset.projectId); }); c.addEventListener('dragend', () => c.classList.remove('dragging')); } }); }
+function attachDropListeners() { if (!canMoveStages()) return; $$('.stage-cards').forEach(z => { z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('drop-target'); }); z.addEventListener('dragleave', () => z.classList.remove('drop-target')); z.addEventListener('drop', async e => { e.preventDefault(); z.classList.remove('drop-target'); const pid = parseInt(e.dataTransfer.getData('text/project-id')); const ns = z.dataset.dropStage; const p = projects.find(x => x.id === pid); if (!p || p.current_stage === ns) return; await moveProject(p, ns); }); }); }
+async function moveProject(project, newStage) { const old = project.current_stage; project.current_stage = newStage; if (newStage === 'posted') project.completed_at = new Date().toISOString(); renderPipeline(); try { const { data: open } = await sb.from('video_stage_history').select('*').eq('video_project_id', project.id).is('exited_at', null); if (open && open.length) { const o = open[0]; const ex = new Date(); const en = new Date(o.entered_at); await sb.from('video_stage_history').update({ exited_at: ex.toISOString(), duration_seconds: Math.floor((ex - en) / 1000) }).eq('id', o.id); } await sb.from('video_stage_history').insert({ video_project_id: project.id, stage: newStage, moved_by: currentUser.name }); const up = { current_stage: newStage, updated_at: new Date().toISOString() }; if (newStage === 'posted') up.completed_at = new Date().toISOString(); const { error } = await sb.from('video_projects').update(up).eq('id', project.id); if (error) throw error; toast(`Moved to ${STAGES.find(s => s.key === newStage)?.label}`, 'success'); } catch (err) { console.error(err); toast('Move failed', 'error'); project.current_stage = old; renderPipeline(); } }
+function openProjectForm(existing = null) { if (!canEditProjects()) return; const ie = !!existing; const html = `<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">${ie ? 'Edit Project' : 'New Project'}</div><button class="modal-close" onclick="closeModal()">&times;</button></div><form id="projectForm" class="modal-body"><div class="form-grid"><div><label class="field-label">Title</label><input class="field-input" name="title" required value="${escapeHtml(existing?.title || '')}" autofocus></div><div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${clients.map(c => `<option value="${c.id}" ${existing?.client_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">— Unassigned —</option>${teamMembers.map(m => `<option value="${m.id}" ${existing?.assigned_editor_id === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}</select></div></div><div class="form-row"><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p => `<option value="${p}" ${(existing?.priority || 'medium') === p ? 'selected' : ''}>${p[0].toUpperCase() + p.slice(1)}</option>`).join('')}</select></div><div><label class="field-label">Type</label><select class="field-select" name="type">${['reel','ad','testimonial','product','educational'].map(t => `<option value="${t}" ${(existing?.type || 'reel') === t ? 'selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}</select></div></div><div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s => `<option value="${s.key}" ${(existing?.current_stage || 'video_shot') === s.key ? 'selected' : ''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline || ''}"></div></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${escapeHtml(existing?.formula || '')}"></div><div><label class="field-label">Description</label><textarea class="field-textarea" name="description" rows="3">${escapeHtml(existing?.description || '')}</textarea></div></div></form><div class="modal-footer">${ie && canDeleteProject() ? `<button class="btn btn-ghost btn-danger" onclick="deleteProject(${existing.id})">Delete</button>` : ''}<button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveProject(${ie ? existing.id : 'null'})">${ie ? 'Save' : 'Create'}</button></div></div></div>`; $('#modalRoot').innerHTML = html; }
+async function saveProject(id) { const f = $('#projectForm'); const fd = new FormData(f); const d = { title: fd.get('title').trim(), client_id: fd.get('client_id') ? parseInt(fd.get('client_id')) : null, assigned_editor_id: fd.get('assigned_editor_id') ? parseInt(fd.get('assigned_editor_id')) : null, priority: fd.get('priority'), type: fd.get('type'), current_stage: fd.get('current_stage'), deadline: fd.get('deadline') || null, formula: fd.get('formula').trim() || null, description: fd.get('description').trim() || null }; if (!d.title) { toast('Title required', 'error'); return; } try { if (id) { const o = projects.find(p => p.id === id); if (o && o.current_stage !== d.current_stage) await moveProject(o, d.current_stage); d.updated_at = new Date().toISOString(); const { error } = await sb.from('video_projects').update(d).eq('id', id); if (error) throw error; toast('Project updated', 'success'); } else { d.created_by = currentUser.name; const { data: ins, error } = await sb.from('video_projects').insert(d).select().single(); if (error) throw error; await sb.from('video_stage_history').insert({ video_project_id: ins.id, stage: ins.current_stage, moved_by: currentUser.name }); toast('Project created', 'success'); } closeModal(); await fetchAll(); } catch (err) { console.error(err); toast('Save failed: ' + (err.message || ''), 'error'); } }
+async function deleteProject(id) { if (!confirm('Delete this project?')) return; try { const { error } = await sb.from('video_projects').delete().eq('id', id); if (error) throw error; toast('Project deleted', 'success'); closeModal(); await fetchAll(); } catch (err) { toast('Delete failed', 'error'); } }
 function closeModal() { $('#modalRoot').innerHTML = ''; }
-
-/* ============================================================
-   PROJECT DETAIL POPUP
-   ============================================================ */
-
-async function openProjectDetail(id) {
-  const p = projects.find(x => x.id === id);
-  if (!p) return;
-  const client = clients.find(c => c.id === p.client_id);
-  const editor = teamMembers.find(m => m.id === p.assigned_editor_id);
-  const stage = STAGES.find(s => s.key === p.current_stage);
-
-  // Fetch comments for this project
-  let comments = [];
-  try {
-    const { data } = await sb
-      .from('video_project_comments')
-      .select('*')
-      .eq('video_project_id', id)
-      .order('created_at', { ascending: true });
-    comments = data || [];
-  } catch (_) {}
-
-  const overdue = p.deadline && isOverdue(p.deadline) && p.current_stage !== 'posted';
-
-  const html = `
-    <div class="modal-backdrop" id="modal">
-      <div class="modal modal-large">
-        <div class="modal-header">
-          <div>
-            <div class="modal-title">${escapeHtml(p.title)}</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:0.06em">
-              ${escapeHtml(client?.name || 'No client')} · ${stage?.label || p.current_stage}
-            </div>
-          </div>
-          <button class="modal-close" onclick="closeModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="detail-section">
-            <div class="detail-section-title">Overview</div>
-            <div class="detail-meta-grid">
-              <div class="detail-meta-item">
-                <div class="detail-meta-label">Priority</div>
-                <div class="detail-meta-value" style="text-transform:capitalize">
-                  <span class="priority-dot priority-${p.priority || 'medium'}" style="display:inline-block;margin-right:6px;vertical-align:middle"></span>
-                  ${p.priority || 'medium'}
-                </div>
-              </div>
-              <div class="detail-meta-item">
-                <div class="detail-meta-label">Type</div>
-                <div class="detail-meta-value" style="text-transform:capitalize">${p.type || '—'}</div>
-              </div>
-              <div class="detail-meta-item">
-                <div class="detail-meta-label">Editor</div>
-                <div class="detail-meta-value">${escapeHtml(editor?.name || 'Unassigned')}</div>
-              </div>
-              <div class="detail-meta-item">
-                <div class="detail-meta-label">Deadline</div>
-                <div class="detail-meta-value" style="${overdue ? 'color:var(--red)' : ''}">
-                  ${p.deadline ? formatDate(p.deadline) : '—'}${overdue ? ' (overdue)' : ''}
-                </div>
-              </div>
-              ${p.formula ? `
-                <div class="detail-meta-item" style="grid-column:1/-1">
-                  <div class="detail-meta-label">Formula</div>
-                  <div class="detail-meta-value">${escapeHtml(p.formula)}</div>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-
-          ${p.description ? `
-            <div class="detail-section">
-              <div class="detail-section-title">Description</div>
-              <div class="detail-description">${escapeHtml(p.description)}</div>
-            </div>
-          ` : ''}
-
-          <div class="detail-section">
-            <div class="detail-section-title">Team Discussion</div>
-            <div class="comment-list">
-              ${comments.length ? comments.map(c => `
-                <div class="comment">
-                  <div class="comment-head">
-                    <div class="comment-author">${escapeHtml(c.author)}</div>
-                    <div class="comment-time">${timeAgo(c.created_at)}</div>
-                  </div>
-                  <div class="comment-body">${escapeHtml(c.body)}</div>
-                </div>
-              `).join('') : `<div class="comment-empty">No comments yet</div>`}
-            </div>
-            <div class="comment-form">
-              <textarea id="newComment" class="field-textarea" placeholder="Add a comment…" rows="2"></textarea>
-              <button class="btn btn-primary" onclick="postComment(${id})">Post</button>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          ${canEditProjects() ? `<button class="btn btn-secondary" onclick="closeModal(); openProjectForm(projects.find(p => p.id === ${id}))">Edit</button>` : ''}
-          <button class="btn btn-primary" onclick="closeModal()">Close</button>
-        </div>
-      </div>
-    </div>
-  `;
-  $('#modalRoot').innerHTML = html;
-}
-
-async function postComment(projectId) {
-  const body = $('#newComment').value.trim();
-  if (!body) return;
-  try {
-    const { error } = await sb.from('video_project_comments').insert({
-      video_project_id: projectId,
-      body,
-      author: currentUser.name,
-    });
-    if (error) throw error;
-    await openProjectDetail(projectId); // reload
-  } catch (err) {
-    console.error(err);
-    toast('Comment failed', 'error');
-  }
-}
-
-/* ============================================================
-   BOOT
-   ============================================================ */
-
-function bootApp() {
-  $('#newProjectBtn').onclick = () => openProjectForm();
-  $('#refreshBtn').onclick = () => fetchAll();
-  $('#logoutBtn').onclick = logout;
-
-  fetchAll();
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(fetchAll, REFRESH_MS);
-
-  // Close modal on backdrop click
-  document.addEventListener('click', (e) => {
-    if (e.target.id === 'modal') closeModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
-  });
-}
-
-/* ============================================================
-   INIT
-   ============================================================ */
-
-window.addEventListener('DOMContentLoaded', () => {
-  initSupabase();
-  setupLogin();
-});
-
-// Expose for inline handlers
-window.openProjectForm = openProjectForm;
-window.saveProject = saveProject;
-window.deleteProject = deleteProject;
-window.closeModal = closeModal;
-window.postComment = postComment;
+async function openProjectDetail(id) { const p = projects.find(x => x.id === id); if (!p) return; const cl = clients.find(c => c.id === p.client_id); const ed = teamMembers.find(m => m.id === p.assigned_editor_id); const st = STAGES.find(s => s.key === p.current_stage); let comments = []; try { const { data } = await sb.from('video_project_comments').select('*').eq('video_project_id', id).order('created_at', { ascending: true }); comments = data || []; } catch (_) {} const ov = p.deadline && isOverdue(p.deadline) && p.current_stage !== 'posted'; const html = `<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${escapeHtml(p.title)}</div><div style="font-size:11px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(cl?.name || 'No client')} · ${st?.label || p.current_stage}</div></div><button class="modal-close" onclick="closeModal()">&times;</button></div><div class="modal-body"><div class="detail-section"><div class="detail-section-title">Overview</div><div class="detail-meta-grid"><div class="detail-meta-item"><div class="detail-meta-label">Priority</div><div class="detail-meta-value" style="text-transform:capitalize"><span class="priority-dot priority-${p.priority || 'medium'}" style="display:inline-block;margin-right:6px"></span>${p.priority || 'medium'}</div></div><div class="detail-meta-item"><div class="detail-meta-label">Type</div><div class="detail-meta-value" style="text-transform:capitalize">${p.type || '—'}</div></div><div class="detail-meta-item"><div class="detail-meta-label">Editor</div><div class="detail-meta-value">${escapeHtml(ed?.name || 'Unassigned')}</div></div><div class="detail-meta-item"><div class="detail-meta-label">Deadline</div><div class="detail-meta-value" style="${ov ? 'color:var(--red)' : ''}">${p.deadline ? formatDate(p.deadline) : '—'}${ov ? ' (overdue)' : ''}</div></div>${p.formula ? `<div class="detail-meta-item" style="grid-column:1/-1"><div class="detail-meta-label">Formula</div><div class="detail-meta-value">${escapeHtml(p.formula)}</div></div>` : ''}</div></div>${p.description ? `<div class="detail-section"><div class="detail-section-title">Description</div><div class="detail-description">${escapeHtml(p.description)}</div></div>` : ''}<div class="detail-section"><div class="detail-section-title">Team Discussion</div><div class="comment-list">${comments.length ? comments.map(c => `<div class="comment"><div class="comment-head"><div class="comment-author">${escapeHtml(c.author)}</div><div class="comment-time">${timeAgo(c.created_at)}</div></div><div class="comment-body">${escapeHtml(c.body)}</div></div>`).join('') : `<div class="comment-empty">No comments yet</div>`}</div><div class="comment-form"><textarea id="newComment" class="field-textarea" placeholder="Add a comment…" rows="2"></textarea><button class="btn btn-primary" onclick="postComment(${id})">Post</button></div></div></div><div class="modal-footer">${canEditProjects() ? `<button class="btn btn-secondary" onclick="closeModal(); openProjectForm(projects.find(p => p.id === ${id}))">Edit</button>` : ''}<button class="btn btn-primary" onclick="closeModal()">Close</button></div></div></div>`; $('#modalRoot').innerHTML = html; }
+async function postComment(pid) { const b = $('#newComment').value.trim(); if (!b) return; try { const { error } = await sb.from('video_project_comments').insert({ video_project_id: pid, body: b, author: currentUser.name }); if (error) throw error; await openProjectDetail(pid); } catch (err) { toast('Comment failed', 'error'); } }
+function bootApp() { $('#newProjectBtn').onclick = () => openProjectForm(); $('#refreshBtn').onclick = () => fetchAll(); $('#logoutBtn').onclick = logout; fetchAll(); if (refreshTimer) clearInterval(refreshTimer); refreshTimer = setInterval(fetchAll, REFRESH_MS); document.addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); }); document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); }); }
+window.addEventListener('DOMContentLoaded', () => { initSupabase(); setupLogin(); });
+window.openProjectForm = openProjectForm; window.saveProject = saveProject; window.deleteProject = deleteProject; window.closeModal = closeModal; window.postComment = postComment;
 </script>
-
 </body>
 </html>
