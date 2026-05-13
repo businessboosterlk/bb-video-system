@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,9 +23,12 @@ a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
 .login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:100;padding:20px}
 .login-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:56px 48px 40px;width:100%;max-width:440px;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
-.login-wordmark{text-align:center;margin-bottom:6px;line-height:0.92}
-.wordmark-line1,.wordmark-line2{font-size:44px;font-weight:900;letter-spacing:-0.02em;color:var(--text);text-transform:uppercase}
-.login-subtitle{text-align:center;font-size:11px;font-weight:700;letter-spacing:0.32em;color:var(--accent);text-transform:uppercase;margin-top:10px;margin-bottom:24px}
+.bb-wordmark{text-align:center;line-height:0.88;margin-bottom:10px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.bb-wm-row{font-family:'Inter',sans-serif;font-size:48px;font-weight:900;letter-spacing:-0.04em;color:var(--text);text-transform:uppercase;display:flex;align-items:center;justify-content:center;line-height:0.95}
+.bb-wm-row.with-arrow{padding-left:8px}
+.bb-arrow{display:inline-block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:14px solid var(--text);margin-right:-4px;margin-top:-22px;align-self:flex-start;position:relative;top:6px}
+.bb-inf{display:inline-block;font-size:0.95em;font-weight:900;letter-spacing:-0.18em;margin:0 -0.08em;transform:translateY(0.04em);font-family:'Inter',sans-serif}
+.login-subtitle{text-align:center;font-size:11px;font-weight:700;letter-spacing:0.32em;color:var(--accent);text-transform:uppercase;margin-top:12px;margin-bottom:24px}
 .login-date{text-align:center;color:var(--text-3);font-size:13px;margin-bottom:28px}
 .login-input-big{width:100%;background:var(--surface-2);border:1px solid transparent;border-radius:10px;padding:18px 20px;color:var(--text);font-size:13px;font-weight:600;text-align:center;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:12px;transition:all 0.15s;display:block}
 .login-input-big::placeholder{color:var(--text-3);letter-spacing:0.24em;font-weight:500}
@@ -35,7 +39,16 @@ a:hover{text-decoration:underline}
 .version-marker{position:fixed;bottom:10px;right:14px;font-size:9px;color:var(--text-3);letter-spacing:0.1em;font-weight:500;opacity:0.5;z-index:1000}
 .app{display:flex;height:100vh;position:relative}
 .sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
-.sidebar-header{height:var(--topbar-h);padding:0 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-header{padding:20px 18px 14px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-brand{display:flex;flex-direction:column;align-items:center;gap:4px}
+.sidebar-bb-wm{font-family:'Inter',sans-serif;font-weight:900;line-height:0.9;letter-spacing:-0.04em;color:var(--text);text-transform:uppercase;text-align:center}
+.sidebar-bb-wm .sb-row{font-size:22px;display:flex;align-items:center;justify-content:center;line-height:0.95}
+.sidebar-bb-wm .sb-arrow{display:inline-block;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid var(--text);margin-right:-3px;margin-top:-12px;align-self:flex-start;position:relative;top:4px}
+.sidebar-bb-wm .sb-inf{font-size:0.95em;letter-spacing:-0.18em;margin:0 -0.08em;transform:translateY(0.05em);display:inline-block}
+.sidebar-subtitle{font-size:9px;font-weight:700;letter-spacing:0.28em;color:var(--accent);text-transform:uppercase;text-align:center;margin-top:2px}
+.sidebar-clock{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center;margin-top:4px}
+.sidebar-clock-time{font-size:22px;font-weight:800;color:var(--text);letter-spacing:0.04em;font-variant-numeric:tabular-nums;line-height:1}
+.sidebar-clock-date{font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.1em;margin-top:6px}
 .sidebar-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);display:grid;place-items:center;font-weight:800;font-size:14px;color:white;box-shadow:0 2px 12px var(--accent-glow)}
 .sidebar-title{font-size:11px;font-weight:700;letter-spacing:0.12em;color:var(--text);text-transform:uppercase}
 .sidebar-nav{flex:1;padding:14px 12px;display:flex;flex-direction:column;gap:1px;overflow-y:auto}
@@ -119,28 +132,43 @@ a:hover{text-decoration:underline}
 .tag.blue{background:var(--blue-soft);color:var(--blue)}
 .tag.purple{background:var(--accent-soft);color:var(--accent)}
 .pipeline-board{display:flex;gap:14px;min-height:calc(100vh - 230px)}
-.stage-col{width:280px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 230px)}
-.stage-header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border)}
-.stage-title{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:0.08em;flex:1}
-.stage-count{background:var(--surface-2);color:var(--text-2);font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;min-width:24px;text-align:center}
-.stage-cards{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1}
+.stage-col{width:286px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 230px)}
+.stage-header{padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border)}
+.stage-title{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:0.1em;flex:1;display:flex;align-items:center;gap:8px}
+.stage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.stage-dot.s-video_shot{background:#3b82f6}
+.stage-dot.s-cutting_color_grading{background:#06b6d4}
+.stage-dot.s-editing{background:#f59e0b}
+.stage-dot.s-team_review{background:#a855f7}
+.stage-dot.s-changes{background:#ef4444}
+.stage-dot.s-coo_check{background:#ec4899}
+.stage-dot.s-sent_to_client{background:#22c55e}
+.stage-dot.s-client_changes{background:#f97316}
+.stage-dot.s-add_to_drive{background:#14b8a6}
+.stage-dot.s-posted{background:#64748b}
+.stage-count{background:var(--surface-2);color:var(--text-2);font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;min-width:26px;text-align:center}
+.stage-cards{padding:10px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;flex:1}
 .stage-cards.drop-target{background:var(--accent-soft)}
 .stage-empty{padding:20px 10px;text-align:center;color:var(--text-3);font-size:11px;font-style:italic}
-.card{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:grab;transition:all 0.15s}
-.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.card{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:13px;cursor:grab;transition:all 0.18s;border-left:3px solid var(--text-3);position:relative}
+.card.pr-urgent{border-left-color:var(--red)}
+.card.pr-high{border-left-color:var(--amber)}
+.card.pr-medium{border-left-color:var(--blue)}
+.card.pr-low{border-left-color:var(--text-3)}
+.card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.25)}
 .card.dragging{opacity:0.4;cursor:grabbing}
-.card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.card-client{font-size:11px;color:var(--text-3);margin-bottom:10px}
-.card-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px}
+.card-title{font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;letter-spacing:-0.01em}
+.card-client{font-size:10px;color:var(--text-3);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600}
+.card-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)}
 .card-meta-left{display:flex;align-items:center;gap:6px}
 .priority-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .priority-urgent{background:var(--red);box-shadow:0 0 8px var(--red)}
 .priority-high{background:var(--amber)}
 .priority-medium{background:var(--blue)}
 .priority-low{background:var(--text-3)}
-.card-deadline{font-size:10px;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
-.card-deadline.overdue{color:var(--red);font-weight:600}
-.card-avatar{width:22px;height:22px;border-radius:50%;background:var(--surface-3);display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--text)}
+.card-deadline{font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
+.card-deadline.overdue{color:var(--red);font-weight:700}
+.card-avatar{width:24px;height:24px;border-radius:50%;background:var(--surface-3);display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--text)}
 .card-avatar.assigned{background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);color:white}
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.15s}
 .modal{background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;width:100%;max-width:600px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:slideUp 0.2s}
@@ -220,6 +248,21 @@ a:hover{text-decoration:underline}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.image-attach{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border:1px dashed var(--border-strong);border-radius:8px;flex-wrap:wrap}
+.image-attach-btn{padding:7px 12px;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px}
+.image-attach-btn:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.image-attach-hint{font-size:11px;color:var(--text-3);font-style:italic}
+.image-preview-wrap{position:relative;display:inline-block;margin-top:6px}
+.image-preview{max-width:200px;max-height:160px;border-radius:6px;border:1px solid var(--border-strong);display:block}
+.image-preview-remove{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--red);color:white;font-size:14px;font-weight:700;display:grid;place-items:center;cursor:pointer;border:2px solid var(--bg);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+.comment{background:var(--surface-2);border-radius:10px;padding:12px 14px;border:1px solid var(--border)}
+.comment-author{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:0.06em;text-transform:uppercase}
+.comment-time{font-size:10px;color:var(--text-3);font-weight:500}
+.link-row{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--surface-2);border-radius:9px;border:1px solid var(--border);transition:all 0.15s}
+.link-row:hover{border-color:var(--accent);transform:translateX(2px)}
+.detail-meta-item{background:var(--surface-2);padding:11px 13px;border-radius:9px;border:1px solid var(--border)}
+.timestamp-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3);font-weight:500;letter-spacing:0.02em}
+.timestamp-tag::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--text-3)}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:4px}
@@ -229,7 +272,10 @@ a:hover{text-decoration:underline}
 <body>
 <div class="login" id="loginScreen">
   <div class="login-card">
-    <div class="login-wordmark"><div class="wordmark-line1">BUSINESS</div><div class="wordmark-line2">BOOSTER</div></div>
+    <div class="bb-wordmark">
+      <div class="bb-wm-row">BUSINESS</div>
+      <div class="bb-wm-row">BOOSTER</div>
+    </div>
     <div class="login-subtitle">VIDEO SYSTEM</div>
     <div class="login-date" id="loginDate"></div>
     <input type="text" class="login-input-big" id="loginName" placeholder="YOUR NAME" autocomplete="off" autocapitalize="characters" spellcheck="false">
@@ -240,7 +286,19 @@ a:hover{text-decoration:underline}
 </div>
 <div class="app" id="app" hidden>
   <aside class="sidebar">
-    <div class="sidebar-header"><div class="sidebar-logo">V</div><div class="sidebar-title">BB Video</div></div>
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <div class="sidebar-bb-wm">
+          <div class="sb-row">BUSINESS</div>
+          <div class="sb-row">BOOSTER</div>
+        </div>
+        <div class="sidebar-subtitle">Video System</div>
+      </div>
+      <div class="sidebar-clock">
+        <div class="sidebar-clock-time" id="sbClockTime">--:--</div>
+        <div class="sidebar-clock-date" id="sbClockDate">--</div>
+      </div>
+    </div>
     <nav class="sidebar-nav" id="sidebarNav"></nav>
     <div class="sidebar-footer">
       <div class="user-chip">
@@ -260,14 +318,15 @@ a:hover{text-decoration:underline}
 </div>
 <div id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
-<div class="version-marker">v7</div>
+<div class="version-marker">v10</div>
 <script>
+// === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_RkGimnQ1rzRrU4Io5qn9xg_Fgi4LxiO';
 const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
-  { name: 'USHANE',  pin: '1234', role: 'video_head' },
+  { name: 'USHANE',  pin: '1111', role: 'video_head' },
   { name: 'RAJEEWA', pin: '1234', role: 'editor' },
   { name: 'THARUKA', pin: '1234', role: 'editor' },
 ];
@@ -311,16 +370,19 @@ const PAGES_EDITOR = [
   { key: 'time_tracker', label: 'My Time',       section: 'WORKSPACE' },
 ];
 
+// === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [] };
 let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '' }, chatClient: null };
 
+// === HELPERS ===
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function toast(msg,type=''){const e=document.createElement('div');e.className='toast'+(type?' '+type:'');e.textContent=msg;$('#toasts').appendChild(e);setTimeout(()=>{e.style.opacity='0'},2800);setTimeout(()=>e.remove(),3100)}
 function fmtDate(d){if(!d)return'';const x=new Date(d);const t=new Date();const tom=new Date(t.getTime()+86400000);if(x.toDateString()===t.toDateString())return'Today';if(x.toDateString()===tom.toDateString())return'Tomorrow';return x.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
 function fmtDateTime(d){if(!d)return'';return new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+function fmtFull(d){if(!d)return'';return new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function isOverdue(d){if(!d)return false;const x=new Date(d);x.setHours(23,59,59);return x<new Date()}
 function timeAgo(d){if(!d)return'';const diff=Date.now()-new Date(d).getTime();const m=Math.floor(diff/60000);if(m<1)return'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);if(h<24)return h+'h ago';const dd=Math.floor(h/24);if(dd<30)return dd+'d ago';return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}
 function initials(name){if(!name)return'?';const p=name.trim().split(/\s+/);if(p.length===1)return p[0].slice(0,2).toUpperCase();return(p[0][0]+p[p.length-1][0]).toUpperCase()}
@@ -333,8 +395,54 @@ function getProject(id){return DATA.projects.find(p=>p.id===id)}
 function startOfMonth(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)}
 function startOfWeek(){const d=new Date();const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);return new Date(d.setDate(diff))}
 
+// === CLOCK ===
+function updateClock(){
+  const now=new Date();
+  const h=now.getHours();const m=String(now.getMinutes()).padStart(2,'0');
+  const hr12=h%12||12;const ampm=h>=12?'PM':'AM';
+  const tEl=$('#sbClockTime');if(tEl)tEl.textContent=`${String(hr12).padStart(2,'0')}:${m} ${ampm}`;
+  const dEl=$('#sbClockDate');if(dEl)dEl.textContent=now.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+}
+let clockTimer=null;
+function startClock(){updateClock();if(clockTimer)clearInterval(clockTimer);clockTimer=setInterval(updateClock,1000)}
+
+// === IMAGE ATTACH HELPER ===
+// returns base64 data URI for inserting into image_url column, OR null
+// Used by both project comments and team chat. Bound to elements by hostId.
+const PENDING_IMG = {}; // hostId -> base64
+function imageAttachHtml(hostId){
+  return `<div class="image-attach">
+    <button type="button" class="image-attach-btn" data-attach-host="${hostId}">📎 Attach image</button>
+    <input type="file" accept="image/*" hidden id="${hostId}-file">
+    <span class="image-attach-hint">or paste from clipboard (Cmd+V / Ctrl+V)</span>
+  </div>
+  <div id="${hostId}-preview"></div>`;
+}
+function wireImageAttach(hostId,hostTextarea){
+  // file pick
+  const btn=document.querySelector(`[data-attach-host="${hostId}"]`);
+  const file=$(`#${hostId}-file`);
+  if(btn&&file){btn.addEventListener('click',()=>file.click());file.addEventListener('change',e=>{const f=e.target.files[0];if(f)readImageFile(f,hostId)});}
+  // paste handler attached to the textarea
+  const ta=hostTextarea?$(hostTextarea):null;
+  if(ta){ta.addEventListener('paste',e=>{const items=(e.clipboardData||window.clipboardData).items;for(const it of items){if(it.type.indexOf('image')===0){const f=it.getAsFile();if(f){e.preventDefault();readImageFile(f,hostId)}break}}});}
+}
+function readImageFile(file,hostId){
+  if(file.size>3*1024*1024){toast('Image too large (max 3MB)','error');return}
+  const r=new FileReader();
+  r.onload=ev=>{
+    PENDING_IMG[hostId]=ev.target.result;
+    const pv=$(`#${hostId}-preview`);
+    if(pv){pv.innerHTML=`<div class="image-preview-wrap"><img class="image-preview" src="${ev.target.result}"><div class="image-preview-remove" data-clear-img="${hostId}">×</div></div>`;}
+  };
+  r.readAsDataURL(file);
+}
+function clearPendingImg(hostId){delete PENDING_IMG[hostId];const pv=$(`#${hostId}-preview`);if(pv)pv.innerHTML='';const f=$(`#${hostId}-file`);if(f)f.value='';}
+
+// === SUPABASE INIT ===
 function initSupabase(){if(!window.supabase){console.error('SDK not loaded');return}sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}
 
+// === LOGIN ===
 function setupLogin(){
   const dEl=$('#loginDate');if(dEl)dEl.textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   $('#loginBtn').onclick=doLogin;
@@ -361,8 +469,10 @@ function onLoginSuccess(u){
 }
 function logout(){sessionStorage.removeItem('bb_video_user');if(refreshTimer)clearInterval(refreshTimer);currentUser=null;$('#app').hidden=true;$('#loginScreen').hidden=false;$('#loginPin').value=''}
 
+// === BOOT ===
 function bootApp(){
   buildSidebar();
+  startClock();
   $('#logoutBtn').onclick=logout;
   currentPage=isEditor()?'pipeline':'dashboard';
   navTo(currentPage);
@@ -373,6 +483,7 @@ function bootApp(){
   refreshTimer=setInterval(()=>{fetchAll(true)},REFRESH_MS);
 }
 
+// === SIDEBAR ===
 function buildSidebar(){
   const pages=isEditor()?PAGES_EDITOR:PAGES_FULL;
   const sections={};
@@ -411,6 +522,7 @@ function navTo(page){
   renderPage();
 }
 
+// === DATA FETCH ===
 async function fetchAll(silent=false){
   try{
     const [pr,cr,tr,llr,slr,clr,tkr,inr]=await Promise.all([
@@ -431,6 +543,7 @@ async function fetchAll(silent=false){
     DATA.chats=clr.data||[];
     DATA.tasks=tkr.data||[];
     DATA.inspo=inr.data||[];
+    // Filter projects for editors
     if(isEditor()){
       const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
       DATA.projects=me?DATA.projects.filter(p=>p.assigned_editor_id===me.id):[];
@@ -439,12 +552,14 @@ async function fetchAll(silent=false){
   }catch(err){console.error(err);if(!silent)toast('Failed to load data: '+(err.message||''),'error')}
 }
 
+// === ROUTER ===
 function renderPage(){
   const map={dashboard:renderDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,drive_links:renderDriveLinks,clients:renderClients,team:renderTeam,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub};
   const fn=map[currentPage]||renderDashboard;
   try{fn()}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">⚠</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
 }
 
+// === PAGE: DASHBOARD ===
 function renderDashboard(){
   const ps=DATA.projects;
   const active=ps.filter(p=>p.current_stage!=='posted').length;
@@ -454,8 +569,10 @@ function renderDashboard(){
   const inEditing=ps.filter(p=>p.current_stage==='editing').length;
   const sentToClient=ps.filter(p=>p.current_stage==='sent_to_client').length;
   const inReview=ps.filter(p=>['team_review','coo_check'].includes(p.current_stage)).length;
+  // 5 pillars based on real data
   const stuckCount=ps.filter(p=>{if(p.current_stage==='posted')return false;const upd=new Date(p.updated_at||p.created_at);return(Date.now()-upd.getTime())>3*86400000}).length;
   const pillarPipeline=stuckCount===0?'green':(stuckCount<=2?'amber':'red');
+  const pillarQuality=inReview>=0?'green':'amber';
   const pillarTeam=overdue===0?'green':(overdue<=2?'amber':'red');
   const stale=ps.filter(p=>p.current_stage==='sent_to_client'&&p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())>5*86400000).length;
   const pillarComm=stale===0?'green':(stale<=1?'amber':'red');
@@ -464,13 +581,17 @@ function renderDashboard(){
   const loads=Object.values(editorLoad);
   const maxLoad=Math.max(...loads,0),minLoad=Math.min(...loads,0);
   const pillarCap=(maxLoad-minLoad)<=2?'green':((maxLoad-minLoad)<=4?'amber':'red');
+  // Stage distribution
   const stageDist=STAGES.map(s=>({label:s.label,count:ps.filter(p=>p.current_stage===s.key).length}));
   const maxStage=Math.max(...stageDist.map(s=>s.count),1);
+  // Upcoming deadlines
   const upcoming=ps.filter(p=>p.deadline&&p.current_stage!=='posted').sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
+  // Workload bars
   const editors=DATA.teamMembers.filter(m=>m.role==='editor'||m.role==='video_editor'||(m.role||'').toLowerCase().includes('editor'));
   const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&p.current_stage!=='posted').length}));
   editorBars.sort((a,b)=>b.count-a.count);
   const maxEd=Math.max(...editorBars.map(e=>e.count),1);
+  // Recent activity
   const recent=[...ps].sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at)).slice(0,8);
 
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻ Refresh</button>';
@@ -523,6 +644,7 @@ function renderDashboard(){
 function statCard(label,value,sub='',cls=''){return `<div class="stat-card"><div class="stat-card-label">${esc(label)}</div><div class="stat-card-value">${value}</div>${sub?`<div class="stat-card-sub ${cls}">${esc(sub)}</div>`:''}</div>`}
 function pillar(title,status,note){const txt=status==='green'?'On track':status==='amber'?'Watch':status==='red'?'Needs attention':'—';return `<div class="pillar ${status}"><div class="pillar-title">${esc(title)}</div><div class="pillar-status">${txt}</div><div class="pillar-note">${esc(note)}</div></div>`}
 
+// === PAGE: PIPELINE ===
 function renderPipeline(){
   const f=FILTERS.pipeline;
   let ps=DATA.projects.slice();
@@ -544,7 +666,7 @@ function renderPipeline(){
     <select class="filter-select" id="fPriority"><option value="">All priorities</option>${['urgent','high','medium','low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select>
     ${(f.search||f.client||f.editor||f.priority)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
   </div>`;
-  const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title">${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
+  const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
   $('#pageContent').innerHTML=filtersHtml+boardHtml;
   $('#fSearch').oninput=e=>{FILTERS.pipeline.search=e.target.value;renderPipeline()};
   $('#fClient').onchange=e=>{FILTERS.pipeline.client=e.target.value;renderPipeline()};
@@ -557,7 +679,8 @@ function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
   const dr=isAdmin()?'draggable="true"':'';
-  return `<div class="card" data-pid="${p.id}" ${dr}><div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div><div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${p.priority||'medium'}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div></div>`;
+  const pr=p.priority||'medium';
+  return `<div class="card pr-${pr}" data-pid="${p.id}" ${dr}><div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div><div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div></div>`;
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
@@ -597,6 +720,7 @@ async function moveProject(project,newStage){
   }catch(err){console.error(err);toast('Move failed','error');project.current_stage=old;renderPage()}
 }
 
+// === PROJECT FORM ===
 function openProjectForm(existing=null){
   if(!isAdmin())return;
   const ie=!!existing;
@@ -627,9 +751,11 @@ async function saveProject(id){
 }
 async function deleteProject(id){if(!confirm('Delete this project?'))return;try{const {error}=await sb.from('video_projects').delete().eq('id',id);if(error)throw error;toast('Deleted','success');closeModal();await fetchAll()}catch(err){toast('Delete failed','error')}}
 
+// === PROJECT DETAIL ===
 async function openProjectDetail(id){
   const p=getProject(id);if(!p)return;
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id),st=STAGES.find(s=>s.key===p.current_stage);
+  // Fetch comments and links
   let comments=[];
   try{const {data}=await sb.from('video_project_comments').select('*').eq('video_project_id',id).order('created_at',{ascending:true});comments=data||[]}catch(_){}
   const allLinks=DATA.links.filter(l=>l.video_project_id===id);
@@ -652,18 +778,21 @@ async function openProjectDetail(id){
     <div class="detail-section"><div class="detail-section-title">Team Discussion</div>
       <div class="comment-list">${comments.length?comments.map(c=>`<div class="comment"><div class="comment-head"><div class="comment-author">${esc(c.author)}</div><div class="comment-time">${timeAgo(c.created_at)}</div></div>${c.body?`<div class="comment-body">${esc(c.body)}</div>`:''}${c.image_url?`<img class="comment-img" src="${esc(c.image_url)}" onerror="this.style.display='none'">`:''}</div>`).join(''):'<div class="comment-empty">No comments yet</div>'}</div>
       <div class="comment-form">
-        <textarea id="newComment" class="field-textarea" placeholder="Add a comment…" rows="2"></textarea>
-        <div class="comment-form-row"><input id="newCommentImg" class="field-input" placeholder="Image URL (optional) — paste Imgur/Drive direct link"><button class="btn btn-primary" data-post-comment="${id}">Post</button></div>
+        <textarea id="newComment" class="field-textarea" placeholder="Add a comment… (you can paste an image with Cmd+V)" rows="2"></textarea>
+        ${imageAttachHtml('cmt-'+id)}
+        <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" data-post-comment="${id}">Post Comment</button></div>
       </div>
     </div>
   </div><div class="modal-footer">${isAdmin()?`<button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
+  wireImageAttach('cmt-'+id,'#newComment');
   $('#modalRoot').onclick=async e=>{
     if(e.target.closest('[data-close]'))closeModal();
     const ed=e.target.closest('[data-edit]');if(ed){closeModal();openProjectForm(getProject(parseInt(ed.dataset.edit)))}
     const pc=e.target.closest('[data-post-comment]');if(pc)await postComment(parseInt(pc.dataset.postComment));
     const al=e.target.closest('[data-add-link]');if(al)openAddLinkForm(id,al.dataset.addLink);
     const dl=e.target.closest('[data-del-link]');if(dl)await deleteLink(parseInt(dl.dataset.delLink),id);
+    const ci=e.target.closest('[data-clear-img]');if(ci)clearPendingImg(ci.dataset.clearImg);
   };
 }
 function linkListHtml(links,kind){
@@ -688,12 +817,14 @@ function openAddLinkForm(projectId,tag){
 }
 async function deleteLink(linkId,projectId){if(!confirm('Delete this link?'))return;try{const {error}=await sb.from('video_project_links').delete().eq('id',linkId);if(error)throw error;await fetchAll();openProjectDetail(projectId)}catch(err){toast('Delete failed','error')}}
 async function postComment(pid){
-  const body=$('#newComment').value.trim(),img=$('#newCommentImg').value.trim();
+  const body=$('#newComment').value.trim();
+  const img=PENDING_IMG['cmt-'+pid]||null;
   if(!body&&!img)return;
-  try{const {error}=await sb.from('video_project_comments').insert({video_project_id:pid,body:body||null,image_url:img||null,author:currentUser.name});if(error)throw error;openProjectDetail(pid)}catch(err){toast('Comment failed','error')}
+  try{const {error}=await sb.from('video_project_comments').insert({video_project_id:pid,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;clearPendingImg('cmt-'+pid);openProjectDetail(pid)}catch(err){toast('Comment failed: '+(err.message||''),'error')}
 }
 function closeModal(){const m=$('#modalRoot');if(m)m.innerHTML='';const m2=$('#modal2');if(m2)m2.remove()}
 
+// === PAGE: SHOOT PIPELINE ===
 function renderShootPipeline(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><div class="text-3 fs-11" style="margin-left:8px">Read-only · managed by SMM team</div>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
@@ -705,9 +836,11 @@ function renderShootPipeline(){
     <div class="pipeline-board">${SHOOT_STAGES.map(st=>{const sps=grouped[st.key]||[];return `<div class="stage-col"><div class="stage-header"><div class="stage-title">${st.label}</div><div class="stage-count">${sps.length}</div></div><div class="stage-cards">${sps.length?sps.map(s=>{const cl=getClient(s.client_id);return `<div class="card"><div class="card-title">${esc(s.title||s.shoot_name||'Shoot')}</div><div class="card-client">${esc(cl?.name||'—')}</div><div class="card-meta"><div class="card-meta-left"><div class="card-deadline">${s.shoot_date?fmtDate(s.shoot_date):'No date'}</div></div></div></div>`}).join(''):'<div class="stage-empty">None</div>'}</div></div>`}).join('')}</div>`;
 }
 
+// === PAGE: TASKS ===
 function renderTasks(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><button class="btn btn-primary" data-action="new">+ New Task</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll();if(e.target.closest('[data-action="new"]'))openTaskForm()};
+  // Filter: tasks where assign='video' OR for current user OR tagged video
   let tasks=DATA.tasks.filter(t=>{const a=(t.assign||t.assigned_to||'').toLowerCase();return a==='video'||a==='video_head'||a==='ushane'||a===currentUser.name.toLowerCase()||t.video_project_id});
   $('#pageSub').textContent=`${tasks.length} task${tasks.length===1?'':'s'}`;
   const todo=tasks.filter(t=>!t.completed&&t.status!=='done'&&t.status!=='completed');
@@ -745,6 +878,7 @@ function openTaskForm(existing=null){
   };
 }
 
+// === PAGE: TIME TRACKER ===
 function renderTimeTracker(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><button class="btn btn-primary" data-action="log">+ Log Time</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll();if(e.target.closest('[data-action="log"]'))openTimeForm()};
@@ -792,6 +926,7 @@ function openTimeForm(){
   };
 }
 
+// === PAGE: DRIVE LINKS ===
 let driveTab='raw_footage';
 function renderDriveLinks(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
@@ -808,6 +943,7 @@ function renderDriveLinks(){
   $('#pageContent').onclick=e=>{const t=e.target.closest('[data-tab]');if(t){driveTab=t.dataset.tab;renderDriveLinks()}const r=e.target.closest('[data-pid]');if(r&&e.target.tagName!=='A')openProjectDetail(parseInt(r.dataset.pid))};
 }
 
+// === PAGE: CLIENTS ===
 function renderClients(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
@@ -841,9 +977,11 @@ function openClientDetail(cid){
   $('#modalRoot').onclick=e=>{if(e.target.closest('[data-close]'))closeModal();const r=e.target.closest('[data-pid]');if(r){closeModal();setTimeout(()=>openProjectDetail(parseInt(r.dataset.pid)),100)}};
 }
 
+// === PAGE: TEAM ===
 function renderTeam(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
+  // Show everyone — admin can see all, also include video_head (ushane)
   const members=DATA.teamMembers;
   $('#pageSub').textContent=`${members.length} team member${members.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team</div><div class="page-sub">Click any member to see full history and current work</div></div></div>
@@ -858,8 +996,10 @@ async function openMemberDetail(mid){
   const active=ps.filter(p=>p.current_stage!=='posted');
   const monthStart=startOfMonth();
   const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
+  // Avg time: from stage_history
   let avgSec=0;
   try{const {data}=await sb.from('video_stage_history').select('duration_seconds').eq('moved_by',m.name).not('duration_seconds','is',null).limit(500);if(data&&data.length){avgSec=data.reduce((s,r)=>s+(r.duration_seconds||0),0)/data.length}}catch(_){}
+  // Time logs for this editor
   let myLogs=[];
   try{const {data}=await sb.from('video_time_logs').select('*').eq('team_member_id',mid).order('started_at',{ascending:false}).limit(20);myLogs=data||[]}catch(_){}
   const monthLogTotal=myLogs.filter(l=>new Date(l.started_at)>=monthStart).reduce((s,l)=>s+(l.duration_seconds||0),0);
@@ -873,6 +1013,7 @@ async function openMemberDetail(mid){
   $('#modalRoot').onclick=e=>{if(e.target.closest('[data-close]'))closeModal();const r=e.target.closest('[data-pid]');if(r){closeModal();setTimeout(()=>openProjectDetail(parseInt(r.dataset.pid)),100)}};
 }
 
+// === PAGE: ANALYTICS ===
 function renderAnalytics(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
@@ -880,11 +1021,15 @@ function renderAnalytics(){
   const ps=DATA.projects;
   const completed=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
   const active=ps.filter(p=>p.current_stage!=='posted').length;
+  // Avg turnaround for completed: from created_at to completed_at
   const turn=completed.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
   const avgTurn=turn.length?(turn.reduce((s,t)=>s+t,0)/turn.length).toFixed(1):'—';
+  // Per editor
   const editorStats={};
   DATA.teamMembers.forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,sumDays:0,countDays:0}});
   ps.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(p.current_stage!=='posted')s.active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart){s.doneMonth++;s.sumDays+=(new Date(p.completed_at)-new Date(p.created_at))/86400000;s.countDays++}});
+  // Per stage avg time (from stage_history)
+  // Per client
   const clientStats={};
   DATA.clients.forEach(c=>{clientStats[c.id]={name:c.name,active:0,doneMonth:0}});
   ps.forEach(p=>{if(!p.client_id||!clientStats[p.client_id])return;if(p.current_stage!=='posted')clientStats[p.client_id].active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart)clientStats[p.client_id].doneMonth++});
@@ -898,6 +1043,7 @@ function renderAnalytics(){
   `;
 }
 
+// === PAGE: TEAM CHAT ===
 function renderTeamChat(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
@@ -913,21 +1059,26 @@ function renderTeamChat(){
       <div class="panel-body">
         <div class="comment-list" style="max-height:50vh">${msgs.length?msgs.map(m=>`<div class="comment"><div class="comment-head"><div class="comment-author">${esc(m.author||m.from||'')}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${m.image_url?`<img class="comment-img" src="${esc(m.image_url)}" onerror="this.style.display='none'">`:''}</div>`).join(''):'<div class="comment-empty">No messages for this client yet — start the conversation</div>'}</div>
         <div class="comment-form">
-          <textarea id="chatBody" class="field-textarea" placeholder="Type a message..." rows="2"></textarea>
-          <div class="comment-form-row"><input id="chatImg" class="field-input" placeholder="Image URL (optional)"><button class="btn btn-primary" data-send-chat>Send</button></div>
+          <textarea id="chatBody" class="field-textarea" placeholder="Type a message… (you can paste an image with Cmd+V)" rows="2"></textarea>
+          ${imageAttachHtml('chat')}
+          <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" data-send-chat>Send Message</button></div>
         </div>
       </div>
     </div>`;
   $('#chatClientPick').onchange=e=>{FILTERS.chatClient=parseInt(e.target.value);renderTeamChat()};
+  wireImageAttach('chat','#chatBody');
   $('#pageContent').onclick=async e=>{
+    const ci=e.target.closest('[data-clear-img]');if(ci){clearPendingImg(ci.dataset.clearImg);return}
     if(e.target.closest('[data-send-chat]')){
-      const body=$('#chatBody').value.trim(),img=$('#chatImg').value.trim();
+      const body=$('#chatBody').value.trim();
+      const img=PENDING_IMG['chat']||null;
       if(!body&&!img)return;
-      try{const {error}=await sb.from('video_chat_messages').insert({client_id:FILTERS.chatClient,body:body||null,image_url:img||null,author:currentUser.name});if(error)throw error;$('#chatBody').value='';$('#chatImg').value='';await fetchAll();renderTeamChat()}catch(err){toast('Failed: '+(err.message||''),'error')}
+      try{const {error}=await sb.from('video_chat_messages').insert({client_id:FILTERS.chatClient,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;$('#chatBody').value='';clearPendingImg('chat');await fetchAll();renderTeamChat()}catch(err){toast('Failed: '+(err.message||''),'error')}
     }
   };
 }
 
+// === PAGE: INSPO HUB ===
 function renderInspoHub(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><button class="btn btn-primary" data-action="new">+ Add Inspo</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll();if(e.target.closest('[data-action="new"]'))openInspoForm()};
@@ -973,6 +1124,7 @@ function openInspoDetail(iid){
   $('#modalRoot').onclick=e=>{if(e.target.closest('[data-close]'))closeModal();const ed=e.target.closest('[data-edit-inspo]');if(ed){closeModal();setTimeout(()=>openInspoForm(DATA.inspo.find(x=>x.id===parseInt(ed.dataset.editInspo))),50)}};
 }
 
+// === INIT ===
 window.addEventListener('DOMContentLoaded',()=>{initSupabase();setupLogin()});
 window.openProjectForm=openProjectForm;window.openProjectDetail=openProjectDetail;window.closeModal=closeModal;
 </script>
