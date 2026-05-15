@@ -137,6 +137,7 @@ a:hover{text-decoration:underline}
 .stage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
 .stage-dot.s-video_shot{background:#3b82f6}
 .stage-dot.s-cutting_color_grading{background:#06b6d4}
+.stage-dot.s-rendering{background:#8b5cf6}
 .stage-dot.s-editing{background:#f59e0b}
 .stage-dot.s-team_review{background:#a855f7}
 .stage-dot.s-changes{background:#ef4444}
@@ -282,9 +283,28 @@ a:hover{text-decoration:underline}
 .videos-progress.over .videos-progress-fill{background:linear-gradient(90deg,var(--amber) 0%,#d97706 100%)}
 .time-breakdown{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px}
 .time-breakdown-item{background:var(--surface-2);padding:10px 12px;border-radius:8px;border-left:3px solid var(--text-3)}
-.time-breakdown-item.editing{border-left-color:var(--amber)}
-.time-breakdown-item.changes{border-left-color:var(--red)}
-.time-breakdown-item.total{border-left-color:var(--accent)}
+.daily-pillars-icon{width:22px;height:22px;color:var(--accent);flex-shrink:0}
+.daily-pillars-head-left{display:flex;align-items:center;gap:10px}
+.bulk-toggle-btn{padding:8px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px}
+.bulk-toggle-btn:hover{border-color:var(--accent);color:var(--accent)}
+.bulk-toggle-btn.active{background:var(--accent);border-color:var(--accent);color:white}
+.card.selectable{cursor:pointer}
+.card.selectable .card-checkbox{display:grid;place-items:center;position:absolute;top:8px;right:8px;width:22px;height:22px;border:2px solid var(--text-3);border-radius:5px;background:var(--surface);transition:all 0.15s;z-index:2}
+.card.selectable:not(.selected) .card-checkbox::after{content:""}
+.card.selectable.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent),0 6px 20px rgba(0,0,0,0.3)}
+.card.selectable.selected .card-checkbox{background:var(--accent);border-color:var(--accent)}
+.card.selectable.selected .card-checkbox::after{content:"✓";color:white;font-weight:800;font-size:13px;line-height:1}
+.bulk-action-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--accent);border-radius:14px;padding:14px 20px;box-shadow:0 12px 40px rgba(0,0,0,0.5),0 0 0 1px var(--accent-soft);display:flex;align-items:center;gap:14px;z-index:500;backdrop-filter:blur(20px)}
+.bulk-action-count{font-size:13px;font-weight:700;color:var(--accent)}
+.bulk-action-select{padding:8px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer}
+.bulk-action-btn{padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:white;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.03em}
+.bulk-action-btn:hover{background:var(--accent-2)}
+.bulk-action-btn.ghost{background:var(--surface-2);color:var(--text-2)}
+.bulk-action-btn.ghost:hover{background:var(--surface-3);color:var(--text)}
+.duplicate-btn{padding:6px 11px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;margin-right:6px}
+.duplicate-btn:hover{border-color:var(--accent);color:var(--accent)}
+.time-breakdown-item.rendering{border-left-color:#8b5cf6}
+.time-breakdown-item.client-changes{border-left-color:#f97316}
 .time-breakdown-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px}
 .time-breakdown-value{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
 .chat-source-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-left:8px;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
@@ -343,7 +363,7 @@ a:hover{text-decoration:underline}
 </div>
 <div id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
-<div class="version-marker">v11</div>
+<div class="version-marker">v14</div>
 <script>
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
@@ -352,15 +372,15 @@ const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
   { name: 'USHANE',  pin: '1111', role: 'video_head' },
-  { name: 'KENULI',  pin: '2001', role: 'smm' },
-  { name: 'KANEESHA',pin: '2002', role: 'smm' },
   { name: 'RAJEEWA', pin: '1234', role: 'editor' },
   { name: 'THARUKA', pin: '1234', role: 'editor' },
+  { name: 'NIDWIN',  pin: '1234', role: 'editor' },
 ];
 const REFRESH_MS = 20000;
 const STAGES = [
   { key: 'video_shot', label: 'Video Shot' },
   { key: 'cutting_color_grading', label: 'Cutting & Color' },
+  { key: 'rendering', label: 'Rendering' },
   { key: 'editing', label: 'Editing' },
   { key: 'team_review', label: 'Team Review' },
   { key: 'changes', label: 'Changes' },
@@ -715,7 +735,7 @@ function renderDashboard(){
       ${statCard('In Editing',inEditing,'currently being cut')}
       ${statCard('Sent to Client',sentToClient,sentToClient>0?'awaiting feedback':'—')}
     </div>
-    ${currentUser.name==='USHANE'?ushaneDailyPillarsHtml():''}
+    ${isAdmin()?ushaneDailyPillarsHtml():''}
     <div class="pillars">
       ${pillar('Pipeline Health',pillarPipeline,stuckCount===0?'No stuck projects':stuckCount+' stuck >3 days')}
       ${pillar('Quality Review','green',inReview+' in review')}
@@ -777,7 +797,7 @@ function ushaneDailyPillarsHtml(){
   const s=getUshanePillarState();
   const done=USHANE_PILLARS.filter(p=>s[p.key]).length;
   return `<div class="panel" style="margin-bottom:22px;border:1px solid var(--accent);background:linear-gradient(180deg,var(--accent-soft) 0%,var(--surface) 50%)">
-    <div class="panel-head"><div class="panel-title">🎯 Daily Pillars — Ushane</div><div style="display:flex;align-items:center;gap:10px"><span class="text-3 fs-11">${done}/${USHANE_PILLARS.length} done today</span><button class="btn btn-ghost btn-sm" data-ushane-reset>Reset</button></div></div>
+    <div class="panel-head"><div class="panel-title" style="display:flex;align-items:center;gap:10px"><svg class="daily-pillars-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></svg>Daily Pillars — Ushane</div><div style="display:flex;align-items:center;gap:10px"><span class="text-3 fs-11">${done}/${USHANE_PILLARS.length} done today</span><button class="btn btn-ghost btn-sm" data-ushane-reset>Reset</button></div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;padding:14px">
       ${USHANE_PILLARS.map(p=>{const checked=!!s[p.key];return `<div class="up-card ${checked?'up-done':''}" data-ushane-pillar="${p.key}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;${checked?'opacity:0.55':''}"><div style="width:22px;height:22px;border-radius:50%;border:2px solid ${checked?'var(--accent)':'var(--border-strong)'};background:${checked?'var(--accent)':'transparent'};display:grid;place-items:center;flex-shrink:0;color:white;font-size:13px;font-weight:700">${checked?'✓':''}</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text);${checked?'text-decoration:line-through':''}">${esc(p.label)}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${esc(p.sub)}</div></div></div>`}).join('')}
     </div>
@@ -785,6 +805,7 @@ function ushaneDailyPillarsHtml(){
 }
 
 // === PAGE: PIPELINE ===
+const PIPELINE_STATE = { bulkMode: false, selected: new Set() };
 function renderPipeline(){
   const f=FILTERS.pipeline;
   let ps=DATA.projects.slice();
@@ -793,10 +814,12 @@ function renderPipeline(){
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
   const editors=DATA.teamMembers;
-  $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
+  const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
+  $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
     if(e.target.closest('[data-action="refresh"]'))fetchAll();
     if(e.target.closest('[data-action="new"]'))openProjectForm();
+    if(e.target.closest('[data-action="bulk-toggle"]')){PIPELINE_STATE.bulkMode=!PIPELINE_STATE.bulkMode;PIPELINE_STATE.selected.clear();renderPipeline()}
   };
   $('#pageSub').textContent=`${ps.length} of ${DATA.projects.length} project${DATA.projects.length===1?'':'s'}`;
   const filtersHtml=`<div class="filters">
@@ -807,29 +830,109 @@ function renderPipeline(){
     ${(f.search||f.client||f.editor||f.priority)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
   </div>`;
   const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
-  $('#pageContent').innerHTML=filtersHtml+boardHtml;
+  // Bulk action floating bar
+  const bulkBarHtml=PIPELINE_STATE.bulkMode&&PIPELINE_STATE.selected.size?`<div class="bulk-action-bar">
+    <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
+    <select class="bulk-action-select" id="bulkMoveTo"><option value="">Move to stage…</option>${STAGES.map(s=>`<option value="${s.key}">${esc(s.label)}</option>`).join('')}</select>
+    <button class="bulk-action-btn" data-action="bulk-duplicate">Duplicate</button>
+    <button class="bulk-action-btn ghost" data-action="bulk-cancel">Cancel</button>
+  </div>`:'';
+  $('#pageContent').innerHTML=filtersHtml+boardHtml+bulkBarHtml;
   $('#fSearch').oninput=e=>{FILTERS.pipeline.search=e.target.value;renderPipeline()};
   $('#fClient').onchange=e=>{FILTERS.pipeline.client=e.target.value;renderPipeline()};
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
   $('#fPriority').onchange=e=>{FILTERS.pipeline.priority=e.target.value;renderPipeline()};
-  $('#pageContent').addEventListener('click',e=>{if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:''};renderPipeline()}});
+  $('#pageContent').addEventListener('click',async e=>{
+    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:''};renderPipeline();return}
+    if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
+    if(e.target.closest('[data-action="bulk-duplicate"]')){await bulkDuplicateProjects();return}
+  });
+  const bulkMove=$('#bulkMoveTo');
+  if(bulkMove)bulkMove.onchange=async e=>{const ns=e.target.value;if(!ns)return;await bulkMoveProjects(ns)};
   attachCardListeners();attachDropListeners();
 }
 function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
-  const dr=isAdmin()?'draggable="true"':'';
+  const dr=(isAdmin()&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
   const pr=p.priority||'medium';
-  return `<div class="card pr-${pr}" data-pid="${p.id}" ${dr}><div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div><div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div></div>`;
+  const sel=PIPELINE_STATE.selected.has(p.id);
+  const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
+  const selClass=sel?'selected':'';
+  const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div><div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div></div>`;
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
-    c.addEventListener('click',()=>{if(c.classList.contains('dragging'))return;openProjectDetail(parseInt(c.dataset.pid))});
-    if(isAdmin()){
+    c.addEventListener('click',e=>{
+      if(c.classList.contains('dragging'))return;
+      const pid=parseInt(c.dataset.pid);
+      if(PIPELINE_STATE.bulkMode){
+        if(PIPELINE_STATE.selected.has(pid))PIPELINE_STATE.selected.delete(pid);
+        else PIPELINE_STATE.selected.add(pid);
+        renderPipeline();
+        return;
+      }
+      openProjectDetail(pid);
+    });
+    if(isAdmin()&&!PIPELINE_STATE.bulkMode){
       c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/pid',c.dataset.pid)});
       c.addEventListener('dragend',()=>c.classList.remove('dragging'));
     }
   });
+}
+async function bulkMoveProjects(newStage){
+  const ids=Array.from(PIPELINE_STATE.selected);
+  if(!ids.length)return;
+  toast(`Moving ${ids.length} project${ids.length>1?'s':''}…`);
+  let ok=0,fail=0;
+  for(const pid of ids){
+    const p=getProject(pid);
+    if(!p||p.current_stage===newStage){ok++;continue}
+    try{await moveProject(p,newStage);ok++}catch(_){fail++}
+  }
+  PIPELINE_STATE.selected.clear();
+  await fetchAll();
+  toast(`Moved ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
+  renderPipeline();
+}
+async function bulkDuplicateProjects(){
+  const ids=Array.from(PIPELINE_STATE.selected);
+  if(!ids.length)return;
+  toast(`Duplicating ${ids.length} project${ids.length>1?'s':''}…`);
+  let ok=0,fail=0;
+  for(const pid of ids){
+    try{await duplicateProject(pid);ok++}catch(_){fail++}
+  }
+  PIPELINE_STATE.selected.clear();
+  await fetchAll();
+  toast(`Duplicated ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
+  renderPipeline();
+}
+async function duplicateProject(pid){
+  const orig=getProject(pid);
+  if(!orig)throw new Error('not found');
+  const copy={
+    title:orig.title+' (Copy)',
+    description:orig.description||null,
+    client_id:orig.client_id,
+    shoot_id:null,
+    assigned_editor_id:orig.assigned_editor_id,
+    priority:orig.priority||'medium',
+    deadline:orig.deadline||null,
+    type:orig.type||null,
+    formula:orig.formula||null,
+    duration_secs:orig.duration_secs||null,
+    notes:orig.notes||null,
+    current_stage:'video_shot',
+    is_archived:false,
+    completed_at:null,
+    created_by:currentUser.name,
+  };
+  const {data:ins,error}=await sb.from('video_projects').insert(copy).select().single();
+  if(error)throw error;
+  await sb.from('video_stage_history').insert({video_project_id:ins.id,stage:ins.current_stage,moved_by:currentUser.name});
+  return ins;
 }
 function attachDropListeners(){
   if(!isAdmin())return;
@@ -898,8 +1001,10 @@ function stageTimingSection(projectId){
   const hist=DATA.stageHistory.filter(h=>h.video_project_id===projectId);
   if(!hist.length)return '<div class="detail-section"><div class="detail-section-title">Time Tracking</div><div class="link-empty">No stage history yet — timing starts tracking once the project moves between stages</div></div>';
   const editingSecs=stageDurationSecs(projectId,'editing');
-  const changesSecs=stageDurationSecs(projectId,'changes');
+  const teamChangesSecs=stageDurationSecs(projectId,'changes');
+  const clientChangesSecs=stageDurationSecs(projectId,'client_changes');
   const cuttingSecs=stageDurationSecs(projectId,'cutting_color_grading');
+  const renderingSecs=stageDurationSecs(projectId,'rendering');
   const reviewSecs=stageDurationSecs(projectId,['team_review','coo_check']);
   // Build a per-stage list showing entered/exited timestamps
   const histRows=hist.map(h=>{
@@ -908,11 +1013,13 @@ function stageTimingSection(projectId){
     return `<tr><td>${esc(lbl)}</td><td class="muted">${fmtDateTime(h.entered_at)}</td><td class="muted">${h.exited_at?fmtDateTime(h.exited_at):'<span style="color:var(--accent)">currently here</span>'}</td><td><strong>${dur}</strong></td></tr>`;
   }).join('');
   return `<div class="detail-section"><div class="detail-section-title">Time Tracking</div>
-    <div class="detail-meta-grid" style="margin-bottom:14px">
-      <div class="detail-meta-item"><div class="detail-meta-label">Editing Time</div><div class="detail-meta-value">${fmtDuration(editingSecs)}</div></div>
+    <div class="detail-meta-grid" style="margin-bottom:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
       <div class="detail-meta-item"><div class="detail-meta-label">Cutting/Color</div><div class="detail-meta-value">${fmtDuration(cuttingSecs)}</div></div>
-      <div class="detail-meta-item"><div class="detail-meta-label">Changes Time</div><div class="detail-meta-value">${fmtDuration(changesSecs)}</div></div>
-      <div class="detail-meta-item"><div class="detail-meta-label">Review Time</div><div class="detail-meta-value">${fmtDuration(reviewSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Rendering</div><div class="detail-meta-value">${fmtDuration(renderingSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Editing</div><div class="detail-meta-value">${fmtDuration(editingSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Team Changes</div><div class="detail-meta-value">${fmtDuration(teamChangesSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Client Changes</div><div class="detail-meta-value">${fmtDuration(clientChangesSecs)}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Review</div><div class="detail-meta-value">${fmtDuration(reviewSecs)}</div></div>
     </div>
     <details><summary style="cursor:pointer;font-size:12px;color:var(--text-3);padding:6px 0">Show full stage history (${hist.length})</summary>
     <table class="tbl" style="margin-top:8px"><thead><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Duration</th></tr></thead><tbody>${histRows}</tbody></table>
@@ -954,12 +1061,13 @@ async function openProjectDetail(id){
         <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" data-post-comment="${id}">Post Comment</button></div>
       </div>
     </div>
-  </div><div class="modal-footer">${isAdmin()?`<button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
+  </div><div class="modal-footer">${isAdmin()?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
   wireImageAttach('cmt-'+id,'#newComment');
   $('#modalRoot').onclick=async e=>{
     if(e.target.closest('[data-close]'))closeModal();
     const ed=e.target.closest('[data-edit]');if(ed){closeModal();openProjectForm(getProject(parseInt(ed.dataset.edit)))}
+    const dp=e.target.closest('[data-dup]');if(dp){const pid=parseInt(dp.dataset.dup);if(confirm('Duplicate this project? Times reset to zero, fresh project starts at "Video Shot".')){try{await duplicateProject(pid);closeModal();await fetchAll();renderPage();toast('Project duplicated','success')}catch(err){toast('Duplicate failed: '+(err.message||''),'error')}}}
     const pc=e.target.closest('[data-post-comment]');if(pc)await postComment(parseInt(pc.dataset.postComment));
     const al=e.target.closest('[data-add-link]');if(al)openAddLinkForm(id,al.dataset.addLink);
     const dl=e.target.closest('[data-del-link]');if(dl)await deleteLink(parseInt(dl.dataset.delLink),id);
@@ -1197,32 +1305,68 @@ async function openMemberDetail(mid){
 }
 
 // === PAGE: ANALYTICS ===
-function renderAnalytics(){
+async function renderAnalytics(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   const monthStart=startOfMonth();
+  const lastMonthStart=new Date(monthStart);lastMonthStart.setMonth(lastMonthStart.getMonth()-1);
+  const lastMonthEnd=new Date(monthStart);
   const ps=DATA.projects;
   const completed=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
+  const completedLastMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=lastMonthStart&&new Date(p.completed_at)<lastMonthEnd);
   const active=ps.filter(p=>p.current_stage!=='posted').length;
-  // Avg turnaround for completed: from created_at to completed_at
   const turn=completed.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
   const avgTurn=turn.length?(turn.reduce((s,t)=>s+t,0)/turn.length).toFixed(1):'—';
+  const turnLast=completedLastMonth.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
+  const avgTurnLast=turnLast.length?(turnLast.reduce((s,t)=>s+t,0)/turnLast.length).toFixed(1):null;
+  const trendArrow=avgTurnLast?(parseFloat(avgTurn)<parseFloat(avgTurnLast)?`<span style="color:var(--green)">↓ ${(avgTurnLast-avgTurn).toFixed(1)}d faster</span>`:`<span style="color:var(--red)">↑ ${(avgTurn-avgTurnLast).toFixed(1)}d slower</span>`):'';
+  const monthlyDelta=completedLastMonth.length?`vs ${completedLastMonth.length} last month`:'';
   // Per editor
   const editorStats={};
-  DATA.teamMembers.forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,sumDays:0,countDays:0}});
-  ps.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(p.current_stage!=='posted')s.active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart){s.doneMonth++;s.sumDays+=(new Date(p.completed_at)-new Date(p.created_at))/86400000;s.countDays++}});
-  // Per stage avg time (from stage_history)
+  DATA.teamMembers.forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,doneLastMonth:0,sumDays:0,countDays:0}});
+  ps.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(p.current_stage!=='posted')s.active++;if(p.completed_at){const d=new Date(p.completed_at);if(d>=monthStart){s.doneMonth++;s.sumDays+=(d-new Date(p.created_at))/86400000;s.countDays++}else if(d>=lastMonthStart&&d<lastMonthEnd){s.doneLastMonth++}}});
   // Per client
   const clientStats={};
-  DATA.clients.forEach(c=>{clientStats[c.id]={name:c.name,active:0,doneMonth:0}});
+  DATA.clients.forEach(c=>{clientStats[c.id]={name:c.name,active:0,doneMonth:0,target:c.videos_per_month||c.monthly_videos||c.video_target||null}});
   ps.forEach(p=>{if(!p.client_id||!clientStats[p.client_id])return;if(p.current_stage!=='posted')clientStats[p.client_id].active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart)clientStats[p.client_id].doneMonth++});
+  // Stage time analysis — from video_stage_history
+  let stageAvgs={};
+  try{
+    const {data:history}=await sb.from('video_stage_history').select('stage,duration_seconds').not('duration_seconds','is',null).gte('entered_at',lastMonthStart.toISOString());
+    if(history){STAGES.forEach(s=>{const rows=history.filter(r=>r.stage===s.key);if(rows.length){stageAvgs[s.key]={avg:rows.reduce((sum,r)=>sum+(r.duration_seconds||0),0)/rows.length,count:rows.length,label:s.label}}})}
+  }catch(_){}
+  // Pipeline bottleneck — which stage has most stuck projects (oldest)
+  const stuckByStage={};
+  ps.filter(p=>p.current_stage!=='posted').forEach(p=>{
+    const stage=p.current_stage;
+    if(!stuckByStage[stage])stuckByStage[stage]={count:0,oldest:null,label:STAGES.find(s=>s.key===stage)?.label||stage};
+    stuckByStage[stage].count++;
+    const updated=new Date(p.updated_at||p.created_at);
+    if(!stuckByStage[stage].oldest||updated<stuckByStage[stage].oldest)stuckByStage[stage].oldest=updated;
+  });
+  const bottleneck=Object.entries(stuckByStage).sort((a,b)=>b[1].count-a[1].count)[0];
+  // Top performer
+  const topEditor=Object.values(editorStats).sort((a,b)=>b.doneMonth-a.doneMonth)[0];
+  // Slowest stage
+  const slowestStage=Object.entries(stageAvgs).sort((a,b)=>b[1].avg-a[1].avg)[0];
   $('#pageSub').textContent='This month performance';
-  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Analytics</div><div class="page-sub">Monthly performance breakdown · Video team</div></div></div>
-    <div class="stat-grid">${statCard('Active Projects',active)}${statCard('Completed This Month',completed.length)}${statCard('Avg Turnaround',avgTurn==='—'?'—':avgTurn+' days')}${statCard('Total Projects',ps.length)}</div>
-    <div class="two-col">
-      <div class="panel"><div class="panel-head"><div class="panel-title">Per Editor (this month)</div></div><table class="tbl"><thead><tr><th>Editor</th><th>Active</th><th>Done</th><th>Avg Turn</th></tr></thead><tbody>${Object.values(editorStats).filter(s=>s.active||s.doneMonth).sort((a,b)=>b.doneMonth-a.doneMonth).map(s=>`<tr><td>${esc(s.name)}</td><td>${s.active}</td><td>${s.doneMonth}</td><td class="muted">${s.countDays?(s.sumDays/s.countDays).toFixed(1)+'d':'—'}</td></tr>`).join('')||'<tr><td colspan="4" class="muted" style="text-align:center">No data</td></tr>'}</tbody></table></div>
-      <div class="panel"><div class="panel-head"><div class="panel-title">Per Client (this month)</div></div><table class="tbl"><thead><tr><th>Client</th><th>Active</th><th>Done</th></tr></thead><tbody>${Object.values(clientStats).filter(s=>s.active||s.doneMonth).sort((a,b)=>b.doneMonth-a.doneMonth).slice(0,15).map(s=>`<tr><td>${esc(s.name)}</td><td>${s.active}</td><td>${s.doneMonth}</td></tr>`).join('')||'<tr><td colspan="3" class="muted" style="text-align:center">No data</td></tr>'}</tbody></table></div>
+  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Analytics</div><div class="page-sub">Monthly performance · ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div></div></div>
+    <div class="stat-grid">
+      ${statCard('Active Projects',active)}
+      ${statCard('Completed This Month',completed.length,monthlyDelta)}
+      ${statCard('Avg Turnaround',avgTurn==='—'?'—':avgTurn+'d',trendArrow||'no comparison')}
+      ${statCard('Total Projects',ps.length)}
     </div>
+    ${bottleneck||topEditor?.doneMonth||slowestStage?`<div class="detail-section"><div class="detail-section-title">🎯 Insights</div><div class="time-breakdown">
+      ${bottleneck?`<div class="time-breakdown-item changes"><div class="time-breakdown-label">Pipeline Bottleneck</div><div class="time-breakdown-value">${bottleneck[1].label}</div><div class="muted" style="font-size:11px;margin-top:4px">${bottleneck[1].count} project${bottleneck[1].count>1?'s':''} stuck</div></div>`:''}
+      ${topEditor?.doneMonth?`<div class="time-breakdown-item editing"><div class="time-breakdown-label">Top Performer</div><div class="time-breakdown-value">${esc(topEditor.name)}</div><div class="muted" style="font-size:11px;margin-top:4px">${topEditor.doneMonth} videos done</div></div>`:''}
+      ${slowestStage?`<div class="time-breakdown-item total"><div class="time-breakdown-label">Slowest Stage</div><div class="time-breakdown-value">${esc(slowestStage[1].label)}</div><div class="muted" style="font-size:11px;margin-top:4px">${secsToHrs(slowestStage[1].avg)} avg</div></div>`:''}
+    </div></div>`:''}
+    <div class="two-col">
+      <div class="panel"><div class="panel-head"><div class="panel-title">Per Editor (this month)</div></div><table class="tbl"><thead><tr><th>Editor</th><th>Active</th><th>Done</th><th>Last Mo</th><th>Avg Turn</th></tr></thead><tbody>${Object.values(editorStats).filter(s=>s.active||s.doneMonth||s.doneLastMonth).sort((a,b)=>b.doneMonth-a.doneMonth).map(s=>{const delta=s.doneLastMonth?(s.doneMonth>=s.doneLastMonth?`<span style="color:var(--green);font-size:10px">↑</span>`:`<span style="color:var(--red);font-size:10px">↓</span>`):'';return `<tr><td>${esc(s.name)}</td><td>${s.active}</td><td>${s.doneMonth} ${delta}</td><td class="muted">${s.doneLastMonth}</td><td class="muted">${s.countDays?(s.sumDays/s.countDays).toFixed(1)+'d':'—'}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted" style="text-align:center">No data</td></tr>'}</tbody></table></div>
+      <div class="panel"><div class="panel-head"><div class="panel-title">Per Client (this month)</div></div><table class="tbl"><thead><tr><th>Client</th><th>Progress</th><th>Active</th></tr></thead><tbody>${Object.values(clientStats).filter(s=>s.active||s.doneMonth).sort((a,b)=>b.doneMonth-a.doneMonth).slice(0,15).map(s=>{const prog=s.target?`${s.doneMonth}/${s.target}`:`${s.doneMonth}`;const cls=s.target&&s.doneMonth>=s.target?'color:var(--green);font-weight:700':(s.target&&s.doneMonth<s.target/2?'color:var(--red)':'');return `<tr><td>${esc(s.name)}</td><td style="${cls}">${prog}</td><td>${s.active}</td></tr>`}).join('')||'<tr><td colspan="3" class="muted" style="text-align:center">No data</td></tr>'}</tbody></table></div>
+    </div>
+    ${Object.keys(stageAvgs).length?`<div class="panel" style="margin-top:18px"><div class="panel-head"><div class="panel-title">Average Time Per Stage</div><div class="muted" style="font-size:11px">Based on last 60 days · ${Object.values(stageAvgs).reduce((s,x)=>s+x.count,0)} data points</div></div><table class="tbl"><thead><tr><th>Stage</th><th>Avg Duration</th><th>Sample Size</th></tr></thead><tbody>${Object.entries(stageAvgs).sort((a,b)=>b[1].avg-a[1].avg).map(([k,v])=>`<tr><td><span class="stage-dot s-${k}"></span> ${esc(v.label)}</td><td>${secsToHrs(v.avg)}</td><td class="muted">${v.count}</td></tr>`).join('')}</tbody></table></div>`:''}
   `;
 }
 
