@@ -385,7 +385,7 @@ a:hover{text-decoration:underline}
 </div>
 <div id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
-<div class="version-marker">v15</div>
+<div class="version-marker">v16</div>
 <script>
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
@@ -436,7 +436,9 @@ const PAGES_FULL = [
 ];
 const PAGES_EDITOR = [
   { key: 'pipeline',     label: 'My Work',       section: 'WORKSPACE' },
+  { key: 'tasks',        label: 'Task Book',     section: 'WORKSPACE' },
   { key: 'time_tracker', label: 'My Time',       section: 'WORKSPACE' },
+  { key: 'inspo',        label: 'Inspo Hub',     section: 'EXTRA' },
 ];
 
 // === STATE ===
@@ -1167,8 +1169,14 @@ function renderShootPipeline(){
 function renderTasks(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><button class="btn btn-primary" data-action="new">+ New Task</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll();if(e.target.closest('[data-action="new"]'))openTaskForm()};
-  // Filter: tasks where assign='video' OR for current user OR tagged video
-  let tasks=DATA.tasks.filter(t=>{const a=(t.assign||t.assigned_to||'').toLowerCase();return a==='video'||a==='video_head'||a==='ushane'||a===currentUser.name.toLowerCase()||t.video_project_id});
+  // Editors: only their own tasks. Admins/video head: all video tasks.
+  let tasks;
+  if(isEditor()){
+    const me=currentUser.name.toLowerCase();
+    tasks=DATA.tasks.filter(t=>{const a=(t.assign||t.assigned_to||'').toLowerCase();return a===me});
+  }else{
+    tasks=DATA.tasks.filter(t=>{const a=(t.assign||t.assigned_to||'').toLowerCase();return a==='video'||a==='video_head'||a==='ushane'||a===currentUser.name.toLowerCase()||t.video_project_id});
+  }
   $('#pageSub').textContent=`${tasks.length} task${tasks.length===1?'':'s'}`;
   const todo=tasks.filter(t=>!t.completed&&t.status!=='done'&&t.status!=='completed');
   const done=tasks.filter(t=>t.completed||t.status==='done'||t.status==='completed');
@@ -1198,7 +1206,7 @@ function openTaskForm(existing=null){
     if(e.target.closest('[data-save-task]')){
       const id=e.target.closest('[data-save-task]').dataset.saveTask;
       const f=$('#taskForm');const fd=new FormData(f);
-      const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,priority:fd.get('priority'),deadline:fd.get('deadline')||null,notes:fd.get('notes').trim()||null,assign:'video'};
+      const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,priority:fd.get('priority'),deadline:fd.get('deadline')||null,notes:fd.get('notes').trim()||null,assign:isEditor()?currentUser.name.toLowerCase():'video'};
       if(!d.title){toast('Title required','error');return}
       try{if(id){await sb.from('tasks').update(d).eq('id',parseInt(id))}else{d.created_by=currentUser.name;await sb.from('tasks').insert(d)}toast('Saved','success');closeModal();await fetchAll()}catch(err){toast('Save failed: '+(err.message||''),'error')}
     }
