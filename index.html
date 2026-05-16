@@ -308,6 +308,28 @@ a:hover{text-decoration:underline}
 .time-breakdown-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px}
 .time-breakdown-value{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
 .chat-source-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-left:8px;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
+.attn-panel{background:linear-gradient(135deg,rgba(239,68,68,0.06) 0%,var(--surface) 60%);border:1px solid var(--red);border-radius:14px;padding:18px 20px;margin-bottom:22px}
+.attn-panel.all-clear{background:linear-gradient(135deg,var(--green-soft) 0%,var(--surface) 60%);border-color:var(--green);padding:16px 20px}
+.attn-panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.attn-panel-title{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:0.08em}
+.attn-panel-count{font-size:12px;font-weight:700;color:var(--red);background:rgba(239,68,68,0.12);padding:4px 12px;border-radius:20px}
+.attn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.attn-block{background:var(--surface-2);border-radius:10px;padding:12px 14px;border-left:3px solid var(--text-3)}
+.attn-block.red{border-left-color:var(--red)}
+.attn-block.amber{border-left-color:var(--amber)}
+.attn-block-label{font-size:11px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px}
+.attn-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border);cursor:pointer;transition:all 0.12s}
+.attn-row:first-of-type{border-top:none}
+.attn-row:hover{padding-left:4px}
+.attn-row-main{flex:1;min-width:0}
+.attn-row-title{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attn-row-sub{font-size:10.5px;color:var(--text-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attn-tag{font-size:9px;font-weight:800;letter-spacing:0.05em;padding:3px 8px;border-radius:5px;flex-shrink:0;text-transform:uppercase}
+.attn-tag.red{background:rgba(239,68,68,0.15);color:#ef4444}
+.attn-tag.amber{background:rgba(245,158,11,0.15);color:#f59e0b}
+.attn-more{font-size:11px;color:var(--text-3);font-style:italic;padding-top:8px;border-top:1px solid var(--border);margin-top:4px}
+.attn-overload{margin-top:14px;padding:10px 14px;background:rgba(245,158,11,0.1);border:1px solid var(--amber);border-radius:8px;font-size:12px;color:var(--text-2)}
+.attn-overload strong{color:var(--amber)}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:4px}
@@ -363,7 +385,7 @@ a:hover{text-decoration:underline}
 </div>
 <div id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
-<div class="version-marker">v14</div>
+<div class="version-marker">v15</div>
 <script>
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
@@ -372,9 +394,9 @@ const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
   { name: 'USHANE',  pin: '1111', role: 'video_head' },
-  { name: 'RAJEEWA', pin: '1234', role: 'editor' },
+  { name: 'RAJEEWA', pin: '2222', role: 'editor' },
   { name: 'THARUKA', pin: '1234', role: 'editor' },
-  { name: 'NIDWIN',  pin: '1234', role: 'editor' },
+  { name: 'NIDWIN',  pin: '3333', role: 'editor' },
 ];
 const REFRESH_MS = 20000;
 const STAGES = [
@@ -420,7 +442,7 @@ const PAGES_EDITOR = [
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [] };
-let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '' }, chatClient: null };
+let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
 
 // === HELPERS ===
 const $ = s => document.querySelector(s);
@@ -724,10 +746,36 @@ function renderDashboard(){
   // Recent activity
   const recent=[...ps].sort((a,b)=>new Date(b.updated_at||b.created_at)-new Date(a.updated_at||a.created_at)).slice(0,8);
 
+  // === NEEDS ATTENTION — video head command center ===
+  const now=Date.now();
+  const todayStr=new Date().toISOString().slice(0,10);
+  const overdueList=ps.filter(p=>p.deadline&&p.current_stage!=='posted'&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const dueTodayList=ps.filter(p=>p.deadline&&p.current_stage!=='posted'&&p.deadline.slice(0,10)===todayStr);
+  const dueSoonList=ps.filter(p=>{if(!p.deadline||p.current_stage==='posted')return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const stuckList=ps.filter(p=>{if(p.current_stage==='posted')return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
+  const clientWaitList=ps.filter(p=>p.current_stage==='sent_to_client'&&p.updated_at&&(now-new Date(p.updated_at).getTime())>5*86400000).sort((a,b)=>new Date(a.updated_at)-new Date(b.updated_at));
+  const unassignedList=ps.filter(p=>!p.assigned_editor_id&&p.current_stage!=='posted');
+  const attnTotal=overdueList.length+dueTodayList.length+stuckList.length+clientWaitList.length+unassignedList.length;
+  function attnRow(p,tagText,tagCls){const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);return `<div class="attn-row clickable" data-pid="${p.id}"><div class="attn-row-main"><div class="attn-row-title">${esc(p.title)}</div><div class="attn-row-sub">${esc(cl?.name||'No client')} · ${STAGES.find(s=>s.key===p.current_stage)?.label||''} · ${ed?esc(ed.name):'<span style="color:var(--red)">Unassigned</span>'}</div></div><div class="attn-tag ${tagCls}">${tagText}</div></div>`}
+  // Editor overload detection
+  const editorOverload=editorBars.filter(e=>e.count>=6);
+
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻ Refresh</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   $('#pageContent').innerHTML=`
     <div class="page-head"><div><div class="page-title">Welcome back, ${esc(currentUser.name)}</div><div class="page-sub">Here's where the video team stands today</div></div></div>
+    ${attnTotal>0?`<div class="attn-panel">
+      <div class="attn-panel-head"><div class="attn-panel-title"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Needs Attention</div><span class="attn-panel-count">${attnTotal} item${attnTotal>1?'s':''}</span></div>
+      <div class="attn-grid">
+        ${overdueList.length?`<div class="attn-block red"><div class="attn-block-label">⚠ Overdue (${overdueList.length})</div>${overdueList.slice(0,5).map(p=>attnRow(p,fmtDate(p.deadline),'red')).join('')}${overdueList.length>5?`<div class="attn-more">+${overdueList.length-5} more</div>`:''}</div>`:''}
+        ${dueTodayList.length?`<div class="attn-block amber"><div class="attn-block-label">📅 Due Today (${dueTodayList.length})</div>${dueTodayList.map(p=>attnRow(p,'TODAY','amber')).join('')}</div>`:''}
+        ${dueSoonList.length?`<div class="attn-block amber"><div class="attn-block-label">⏳ Due in 48h (${dueSoonList.length})</div>${dueSoonList.slice(0,4).map(p=>attnRow(p,fmtDate(p.deadline),'amber')).join('')}</div>`:''}
+        ${stuckList.length?`<div class="attn-block red"><div class="attn-block-label">🐌 Stuck >7 days (${stuckList.length})</div>${stuckList.slice(0,5).map(p=>attnRow(p,timeAgo(p.updated_at||p.created_at),'red')).join('')}${stuckList.length>5?`<div class="attn-more">+${stuckList.length-5} more</div>`:''}</div>`:''}
+        ${clientWaitList.length?`<div class="attn-block amber"><div class="attn-block-label">📤 Client silent >5d (${clientWaitList.length})</div>${clientWaitList.slice(0,4).map(p=>attnRow(p,timeAgo(p.updated_at),'amber')).join('')}</div>`:''}
+        ${unassignedList.length?`<div class="attn-block red"><div class="attn-block-label">👤 No editor assigned (${unassignedList.length})</div>${unassignedList.slice(0,4).map(p=>attnRow(p,'ASSIGN','red')).join('')}</div>`:''}
+      </div>
+      ${editorOverload.length?`<div class="attn-overload">⚡ Workload imbalance: ${editorOverload.map(e=>`<strong>${esc(e.name)}</strong> (${e.count})`).join(', ')} carrying heavy load — consider redistributing</div>`:''}
+    </div>`:`<div class="attn-panel all-clear"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All clear — nothing needs attention right now</div></div>`}
     <div class="stat-grid">
       ${statCard('Active Projects',active,ps.length+' total')}
       ${statCard('Overdue',overdue,overdue>0?'past deadline':'all on track',overdue>0?'red':'green')}
@@ -760,7 +808,7 @@ function renderDashboard(){
         <div class="panel">
           <div class="panel-head"><div class="panel-title">Team Workload</div></div>
           <div class="panel-body">
-            ${editorBars.length?editorBars.map(e=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${esc(e.name)}</span><span class="text-3">${e.count} active</span></div><div class="spark-bar"><div class="spark-fill" style="width:${maxEd?(e.count/maxEd)*100:0}%"></div></div></div>`).join(''):'<div class="text-3 fs-12" style="text-align:center;font-style:italic">No editors found</div>'}
+            ${editorBars.length?editorBars.map(e=>{const heavy=e.count>=6;return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${esc(e.name)}${heavy?' <span style="color:var(--red);font-size:10px">⚡ HEAVY</span>':''}</span><span class="text-3">${e.count} active</span></div><div class="spark-bar"><div class="spark-fill" style="width:${maxEd?(e.count/maxEd)*100:0}%;${heavy?'background:var(--red)':''}"></div></div></div>`}).join(''):'<div class="text-3 fs-12" style="text-align:center;font-style:italic">No editors found</div>'}
           </div>
         </div>
         <div class="panel">
@@ -1226,20 +1274,36 @@ function renderDriveLinks(){
 function renderClients(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
-  const monthStart=startOfMonth();
-  const monthLabel=new Date().toLocaleDateString('en-GB',{month:'long'});
+  // Selected month from filter (YYYY-MM)
+  const selMonth=FILTERS.clientsMonth||new Date().toISOString().slice(0,7);
+  const [selY,selM]=selMonth.split('-').map(Number);
+  const monthStart=new Date(selY,selM-1,1);
+  const monthEnd=new Date(selY,selM,1);
+  const monthLabel=monthStart.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  // Build last 12 months options
+  const monthOpts=[];
+  for(let i=0;i<12;i++){const d=new Date();d.setMonth(d.getMonth()-i);const v=d.toISOString().slice(0,7);const lbl=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});monthOpts.push({v,lbl})}
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
     const active=proj.filter(p=>p.current_stage!=='posted').length;
-    const postedThisMonth=videosPostedThisMonth(c.id);
+    const postedThisMonth=proj.filter(p=>p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=monthStart&&new Date(p.completed_at)<monthEnd).length;
     const target=videoTarget(c);
-    const doneMonth=proj.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;
     const lastAct=proj.map(p=>p.updated_at||p.created_at).sort().pop();
-    return {client:c,active,doneMonth,postedThisMonth,target,total:proj.length,lastAct};
+    return {client:c,active,postedThisMonth,target,total:proj.length,lastAct};
   }).sort((a,b)=>b.active-a.active);
-  $('#pageSub').textContent=`${rows.length} client${rows.length===1?'':'s'} in system · video progress for ${monthLabel}`;
-  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Clients</div><div class="page-sub">All clients with their video work · click to drill in</div></div></div>
-    <table class="tbl"><thead><tr><th>Client</th><th>Active</th><th>${monthLabel} Progress</th><th>Total Projects</th><th>Last Activity</th></tr></thead><tbody>
+  // Summary: how many clients hit target this month
+  const withTarget=rows.filter(r=>r.target>0);
+  const hitTarget=withTarget.filter(r=>r.postedThisMonth>=r.target).length;
+  $('#pageSub').textContent=`${rows.length} client${rows.length===1?'':'s'} · ${monthLabel}`;
+  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Clients</div><div class="page-sub">Video delivery per client · click a row to drill in</div></div>
+    <select class="filter-select" id="clientsMonthPick" style="min-width:180px">${monthOpts.map(o=>`<option value="${o.v}" ${o.v===selMonth?'selected':''}>${o.lbl}</option>`).join('')}</select></div>
+    ${withTarget.length?`<div class="stat-grid" style="margin-bottom:18px">
+      ${statCard('On Target',hitTarget+'/'+withTarget.length,'clients hit monthly goal',hitTarget===withTarget.length?'green':(hitTarget>=withTarget.length/2?'amber':'red'))}
+      ${statCard('Videos Posted',rows.reduce((s,r)=>s+r.postedThisMonth,0),'across all clients in '+monthStart.toLocaleDateString('en-GB',{month:'short'}))}
+      ${statCard('Behind Target',withTarget.filter(r=>r.postedThisMonth<r.target).length,'clients below goal','red')}
+      ${statCard('Active Projects',rows.reduce((s,r)=>s+r.active,0),'in pipeline now')}
+    </div>`:''}
+    <table class="tbl"><thead><tr><th>Client</th><th>Active</th><th>${monthStart.toLocaleDateString('en-GB',{month:'short'})} Progress</th><th>Total Projects</th><th>Last Activity</th></tr></thead><tbody>
     ${rows.map(r=>{
       const tgt=r.target||0;
       const posted=r.postedThisMonth;
@@ -1251,6 +1315,8 @@ function renderClients(){
       return `<tr class="clickable" data-cid="${r.client.id}"><td><strong>${esc(r.client.name)}</strong></td><td>${r.active}</td><td>${progressHtml}</td><td class="muted">${r.total}</td><td class="muted">${r.lastAct?timeAgo(r.lastAct):'—'}</td></tr>`;
     }).join('')}
     </tbody></table>`;
+  const mp=$('#clientsMonthPick');
+  if(mp)mp.onchange=e=>{FILTERS.clientsMonth=e.target.value;renderClients()};
   $('#pageContent').onclick=e=>{const r=e.target.closest('[data-cid]');if(r)openClientDetail(parseInt(r.dataset.cid))};
 }
 function openClientDetail(cid){
