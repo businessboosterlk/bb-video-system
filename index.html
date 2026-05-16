@@ -9,7 +9,7 @@
 <title>BB Video System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -23,10 +23,10 @@ a:hover{text-decoration:underline}
 .login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:100;padding:20px}
 .login-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:56px 48px 40px;width:100%;max-width:440px;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
 .bb-wordmark{text-align:center;line-height:0.88;margin-bottom:10px;display:flex;flex-direction:column;align-items:center;gap:2px}
-.bb-wm-row{font-family:'Inter',sans-serif;font-size:48px;font-weight:900;letter-spacing:-0.04em;color:var(--text);text-transform:uppercase;display:flex;align-items:center;justify-content:center;line-height:0.95}
+.bb-wm-row{font-family:'Poppins',sans-serif;font-size:46px;font-weight:800;letter-spacing:-0.04em;color:var(--text);text-transform:uppercase;display:flex;align-items:center;justify-content:center;line-height:0.95}
 .bb-wm-row.with-arrow{padding-left:8px}
 .bb-arrow{display:inline-block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:14px solid var(--text);margin-right:-4px;margin-top:-22px;align-self:flex-start;position:relative;top:6px}
-.bb-inf{display:inline-block;font-size:0.95em;font-weight:900;letter-spacing:-0.18em;margin:0 -0.08em;transform:translateY(0.04em);font-family:'Inter',sans-serif}
+.bb-inf{display:inline-block;font-size:0.95em;font-weight:800;letter-spacing:-0.18em;margin:0 -0.08em;transform:translateY(0.04em);font-family:'Poppins',sans-serif}
 .login-subtitle{text-align:center;font-size:11px;font-weight:700;letter-spacing:0.32em;color:var(--accent);text-transform:uppercase;margin-top:12px;margin-bottom:24px}
 .login-date{text-align:center;color:var(--text-3);font-size:13px;margin-bottom:28px}
 .login-input-big{width:100%;background:var(--surface-2);border:1px solid transparent;border-radius:10px;padding:18px 20px;color:var(--text);font-size:13px;font-weight:600;text-align:center;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:12px;transition:all 0.15s;display:block}
@@ -40,7 +40,7 @@ a:hover{text-decoration:underline}
 .sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
 .sidebar-header{padding:20px 18px 14px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0}
 .sidebar-brand{display:flex;flex-direction:column;align-items:center;gap:4px}
-.sidebar-bb-wm{font-family:'Inter',sans-serif;font-weight:900;line-height:0.9;letter-spacing:-0.04em;color:var(--text);text-transform:uppercase;text-align:center}
+.sidebar-bb-wm{font-family:'Poppins',sans-serif;font-weight:800;line-height:0.9;letter-spacing:-0.04em;color:var(--text);text-transform:uppercase;text-align:center}
 .sidebar-bb-wm .sb-row{font-size:22px;display:flex;align-items:center;justify-content:center;line-height:0.95}
 .sidebar-bb-wm .sb-arrow{display:inline-block;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid var(--text);margin-right:-3px;margin-top:-12px;align-self:flex-start;position:relative;top:4px}
 .sidebar-bb-wm .sb-inf{font-size:0.95em;letter-spacing:-0.18em;margin:0 -0.08em;transform:translateY(0.05em);display:inline-block}
@@ -340,8 +340,8 @@ a:hover{text-decoration:underline}
 <div class="login" id="loginScreen">
   <div class="login-card">
     <div class="bb-wordmark">
-      <div class="bb-wm-row">BUSINESS</div>
-      <div class="bb-wm-row">BOOSTER</div>
+      <div class="bb-wm-row with-arrow"><span class="bb-arrow"></span>BUSINESS</div>
+      <div class="bb-wm-row">B<span class="bb-inf">∞</span>STER</div>
     </div>
     <div class="login-subtitle">VIDEO SYSTEM</div>
     <div class="login-date" id="loginDate"></div>
@@ -356,8 +356,8 @@ a:hover{text-decoration:underline}
     <div class="sidebar-header">
       <div class="sidebar-brand">
         <div class="sidebar-bb-wm">
-          <div class="sb-row">BUSINESS</div>
-          <div class="sb-row">BOOSTER</div>
+          <div class="sb-row with-arrow"><span class="sb-arrow"></span>BUSINESS</div>
+          <div class="sb-row">B<span class="sb-inf">∞</span>STER</div>
         </div>
         <div class="sidebar-subtitle">Video System</div>
       </div>
@@ -385,7 +385,7 @@ a:hover{text-decoration:underline}
 </div>
 <div id="modalRoot"></div>
 <div class="toasts" id="toasts"></div>
-<div class="version-marker">v17</div>
+<div class="version-marker">v19</div>
 <script>
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
@@ -432,14 +432,14 @@ const PAGES_FULL = [
   { key: 'team',          label: 'Team',           section: 'TEAM' },
   { key: 'analytics',     label: 'Analytics',      section: 'TEAM' },
   { key: 'team_chat',     label: 'Team Chat',      section: 'TEAM' },
-  { key: 'inspo',         label: 'Inspo Hub',      section: 'EXTRA' },
+  { key: 'inspo',         label: 'Inspo Hub ↗',    section: 'EXTRA' },
 ];
 const PAGES_EDITOR = [
   { key: 'my_dashboard', label: 'My Dashboard', section: 'WORKSPACE' },
   { key: 'pipeline',     label: 'My Work',       section: 'WORKSPACE' },
   { key: 'tasks',        label: 'Task Book',     section: 'WORKSPACE' },
   { key: 'time_tracker', label: 'My Time',       section: 'WORKSPACE' },
-  { key: 'inspo',        label: 'Inspo Hub',     section: 'EXTRA' },
+  { key: 'inspo',        label: 'Inspo Hub ↗',   section: 'EXTRA' },
 ];
 
 // === STATE ===
@@ -665,6 +665,11 @@ function navIcon(key){
   return icons[key]||icons.dashboard;
 }
 function navTo(page){
+  // Inspo Hub points to the shared Command Centre Inspo Hub (single source of truth)
+  if(page==='inspo'){
+    window.open('https://businessboosterlk.github.io/bb-command-centre/inspo-hub.html','_blank','noopener');
+    return;
+  }
   currentPage=page;
   $$('#sidebarNav .nav-item').forEach(b=>{b.classList.toggle('active',b.dataset.nav===page)});
   $('#pageTitle').textContent=(isEditor()?PAGES_EDITOR:PAGES_FULL).find(p=>p.key===page)?.label||'';
