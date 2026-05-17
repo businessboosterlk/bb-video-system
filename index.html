@@ -481,6 +481,7 @@ const USERS = [
   { name: 'RAJEEWA', pin: '2222', role: 'editor' },
   { name: 'THARUKA', pin: '1234', role: 'editor' },
   { name: 'NIDWIN',  pin: '3333', role: 'editor' },
+  { name: 'THIRAN',  pin: '0437', role: 'editor' },
 ];
 const REFRESH_MS = 20000;
 const STAGES = [
@@ -502,7 +503,7 @@ const SHOOT_STAGES = [
   { key: 'script_changes', label: 'Script Changes' },
   { key: 'final_script', label: 'Final Script' },
   { key: 'get_shoot_date', label: 'Get Shoot Date' },
-  { key: 'shoot_scheduled', label: 'Shoot Scheduled' },
+  { key: 'date_confirmed', label: 'Date Confirmed' },
   { key: 'shot', label: 'Shot' },
 ];
 const PAGES_FULL = [
@@ -624,7 +625,7 @@ function stageDurationSecs(projectId,stageKeys){
 }
 // Format seconds as "Xh Ym" or "Xm" or "—"
 function fmtDuration(secs){if(!secs||secs<0)return '—';const h=Math.floor(secs/3600);const m=Math.floor((secs%3600)/60);if(h>0)return `${h}h ${m}m`;return `${m}m`;}
-function getClient(id){return DATA.clients.find(c=>c.id===id)}
+function getClient(id){return DATA.clients.find(c=>Number(c.id)===Number(id))}
 function getMember(id){return DATA.teamMembers.find(m=>m.id===id)}
 function getProject(id){return DATA.projects.find(p=>p.id===id)}
 function startOfMonth(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)}
