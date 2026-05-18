@@ -477,11 +477,13 @@ const SUPABASE_ANON_KEY = 'sb_publishable_RkGimnQ1rzRrU4Io5qn9xg_Fgi4LxiO';
 const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
-  { name: 'USHANE',  pin: '1111', role: 'video_head' },
-  { name: 'RAJEEWA', pin: '2222', role: 'editor' },
-  { name: 'THARUKA', pin: '1234', role: 'editor' },
-  { name: 'NIDWIN',  pin: '3333', role: 'editor' },
-  { name: 'THIRAN',  pin: '0437', role: 'editor' },
+  { name: 'USHANE',  pin: '628474', role: 'video_head' },
+  { name: 'KENULI',  pin: '1010', role: 'video_head' },
+  { name: 'RAJEEWA', pin: '1212', role: 'editor' },
+  { name: 'HASEEB',  pin: '1313', role: 'editor' },
+  { name: 'DIRAN',   pin: '1414', role: 'editor' },
+  { name: 'BEVAN',   pin: '1515', role: 'editor' },
+  { name: 'NIDWIN',  pin: '1616', role: 'editor' },
 ];
 const REFRESH_MS = 20000;
 const STAGES = [
@@ -498,13 +500,13 @@ const STAGES = [
   { key: 'posted', label: 'Posted' },
 ];
 const SHOOT_STAGES = [
-  { key: 'videos_confirmed', label: 'Videos Confirmed' },
-  { key: 'script_made', label: 'Script Made' },
-  { key: 'script_changes', label: 'Script Changes' },
-  { key: 'final_script', label: 'Final Script' },
-  { key: 'get_shoot_date', label: 'Get Shoot Date' },
-  { key: 'date_confirmed', label: 'Date Confirmed' },
-  { key: 'shot', label: 'Shot' },
+  { key: 'Videos Confirmed', label: 'Videos Confirmed', alt: 'videos_confirmed' },
+  { key: 'Script Made', label: 'Script Made', alt: 'script_made' },
+  { key: 'Script Changes', label: 'Script Changes', alt: 'script_changes' },
+  { key: 'Final Script', label: 'Final Script', alt: 'final_script' },
+  { key: 'Shoot Date Set', label: 'Get Shoot Date', alt: 'get_shoot_date' },
+  { key: 'Date Confirmed', label: 'Date Confirmed', alt: 'date_confirmed' },
+  { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
 const PAGES_FULL = [
   { key: 'dashboard',     label: 'Dashboard',      section: 'WORKSPACE' },
@@ -1367,7 +1369,20 @@ function renderShootPipeline(){
   $('#pageSub').textContent=`${DATA.shoots.length} shoots in system`;
   const grouped={};
   SHOOT_STAGES.forEach(s=>grouped[s.key]=[]);
-  DATA.shoots.forEach(sh=>{const k=sh.stage||sh.current_stage||'videos_confirmed';if(grouped[k]===undefined)grouped[k]=[];grouped[k].push(sh)});
+  const stageResolve=(raw)=>{
+    if(raw==null||raw==='')return SHOOT_STAGES[0].key;
+    const v=String(raw).trim();
+    const exact=SHOOT_STAGES.find(s=>s.key===v);
+    if(exact)return exact.key;
+    const byAlt=SHOOT_STAGES.find(s=>s.alt===v);
+    if(byAlt)return byAlt.key;
+    const ci=SHOOT_STAGES.find(s=>s.key.toLowerCase()===v.toLowerCase()||s.alt.toLowerCase()===v.toLowerCase()||s.label.toLowerCase()===v.toLowerCase());
+    if(ci)return ci.key;
+    return '__unmapped__';
+  };
+  let unmapped=0;
+  DATA.shoots.forEach(sh=>{const k=stageResolve(sh.stage||sh.current_stage);if(k==='__unmapped__'){unmapped++;return;}grouped[k].push(sh)});
+  if(unmapped)$('#pageSub').textContent=`${DATA.shoots.length} shoots in system · ⚠ ${unmapped} with unrecognised stage (not shown)`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Shoot Pipeline</div><div class="page-sub">Pulled from SMM Workspace · synced with shoot operations</div></div></div>
     <div class="pipeline-board">${SHOOT_STAGES.map(st=>{const sps=grouped[st.key]||[];return `<div class="stage-col"><div class="stage-header"><div class="stage-title">${st.label}</div><div class="stage-count">${sps.length}</div></div><div class="stage-cards">${sps.length?sps.map(s=>{const cl=getClient(s.client_id);return `<div class="card"><div class="card-title">${esc(s.title||s.shoot_name||'Shoot')}</div><div class="card-client">${esc(cl?.name||'—')}</div><div class="card-meta"><div class="card-meta-left"><div class="card-deadline">${s.shoot_date?fmtDate(s.shoot_date):'No date'}</div></div></div></div>`}).join(''):'<div class="stage-empty">None</div>'}</div></div>`}).join('')}</div>`;
 }
