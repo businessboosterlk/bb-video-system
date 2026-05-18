@@ -348,6 +348,7 @@ a:hover{text-decoration:underline}
 .shoot-tab{background:none;border:none;color:var(--text-3);font-size:13px;font-weight:600;padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .shoot-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .shoot-card-meta{font-size:11px;color:var(--text-3);margin-top:6px}
+.card-smm{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.03em}
 .shoot-card-actions{display:flex;gap:6px;margin-top:10px}
 .shoot-card-actions .btn{flex:1}
 .shoot-card-actions .shoot-del{flex:0 0 auto;width:34px;color:var(--text-3)}
@@ -665,6 +666,7 @@ function stageDurationSecs(projectId,stageKeys){
 function fmtDuration(secs){if(!secs||secs<0)return '—';const h=Math.floor(secs/3600);const m=Math.floor((secs%3600)/60);if(h>0)return `${h}h ${m}m`;return `${m}m`;}
 function getClient(id){return DATA.clients.find(c=>Number(c.id)===Number(id))}
 function getMember(id){return DATA.teamMembers.find(m=>m.id===id)}
+function clientSmm(clientId){const c=getClient(clientId);const s=c&&c.assigned_smm?String(c.assigned_smm).trim():'';return s||null}
 function getProject(id){return DATA.projects.find(p=>p.id===id)}
 function startOfMonth(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)}
 function startOfWeek(){const d=new Date();const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);return new Date(d.setDate(diff))}
@@ -1072,7 +1074,7 @@ function renderPipeline(){
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
   if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
-  const editors=DATA.teamMembers;
+  const editors=DATA.teamMembers.filter(m=>(m.role||'').toLowerCase()==='editor'||(m.role||'').toLowerCase()==='video_editor');
   const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
@@ -1146,8 +1148,9 @@ function cardHtml(p){
   const sel=PIPELINE_STATE.selected.has(p.id);
   const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
   const selClass=sel?'selected':'';
+  const smm=clientSmm(p.client_id);
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
-  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div><div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div>${mv}</div>`;
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div>${mv}</div>`;
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
@@ -1337,6 +1340,7 @@ async function openProjectDetail(id){
       <div class="detail-meta-item"><div class="detail-meta-label">Priority</div><div class="detail-meta-value" style="text-transform:capitalize"><span class="priority-dot priority-${p.priority||'medium'}" style="display:inline-block;margin-right:6px"></span>${p.priority||'medium'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Type</div><div class="detail-meta-value" style="text-transform:capitalize">${p.type||'—'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Editor</div><div class="detail-meta-value">${esc(ed?.name||'Unassigned')}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">SMM (handles client)</div><div class="detail-meta-value">${clientSmm(p.client_id)?esc(clientSmm(p.client_id)):'<span class="muted">No SMM assigned</span>'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Month</div><div class="detail-meta-value">${monthLabel(p)?esc(monthLabel(p)):'<span class="muted">Not set</span>'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Current Stage</div><div class="detail-meta-value">${esc(st?.label||'')}</div></div>
       ${p.formula?`<div class="detail-meta-item" style="grid-column:1/-1"><div class="detail-meta-label">Formula</div><div class="detail-meta-value">${esc(p.formula)}</div></div>`:''}
