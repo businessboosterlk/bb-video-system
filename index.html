@@ -344,6 +344,40 @@ a:hover{text-decoration:underline}
    so desktop renders pixel-identical.
    ============================================================ */
 .m-menu-btn{display:none}
+.shoot-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.shoot-tab{background:none;border:none;color:var(--text-3);font-size:13px;font-weight:600;padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.shoot-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.shoot-card-meta{font-size:11px;color:var(--text-3);margin-top:6px}
+.shoot-card-actions{display:flex;gap:6px;margin-top:10px}
+.shoot-card-actions .btn{flex:1}
+.shoot-card-actions .shoot-del{flex:0 0 auto;width:34px;color:var(--text-3)}
+.shoot-card-actions .shoot-del:hover{color:var(--red);background:var(--red-soft)}
+.shoot-card.dragging{opacity:.4}
+[data-shoot-drop].drop-hot{background:var(--accent-soft);border-radius:10px}
+.cal-head{display:flex;align-items:center;gap:16px;margin-bottom:6px}
+.cal-month{font-size:18px;font-weight:700;color:var(--text)}
+.cal-sub{margin-bottom:12px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-dow{font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:.08em;text-align:center;padding:6px 0}
+.cal-cell{min-height:96px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px}
+.cal-cell.cal-empty{background:transparent;border:none}
+.cal-cell.cal-has{border-color:var(--accent)}
+.cal-daynum{font-size:12px;color:var(--text-3);font-weight:600;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.cal-badge{background:var(--accent);color:#fff;font-size:9px;font-weight:700;border-radius:9px;padding:1px 6px}
+.cal-event{background:var(--surface-3);border-radius:5px;padding:4px 6px;margin-bottom:4px;cursor:pointer;border-left:2px solid var(--accent)}
+.cal-event:hover{background:var(--accent-soft)}
+.cal-event-client{font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+.cal-event-title{font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:768px){
+  .shoot-tab{flex:1;font-size:12px;padding:10px 6px}
+  .cal-grid{gap:3px}
+  .cal-cell{min-height:62px;padding:4px}
+  .cal-dow{font-size:8px}
+  .cal-event-title{font-size:9px}
+  .cal-event-client{font-size:8px}
+  .cal-head{gap:8px}
+  .cal-month{font-size:15px}
+}
 .m-nav-overlay{display:none}
 .card-move{display:none}
 
@@ -477,10 +511,13 @@ const SUPABASE_ANON_KEY = 'sb_publishable_RkGimnQ1rzRrU4Io5qn9xg_Fgi4LxiO';
 const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
-  { name: 'USHANE',  pin: '1111', role: 'video_head' },
-  { name: 'RAJEEWA', pin: '2222', role: 'editor' },
-  { name: 'THARUKA', pin: '1234', role: 'editor' },
-  { name: 'NIDWIN',  pin: '3333', role: 'editor' },
+  { name: 'USHANE',  pin: '628474', role: 'video_head' },
+  { name: 'KENULI',  pin: '1010', role: 'video_head' },
+  { name: 'RAJEEWA', pin: '1212', role: 'editor' },
+  { name: 'HASEEB',  pin: '1313', role: 'editor' },
+  { name: 'DIRAN',   pin: '1414', role: 'editor' },
+  { name: 'BEVAN',   pin: '1515', role: 'editor' },
+  { name: 'NIDWIN',  pin: '1616', role: 'editor' },
 ];
 const REFRESH_MS = 20000;
 const STAGES = [
@@ -497,13 +534,13 @@ const STAGES = [
   { key: 'posted', label: 'Posted' },
 ];
 const SHOOT_STAGES = [
-  { key: 'videos_confirmed', label: 'Videos Confirmed' },
-  { key: 'script_made', label: 'Script Made' },
-  { key: 'script_changes', label: 'Script Changes' },
-  { key: 'final_script', label: 'Final Script' },
-  { key: 'get_shoot_date', label: 'Get Shoot Date' },
-  { key: 'shoot_scheduled', label: 'Shoot Scheduled' },
-  { key: 'shot', label: 'Shot' },
+  { key: 'Videos Confirmed', label: 'Videos Confirmed', alt: 'videos_confirmed' },
+  { key: 'Script Made', label: 'Script Made', alt: 'script_made' },
+  { key: 'Script Changes', label: 'Script Changes', alt: 'script_changes' },
+  { key: 'Final Script', label: 'Final Script', alt: 'final_script' },
+  { key: 'Shoot Date Set', label: 'Get Shoot Date', alt: 'get_shoot_date' },
+  { key: 'Date Confirmed', label: 'Date Confirmed', alt: 'date_confirmed' },
+  { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
 const PAGES_FULL = [
   { key: 'dashboard',     label: 'Dashboard',      section: 'WORKSPACE' },
@@ -529,7 +566,9 @@ const PAGES_EDITOR = [
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [] };
-let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
+let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function monthLabel(p){if(!p||!p.target_month)return null;const mi=parseInt(p.target_month);if(isNaN(mi)||mi<1||mi>12)return null;return MONTHS[mi-1]+(p.target_year?' '+p.target_year:'');}
 
 // === HELPERS ===
 const $ = s => document.querySelector(s);
@@ -624,7 +663,7 @@ function stageDurationSecs(projectId,stageKeys){
 }
 // Format seconds as "Xh Ym" or "Xm" or "—"
 function fmtDuration(secs){if(!secs||secs<0)return '—';const h=Math.floor(secs/3600);const m=Math.floor((secs%3600)/60);if(h>0)return `${h}h ${m}m`;return `${m}m`;}
-function getClient(id){return DATA.clients.find(c=>c.id===id)}
+function getClient(id){return DATA.clients.find(c=>Number(c.id)===Number(id))}
 function getMember(id){return DATA.teamMembers.find(m=>m.id===id)}
 function getProject(id){return DATA.projects.find(p=>p.id===id)}
 function startOfMonth(){const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1)}
@@ -1032,6 +1071,7 @@ function renderPipeline(){
   if(f.client)ps=ps.filter(p=>p.client_id===parseInt(f.client));
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
+  if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
   const editors=DATA.teamMembers;
   const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
@@ -1046,8 +1086,34 @@ function renderPipeline(){
     <select class="filter-select" id="fClient"><option value="">All clients</option>${DATA.clients.map(c=>`<option value="${c.id}" ${f.client==c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     <select class="filter-select" id="fEditor"><option value="">All editors</option>${editors.map(m=>`<option value="${m.id}" ${f.editor==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
     <select class="filter-select" id="fPriority"><option value="">All priorities</option>${['urgent','high','medium','low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select>
-    ${(f.search||f.client||f.editor||f.priority)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
+    <select class="filter-select" id="fMonth"><option value="">All months</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(f.month)===i+1?'selected':''}>${m}</option>`).join('')}</select>
+    ${(f.search||f.client||f.editor||f.priority||f.month)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
   </div>`;
+  let monthSummaryHtml='';
+  if(f.month){
+    const DONE=['add_to_drive','posted'];
+    const mi=parseInt(f.month);
+    const byClient={};const yearsSeen=new Set();
+    ps.forEach(p=>{
+      if(p.target_year)yearsSeen.add(p.target_year);
+      const cid=p.client_id==null?'none':p.client_id;
+      if(!byClient[cid])byClient[cid]={done:0,prog:0};
+      if(DONE.includes(p.current_stage))byClient[cid].done++;else byClient[cid].prog++;
+    });
+    const rows=Object.keys(byClient).map(cid=>{
+      const name=cid==='none'?'— No client —':(getClient(Number(cid))?.name||'Unknown');
+      const v=byClient[cid];
+      return {name,done:v.done,prog:v.prog,total:v.done+v.prog};
+    }).sort((a,b)=>b.total-a.total);
+    const totDone=rows.reduce((s,r)=>s+r.done,0),totProg=rows.reduce((s,r)=>s+r.prog,0);
+    const mName=MONTHS[mi-1]||f.month;
+    const yrs=[...yearsSeen].sort();
+    const yrLabel=yrs.length===1?` ${yrs[0]}`:'';
+    const crossYearWarn=yrs.length>1?`<div class="text-3 fs-11" style="color:var(--red);margin-top:4px">⚠ Mixed years in this month: ${yrs.join(', ')} — counts below combine all of them</div>`:'';
+    monthSummaryHtml=`<div class="panel" style="margin-bottom:16px"><div class="panel-head"><div class="panel-title">${esc(mName)}${yrLabel} — completion by client</div><div class="text-3 fs-11">${totDone} on drive · ${totProg} still editing</div></div>${crossYearWarn}
+      ${rows.length?`<table class="tbl"><thead><tr><th>Client</th><th>On drive</th><th>Still editing</th><th>Total</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td><strong style="color:var(--green)">${r.done}</strong></td><td>${r.prog}</td><td class="muted">${r.total}</td></tr>`).join('')}</tbody></table>`:'<div class="link-empty">No videos tagged for this month yet</div>'}
+    </div>`;
+  }
   const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
   // Bulk action floating bar
   const bulkBarHtml=PIPELINE_STATE.bulkMode&&PIPELINE_STATE.selected.size?`<div class="bulk-action-bar">
@@ -1056,13 +1122,14 @@ function renderPipeline(){
     <button class="bulk-action-btn" data-action="bulk-duplicate">Duplicate</button>
     <button class="bulk-action-btn ghost" data-action="bulk-cancel">Cancel</button>
   </div>`:'';
-  $('#pageContent').innerHTML=filtersHtml+boardHtml+bulkBarHtml;
+  $('#pageContent').innerHTML=filtersHtml+monthSummaryHtml+boardHtml+bulkBarHtml;
   $('#fSearch').oninput=e=>{FILTERS.pipeline.search=e.target.value;renderPipeline()};
   $('#fClient').onchange=e=>{FILTERS.pipeline.client=e.target.value;renderPipeline()};
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
   $('#fPriority').onchange=e=>{FILTERS.pipeline.priority=e.target.value;renderPipeline()};
+  $('#fMonth').onchange=e=>{FILTERS.pipeline.month=e.target.value;renderPipeline()};
   $('#pageContent').addEventListener('click',async e=>{
-    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:''};renderPipeline();return}
+    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:''};renderPipeline();return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
     if(e.target.closest('[data-action="bulk-duplicate"]')){await bulkDuplicateProjects();return}
   });
@@ -1193,7 +1260,7 @@ function openProjectForm(existing=null){
     <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">— Unassigned —</option>${DATA.teamMembers.map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p=>`<option value="${p}" ${(existing?.priority||'medium')===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select></div><div><label class="field-label">Type</label><select class="field-select" name="type">${['reel','ad','testimonial','product','educational'].map(t=>`<option value="${t}" ${(existing?.type||'reel')===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||''}"></div></div>
-    <div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div>
+    <div class="form-row"><div><label class="field-label">Month ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month"><option value="">— Not set —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
     <div><label class="field-label">Description / Notes</label><textarea class="field-textarea" name="description" rows="3">${esc(existing?.description||'')}</textarea></div>
   </div></form><div class="modal-footer">${ie&&currentUser.role==='admin'?`<button class="btn btn-ghost btn-danger" data-del="${existing.id}">Delete</button>`:''}<button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save="${ie?existing.id:''}">${ie?'Save':'Create'}</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
@@ -1206,6 +1273,10 @@ function openProjectForm(existing=null){
 async function saveProject(id){
   const f=$('#projectForm');const fd=new FormData(f);
   const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,assigned_editor_id:fd.get('assigned_editor_id')?parseInt(fd.get('assigned_editor_id')):null,priority:fd.get('priority'),type:fd.get('type'),current_stage:fd.get('current_stage'),deadline:fd.get('deadline')||null,formula:fd.get('formula').trim()||null,description:fd.get('description').trim()||null};
+  const tm=fd.get('target_month')?parseInt(fd.get('target_month')):null;
+  d.target_month=tm;
+  if(tm){const ex=id?getProject(id):null;d.target_year=(ex&&ex.target_year)?ex.target_year:new Date().getFullYear();}
+  else{d.target_year=null;}
   if(!d.title){toast('Title required','error');return}
   try{
     if(id){const o=getProject(id);if(o&&o.current_stage!==d.current_stage)await moveProject(o,d.current_stage);d.updated_at=new Date().toISOString();const {error}=await sb.from('video_projects').update(d).eq('id',id);if(error)throw error;toast('Project updated','success')}
@@ -1266,6 +1337,7 @@ async function openProjectDetail(id){
       <div class="detail-meta-item"><div class="detail-meta-label">Priority</div><div class="detail-meta-value" style="text-transform:capitalize"><span class="priority-dot priority-${p.priority||'medium'}" style="display:inline-block;margin-right:6px"></span>${p.priority||'medium'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Type</div><div class="detail-meta-value" style="text-transform:capitalize">${p.type||'—'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Editor</div><div class="detail-meta-value">${esc(ed?.name||'Unassigned')}</div></div>
+      <div class="detail-meta-item"><div class="detail-meta-label">Month</div><div class="detail-meta-value">${monthLabel(p)?esc(monthLabel(p)):'<span class="muted">Not set</span>'}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Current Stage</div><div class="detail-meta-value">${esc(st?.label||'')}</div></div>
       ${p.formula?`<div class="detail-meta-item" style="grid-column:1/-1"><div class="detail-meta-label">Formula</div><div class="detail-meta-value">${esc(p.formula)}</div></div>`:''}
     </div></div>
@@ -1325,15 +1397,114 @@ async function postComment(pid){
 function closeModal(){const m=$('#modalRoot');if(m)m.innerHTML='';const m2=$('#modal2');if(m2)m2.remove()}
 
 // === PAGE: SHOOT PIPELINE ===
+let SHOOT_VIEW='pipeline', SHOOT_CAL=new Date();
 function renderShootPipeline(){
-  $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><div class="text-3 fs-11" style="margin-left:8px">Read-only · managed by SMM team</div>';
-  $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
-  $('#pageSub').textContent=`${DATA.shoots.length} shoots in system`;
-  const grouped={};
-  SHOOT_STAGES.forEach(s=>grouped[s.key]=[]);
-  DATA.shoots.forEach(sh=>{const k=sh.stage||sh.current_stage||'videos_confirmed';if(grouped[k]===undefined)grouped[k]=[];grouped[k].push(sh)});
-  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Shoot Pipeline</div><div class="page-sub">Pulled from SMM Workspace · synced with shoot operations</div></div></div>
-    <div class="pipeline-board">${SHOOT_STAGES.map(st=>{const sps=grouped[st.key]||[];return `<div class="stage-col"><div class="stage-header"><div class="stage-title">${st.label}</div><div class="stage-count">${sps.length}</div></div><div class="stage-cards">${sps.length?sps.map(s=>{const cl=getClient(s.client_id);return `<div class="card"><div class="card-title">${esc(s.title||s.shoot_name||'Shoot')}</div><div class="card-client">${esc(cl?.name||'—')}</div><div class="card-meta"><div class="card-meta-left"><div class="card-deadline">${s.shoot_date?fmtDate(s.shoot_date):'No date'}</div></div></div></div>`}).join(''):'<div class="stage-empty">None</div>'}</div></div>`}).join('')}</div>`;
+  $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button><button class="btn btn-primary" data-action="add-shoot">+ Add Shoot</button>';
+  $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll();if(e.target.closest('[data-action="add-shoot"]'))openShootForm()};
+  const stageResolve=(raw)=>{
+    if(raw==null||raw==='')return SHOOT_STAGES[0].key;
+    const v=String(raw).trim();
+    const exact=SHOOT_STAGES.find(s=>s.key===v); if(exact)return exact.key;
+    const byAlt=SHOOT_STAGES.find(s=>s.alt===v); if(byAlt)return byAlt.key;
+    const ci=SHOOT_STAGES.find(s=>s.key.toLowerCase()===v.toLowerCase()||s.alt.toLowerCase()===v.toLowerCase()||s.label.toLowerCase()===v.toLowerCase());
+    if(ci)return ci.key;
+    return '__unmapped__';
+  };
+  const grouped={}; SHOOT_STAGES.forEach(s=>grouped[s.key]=[]); let unmapped=0;
+  DATA.shoots.forEach(sh=>{const k=stageResolve(sh.stage||sh.current_stage);if(k==='__unmapped__'){unmapped++;return;}grouped[k].push(sh)});
+  $('#pageSub').textContent=`${DATA.shoots.length} shoots in system`+(unmapped?` · ⚠ ${unmapped} unrecognised stage (not shown)`:'');
+  const tabs=`<div class="shoot-tabs"><button class="shoot-tab ${SHOOT_VIEW==='pipeline'?'active':''}" data-sview="pipeline">Pipeline</button><button class="shoot-tab ${SHOOT_VIEW==='calendar'?'active':''}" data-sview="calendar">Weekly Calendar</button></div>`;
+  const shootCard=(s)=>{const cl=getClient(s.client_id);const meta=[s.quarter,s.month,(s.video_count!=null?s.video_count+' vids':null),(s.shoot_date?fmtDate(s.shoot_date):null)].filter(Boolean).join(' · ');return `<div class="card shoot-card" draggable="true" data-shoot-id="${s.id}"><div class="card-client" style="text-transform:uppercase;font-size:11px;letter-spacing:.04em;color:var(--accent)">${esc(cl?.name||'— No client —')}</div><div class="card-title">${esc(s.title||'Shoot')}</div><div class="shoot-card-meta">${esc(meta||'No details')}</div><div class="shoot-card-actions"><button class="btn btn-secondary btn-sm" data-edit-shoot="${s.id}">Edit</button><button class="btn btn-ghost btn-sm shoot-del" data-del-shoot="${s.id}" title="Delete shoot">×</button></div></div>`};
+  let body;
+  if(SHOOT_VIEW==='calendar'){
+    body=shootCalendarHtml();
+  } else {
+    body=`<div class="pipeline-board">${SHOOT_STAGES.map(st=>{const sps=grouped[st.key]||[];return `<div class="stage-col" data-shoot-drop="${st.key}"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.alt}"></span>${st.label}</div><div class="stage-count">${sps.length}</div></div><div class="stage-cards">${sps.length?sps.map(shootCard).join(''):'<div class="stage-empty">No shoots</div>'}</div></div>`}).join('')}</div>`;
+  }
+  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Shoot Pipeline</div><div class="page-sub">Kanban + weekly shoot calendar</div></div></div>${tabs}${body}`;
+  $('#pageContent').querySelectorAll('[data-sview]').forEach(b=>b.onclick=()=>{SHOOT_VIEW=b.dataset.sview;renderShootPipeline()});
+  $('#pageContent').onclick=async e=>{
+    const cp=e.target.closest('[data-cal-prev]'),cn=e.target.closest('[data-cal-next]');
+    if(cp){SHOOT_CAL=new Date(SHOOT_CAL.getFullYear(),SHOOT_CAL.getMonth()-1,1);renderShootPipeline();return}
+    if(cn){SHOOT_CAL=new Date(SHOOT_CAL.getFullYear(),SHOOT_CAL.getMonth()+1,1);renderShootPipeline();return}
+    const ed=e.target.closest('[data-edit-shoot]'); if(ed){openShootForm(parseInt(ed.dataset.editShoot));return}
+    const dl=e.target.closest('[data-del-shoot]'); if(dl){deleteShoot(parseInt(dl.dataset.delShoot));return}
+  };
+  // Drag-to-move: writes ONLY the stage field (narrow write to limit CC collision)
+  let dragId=null;
+  $('#pageContent').querySelectorAll('.shoot-card').forEach(c=>{
+    c.addEventListener('dragstart',()=>{dragId=parseInt(c.dataset.shootId);c.classList.add('dragging')});
+    c.addEventListener('dragend',()=>{dragId=null;c.classList.remove('dragging')});
+  });
+  $('#pageContent').querySelectorAll('[data-shoot-drop]').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('drop-hot')});
+    col.addEventListener('dragleave',()=>col.classList.remove('drop-hot'));
+    col.addEventListener('drop',async e=>{e.preventDefault();col.classList.remove('drop-hot');if(dragId==null)return;const newKey=col.dataset.shootDrop;const sh=DATA.shoots.find(x=>Number(x.id)===Number(dragId));if(!sh)return;if(stageResolve(sh.stage)===newKey)return;await writeShootStage(sh,newKey)});
+  });
+}
+function shootCalendarHtml(){
+  const y=SHOOT_CAL.getFullYear(),m=SHOOT_CAL.getMonth();
+  const monthName=SHOOT_CAL.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const first=new Date(y,m,1),startDow=first.getDay(),days=new Date(y,m+1,0).getDate();
+  const inMonth=DATA.shoots.filter(s=>{if(!s.shoot_date)return false;const d=new Date(s.shoot_date);return d.getFullYear()===y&&d.getMonth()===m});
+  const byDay={}; inMonth.forEach(s=>{const d=new Date(s.shoot_date).getDate();(byDay[d]=byDay[d]||[]).push(s)});
+  let cells='';
+  for(let i=0;i<startDow;i++)cells+='<div class="cal-cell cal-empty"></div>';
+  for(let d=1;d<=days;d++){
+    const list=byDay[d]||[];
+    cells+=`<div class="cal-cell${list.length?' cal-has':''}"><div class="cal-daynum">${d}${list.length?`<span class="cal-badge">${list.length}</span>`:''}</div>${list.map(s=>{const cl=getClient(s.client_id);return `<div class="cal-event" data-edit-shoot="${s.id}"><div class="cal-event-client">${esc(cl?.name||'—')}</div><div class="cal-event-title">${esc(s.title||'Shoot')}</div></div>`}).join('')}</div>`;
+  }
+  return `<div class="cal-head"><button class="btn btn-secondary btn-sm" data-cal-prev>← Prev</button><div class="cal-month">${monthName}</div><button class="btn btn-secondary btn-sm" data-cal-next>Next →</button></div><div class="cal-sub text-3 fs-11">${inMonth.length} shoots this month</div><div class="cal-grid"><div class="cal-dow">SUN</div><div class="cal-dow">MON</div><div class="cal-dow">TUE</div><div class="cal-dow">WED</div><div class="cal-dow">THU</div><div class="cal-dow">FRI</div><div class="cal-dow">SAT</div>${cells}</div>`;
+}
+async function writeShootStage(sh,newKey){
+  try{
+    const {error}=await sb.from('smm_shoots').update({stage:newKey,updated_at:new Date().toISOString()}).eq('id',sh.id);
+    if(error)throw error;
+    sh.stage=newKey;
+    toast('Shoot moved','success');
+    renderShootPipeline();
+    fetchAll(true);
+  }catch(err){toast('Move failed: '+(err.message||''),'error')}
+}
+async function deleteShoot(id){
+  const sh=DATA.shoots.find(x=>Number(x.id)===Number(id));
+  if(!confirm(`Delete this shoot${sh?' ("'+(sh.title||'')+'")':''}?\n\nThis removes it from CC and the SMM Workspace too. It cannot be undone.`))return;
+  try{
+    const {error}=await sb.from('smm_shoots').delete().eq('id',id);
+    if(error)throw error;
+    DATA.shoots=DATA.shoots.filter(x=>Number(x.id)!==Number(id));
+    toast('Shoot deleted','success');
+    renderShootPipeline();
+    fetchAll(true);
+  }catch(err){toast('Delete failed: '+(err.message||''),'error')}
+}
+function openShootForm(id){
+  const ex=id?DATA.shoots.find(x=>Number(x.id)===Number(id)):null;
+  const clientOpts=(DATA.clients||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(c=>`<option value="${c.id}" ${ex&&Number(ex.client_id)===Number(c.id)?'selected':''}>${esc(c.name)}</option>`).join('');
+  const stageOpts=SHOOT_STAGES.map(s=>`<option value="${s.key}" ${ex&&(ex.stage===s.key||ex.stage===s.alt)?'selected':''}>${s.label}</option>`).join('');
+  const html=`<div class="modal-backdrop"><div class="modal"><div class="modal-header"><div class="modal-title">${ex?'Edit Shoot':'Add Shoot'}</div><button class="btn btn-ghost" data-close>✕</button></div><div class="modal-body"><form id="shootForm">
+    <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— No client —</option>${clientOpts}</select></div><div><label class="field-label">Title *</label><input class="field-input" name="title" value="${esc(ex?.title||'')}" required></div></div>
+    <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="stage">${stageOpts}</select></div><div><label class="field-label">Shoot date</label><input class="field-input" type="date" name="shoot_date" value="${ex?.shoot_date||''}"></div></div>
+    <div class="form-row"><div><label class="field-label">Quarter</label><input class="field-input" name="quarter" value="${esc(ex?.quarter||'')}" placeholder="Q2"></div><div><label class="field-label">Month</label><input class="field-input" name="month" value="${esc(ex?.month||'')}" placeholder="May"></div></div>
+    <div class="form-row"><div><label class="field-label">Video count</label><input class="field-input" type="number" name="video_count" value="${ex?.video_count!=null?ex.video_count:''}"></div><div></div></div>
+  </form></div><div class="modal-footer"><button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save-shoot="${ex?ex.id:''}">${ex?'Save':'Create'}</button></div></div></div>`;
+  $('#modalRoot').innerHTML=html;
+  $('#modalRoot').onclick=async e=>{
+    if(e.target.closest('[data-close]')){closeModal();return}
+    const sv=e.target.closest('[data-save-shoot]');
+    if(sv){
+      const f=$('#shootForm');const fd=new FormData(f);
+      const title=(fd.get('title')||'').trim();
+      if(!title){toast('Title is required','error');return}
+      const d={title,client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,stage:fd.get('stage'),shoot_date:fd.get('shoot_date')||null,quarter:(fd.get('quarter')||'').trim()||null,month:(fd.get('month')||'').trim()||null,video_count:fd.get('video_count')!==''?parseInt(fd.get('video_count')):null,updated_at:new Date().toISOString()};
+      try{
+        const sid=sv.dataset.saveShoot;
+        if(sid){const {error}=await sb.from('smm_shoots').update(d).eq('id',parseInt(sid));if(error)throw error;toast('Shoot updated','success')}
+        else{const {error}=await sb.from('smm_shoots').insert(d);if(error)throw error;toast('Shoot created','success')}
+        closeModal();await fetchAll();renderShootPipeline();
+      }catch(err){toast('Save failed: '+(err.message||''),'error')}
+    }
+  };
 }
 
 // === PAGE: TASKS ===
@@ -1353,7 +1524,7 @@ function renderTasks(){
   const done=tasks.filter(t=>t.completed||t.status==='done'||t.status==='completed');
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Tasks</div><div class="page-sub">Personal task list · ${todo.length} to do · ${done.length} done</div></div></div>
     <div class="panel"><div class="panel-head"><div class="panel-title">To Do</div></div>
-      ${todo.length?`<table class="tbl"><thead><tr><th></th><th>Task</th><th>Client</th><th>Assigned</th><th>Priority</th><th>Due</th><th></th></tr></thead><tbody>${todo.map(t=>{const cl=getClient(t.client_id);const due=t.deadline||t.due_date;const ov=due&&isOverdue(due);const who=(t.assign||t.assigned_to||'').trim();const whoLbl=(!who||who==='video')?'—':who.charAt(0).toUpperCase()+who.slice(1);return `<tr><td><input type="checkbox" data-toggle-task="${t.id}"></td><td>${esc(t.title||t.text||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td>${whoLbl==='—'?'<span class="muted">—</span>':'<span class="tag blue">'+esc(whoLbl)+'</span>'}</td><td><span class="tag ${t.priority==='urgent'?'red':t.priority==='high'?'amber':'blue'}">${t.priority||'medium'}</span></td><td class="${ov?'':'muted'}" style="${ov?'color:var(--red)':''}">${due?fmtDate(due):'—'}</td><td><button class="btn btn-ghost btn-sm" data-edit-task="${t.id}">Edit</button></td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">All caught up</div>'}
+      ${todo.length?`<table class="tbl"><thead><tr><th></th><th>Task</th><th>Client</th><th>Priority</th><th>Due</th><th></th></tr></thead><tbody>${todo.map(t=>{const cl=getClient(t.client_id);const due=t.deadline||t.due_date;const ov=due&&isOverdue(due);return `<tr><td><input type="checkbox" data-toggle-task="${t.id}"></td><td>${esc(t.title||t.text||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td><span class="tag ${t.priority==='urgent'?'red':t.priority==='high'?'amber':'blue'}">${t.priority||'medium'}</span></td><td class="${ov?'':'muted'}" style="${ov?'color:var(--red)':''}">${due?fmtDate(due):'—'}</td><td><button class="btn btn-ghost btn-sm" data-edit-task="${t.id}">Edit</button></td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">All caught up</div>'}
     </div>
     ${done.length?`<div class="panel"><div class="panel-head"><div class="panel-title">Done</div></div>${done.slice(0,20).map(t=>{const cl=getClient(t.client_id);return `<div class="panel-row"><div style="text-decoration:line-through;color:var(--text-3)">${esc(t.title||t.text)}</div><div class="muted">${esc(cl?.name||'')}</div></div>`}).join('')}</div>`:''}
   `;
@@ -1367,7 +1538,7 @@ function openTaskForm(existing=null){
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">${ie?'Edit Task':'New Task'}</div><button class="modal-close" data-close>&times;</button></div><form id="taskForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Title</label><input class="field-input" name="title" required value="${esc(existing?.title||existing?.text||'')}" autofocus></div>
     <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p=>`<option value="${p}" ${(existing?.priority||'medium')===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select></div></div>
-    <div class="form-row"><div><label class="field-label">Assign To</label><select class="field-select" name="assign"><option value="">— Unassigned —</option>${DATA.teamMembers.map(m=>`<option value="${esc(m.name)}" ${((existing?.assign||existing?.assigned_to||'').toLowerCase()===(m.name||'').toLowerCase())?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div><div><label class="field-label">Due Date</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||existing?.due_date||''}"></div></div>
+    <div><label class="field-label">Due Date</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||existing?.due_date||''}"></div>
     <div><label class="field-label">Notes</label><textarea class="field-textarea" name="notes">${esc(existing?.notes||existing?.description||'')}</textarea></div>
   </div></form><div class="modal-footer">${ie?`<button class="btn btn-ghost btn-danger" data-del-task="${existing.id}">Delete</button>`:''}<button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save-task="${ie?existing.id:''}">Save</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
@@ -1377,8 +1548,7 @@ function openTaskForm(existing=null){
     if(e.target.closest('[data-save-task]')){
       const id=e.target.closest('[data-save-task]').dataset.saveTask;
       const f=$('#taskForm');const fd=new FormData(f);
-      const pickedAssign=(fd.get('assign')||'').trim();
-      const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,priority:fd.get('priority'),deadline:fd.get('deadline')||null,notes:fd.get('notes').trim()||null,assign:pickedAssign||(isEditor()?currentUser.name.toLowerCase():'video')};
+      const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,priority:fd.get('priority'),deadline:fd.get('deadline')||null,notes:fd.get('notes').trim()||null,assign:isEditor()?currentUser.name.toLowerCase():'video'};
       if(!d.title){toast('Title required','error');return}
       try{if(id){await sb.from('tasks').update(d).eq('id',parseInt(id))}else{d.created_by=currentUser.name;await sb.from('tasks').insert(d)}toast('Saved','success');closeModal();await fetchAll()}catch(err){toast('Save failed: '+(err.message||''),'error')}
     }
