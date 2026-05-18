@@ -1373,7 +1373,7 @@ async function openProjectDetail(id){
 }
 function linkListHtml(links,kind){
   if(!links.length)return `<div class="link-empty">No ${kind==='raw_footage'?'raw footage':kind==='final_cut'?'final video':''} links yet</div>`;
-  return `<div class="link-list">${links.map(l=>`<div class="link-row"><div class="link-icon">${linkIcon(l.url)}</div><div class="link-info"><div class="link-title"><a href="${esc(l.url)}" target="_blank">${esc(l.title||l.url)}</a></div><div class="link-meta">${esc(l.added_by||'')} · ${fmtDateTime(l.created_at)}</div></div>${isAdmin()?`<button class="btn btn-ghost btn-sm btn-danger" data-del-link="${l.id}">×</button>`:''}</div>`).join('')}</div>`;
+  return `<div class="link-list">${links.map(l=>`<div class="link-row"><div class="link-icon">${linkIcon(l.url)}</div><div class="link-info"><div class="link-title"><a href="${esc(l.url)}" target="_blank">${esc(l.label||l.url)}</a></div><div class="link-meta">${esc(l.added_by||'')} · ${fmtDateTime(l.created_at)}</div></div>${isAdmin()?`<button class="btn btn-ghost btn-sm btn-danger" data-del-link="${l.id}">×</button>`:''}</div>`).join('')}</div>`;
 }
 function linkIcon(url){if(!url)return '🔗';const u=url.toLowerCase();if(u.includes('drive.google'))return 'GD';if(u.includes('dropbox'))return 'DB';if(u.includes('frame.io'))return 'F';if(u.includes('youtube')||u.includes('youtu.be'))return 'YT';if(u.includes('imgur'))return 'IM';return '🔗'}
 function openAddLinkForm(projectId,tag){
@@ -1387,7 +1387,7 @@ function openAddLinkForm(projectId,tag){
     if(e.target.closest('[data-save-link]')){
       const url=$('#linkUrl').value.trim(),title=$('#linkTitle').value.trim();
       if(!url){toast('URL required','error');return}
-      try{const {error}=await sb.from('video_project_links').insert({video_project_id:projectId,url,title:title||null,tag,added_by:currentUser.name});if(error)throw error;toast('Link added','success');$('#modal2').remove();await fetchAll();openProjectDetail(projectId)}catch(err){toast('Failed to add link','error')}
+      try{const {error}=await sb.from('video_project_links').insert({video_project_id:projectId,url,label:title||null,tag,added_by:currentUser.name});if(error)throw error;toast('Link added','success');$('#modal2').remove();await fetchAll();openProjectDetail(projectId)}catch(err){toast('Failed to add link: '+(err.message||err.code||'unknown'),'error')}
     }
   };
 }
@@ -1616,7 +1616,7 @@ function renderDriveLinks(){
   const fin=DATA.links.filter(l=>l.tag==='final_cut');
   const other=DATA.links.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
   $('#pageSub').textContent=`${raw.length} raw · ${fin.length} final · ${other.length} other`;
-  const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Project</th><th>Title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=getProject(l.video_project_id);return `<tr class="clickable" data-pid="${l.video_project_id}"><td>${esc(p?.title||'—')}</td><td>${esc(l.title||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
+  const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Project</th><th>Title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=getProject(l.video_project_id);return `<tr class="clickable" data-pid="${l.video_project_id}"><td>${esc(p?.title||'—')}</td><td>${esc(l.label||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Drive Links</div><div class="page-sub">All raw footage and final video links across projects</div></div></div>
     <div class="tabs"><div class="tab ${driveTab==='raw_footage'?'active':''}" data-tab="raw_footage">Raw Clips (${raw.length})</div><div class="tab ${driveTab==='final_cut'?'active':''}" data-tab="final_cut">Final Videos (${fin.length})</div><div class="tab ${driveTab==='other'?'active':''}" data-tab="other">Other (${other.length})</div></div>
     ${renderRows(driveTab==='raw_footage'?raw:driveTab==='final_cut'?fin:other)}
