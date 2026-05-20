@@ -349,7 +349,8 @@ a:hover{text-decoration:underline}
 .shoot-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .shoot-card-meta{font-size:11px;color:var(--text-3);margin-top:6px}
 .card-smm{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.03em}
-.card-editor-name{font-size:10px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-left:6px;align-self:center}
+.card-editor-name{font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;align-self:center}
+.card-editor-name.unassigned{color:var(--text-3);font-weight:500}
 .shoot-card-actions{display:flex;gap:6px;margin-top:10px}
 .shoot-card-actions .btn{flex:1}
 .shoot-card-actions .shoot-del{flex:0 0 auto;width:34px;color:var(--text-3)}
@@ -527,6 +528,7 @@ const STAGES = [
   { key: 'cutting_color_grading', label: 'Cutting & Color' },
   { key: 'rendering', label: 'Rendering' },
   { key: 'editing', label: 'Editing' },
+  { key: 'video_head_review', label: 'Video Head Review' },
   { key: 'team_review', label: 'Team Review' },
   { key: 'changes', label: 'Changes' },
   { key: 'coo_check', label: 'COO Check' },
@@ -1156,7 +1158,7 @@ function cardHtml(p){
   const selClass=sel?'selected':'';
   const smm=clientSmm(p.client_id);
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
-  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:''}</div>${mv}</div>`;
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${mv}</div>`;
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
