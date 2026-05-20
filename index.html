@@ -588,6 +588,18 @@ function initials(name){if(!name)return'?';const p=name.trim().split(/\s+/);if(p
 function secsToHrs(s){if(!s)return'0h';const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);if(h===0)return m+'m';return h+'h '+m+'m'}
 function isAdmin(){return currentUser&&(currentUser.role==='admin'||currentUser.role==='video_head')}
 function isEditor(){return currentUser&&currentUser.role==='editor'}
+// Single source of truth for whether an editor can move a card from->to a given stage.
+// Admins/video_heads bypass this; only called when the user is an editor.
+function editorCanMove(fromStage,toStage){
+  const EDITOR_ZONE=['video_shot','cutting_color_grading','rendering','editing'];
+  // Within their work zone — any combination is fine
+  if(EDITOR_ZONE.includes(fromStage)&&EDITOR_ZONE.includes(toStage))return true;
+  // Editing -> Video Head Review (the "I'm done, please review" signal)
+  if(fromStage==='editing'&&toStage==='video_head_review')return true;
+  // Bounce-back recovery: from Changes or Client Changes back into editing
+  if((fromStage==='changes'||fromStage==='client_changes')&&toStage==='editing')return true;
+  return false;
+}
 function isSmm(){return currentUser&&currentUser.role==='smm'}
 function isVideoHead(){return currentUser&&currentUser.role==='video_head'}
 function canEdit(){return isAdmin()}
@@ -1150,8 +1162,10 @@ function renderPipeline(){
 function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
-  const dr=(isAdmin()&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
-  const mv=(isAdmin()&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
+  // Editors get draggable if their current stage allows ANY allowed destination
+  const editorCanDragFromHere=isEditor()&&['video_shot','cutting_color_grading','rendering','editing','changes','client_changes'].includes(p.current_stage);
+  const dr=((isAdmin()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
+  const mv=((isAdmin()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
   const pr=p.priority||'medium';
   const sel=PIPELINE_STATE.selected.has(p.id);
   const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
@@ -1175,7 +1189,7 @@ function attachCardListeners(){
       }
       openProjectDetail(pid);
     });
-    if(isAdmin()&&!PIPELINE_STATE.bulkMode){
+    if((isAdmin()||isEditor())&&!PIPELINE_STATE.bulkMode){
       c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/pid',c.dataset.pid)});
       c.addEventListener('dragend',()=>c.classList.remove('dragging'));
     }
@@ -1235,7 +1249,7 @@ async function duplicateProject(pid){
   return ins;
 }
 function attachDropListeners(){
-  if(!isAdmin())return;
+  if(!isAdmin()&&!isEditor())return;
   $$('.stage-cards').forEach(z=>{
     z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drop-target')});
     z.addEventListener('dragleave',()=>z.classList.remove('drop-target'));
@@ -1243,6 +1257,14 @@ function attachDropListeners(){
       e.preventDefault();z.classList.remove('drop-target');
       const pid=parseInt(e.dataTransfer.getData('text/pid'));const ns=z.dataset.dropStage;
       const p=getProject(pid);if(!p||p.current_stage===ns)return;
+      // Editor permission check — admins bypass
+      if(!isAdmin()&&isEditor()){
+        if(!editorCanMove(p.current_stage,ns)){
+          const stLabel=STAGES.find(s=>s.key===ns)?.label||ns;
+          toast(`Only admins can move into ${stLabel}`,'error');
+          return;
+        }
+      }
       await moveProject(p,ns);
     });
   });
@@ -1957,7 +1979,8 @@ function openStageMenu(pid){
   if(typeof getProject!=='function')return;
   var p=getProject(pid);if(!p)return;
   var old=document.getElementById('m-stage-sheet');if(old)old.remove();
-  var opts=STAGES.map(function(s){
+  var allowed=function(toKey){if(isAdmin())return true;if(isEditor())return toKey===p.current_stage||editorCanMove(p.current_stage,toKey);return false};
+  var opts=STAGES.filter(function(s){return allowed(s.key)}).map(function(s){
     var cur=p.current_stage===s.key?' cur':'';
     return '<button class="m-stage-opt'+cur+'" data-stage="'+s.key+'"><span class="sd s-'+s.key+'" style="background:var(--accent)"></span>'+esc(s.label)+(cur?' &nbsp;·&nbsp; current':'')+'</button>';
   }).join('');
@@ -1970,6 +1993,11 @@ function openStageMenu(pid){
     var b=e.target.closest('[data-stage]');if(!b)return;
     var ns=b.dataset.stage;
     if(p.current_stage===ns){wrap.remove();return;}
+    if(!isAdmin()&&isEditor()&&!editorCanMove(p.current_stage,ns)){
+      var stLabel=(STAGES.find(function(s){return s.key===ns})||{}).label||ns;
+      if(typeof toast==='function')toast('Only admins can move into '+stLabel,'error');
+      wrap.remove();return;
+    }
     wrap.remove();
     try{await moveProject(p,ns);}catch(err){console.error(err);}
   });
