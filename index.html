@@ -634,7 +634,7 @@ async function getProjectTimeBreakdown(pid){
 // Returns the team_members.id for current user (used to filter editor visibility). null if not in team_members.
 function currentEditorId(){if(!isEditor()||!DATA.teamMembers)return null;const m=DATA.teamMembers.find(x=>x.name&&x.name.toUpperCase()===currentUser.name.toUpperCase());return m?m.id:null}
 // Filter projects: editors only see projects assigned to them. Everyone else sees all.
-function visibleProjects(){if(!isEditor())return DATA.projects||[];const eid=currentEditorId();if(!eid)return [];return (DATA.projects||[]).filter(p=>p.assigned_editor_id===eid)}
+function visibleProjects(){if(!isEditor())return DATA.projects||[];const eid=currentEditorId();if(!eid)return [];return (DATA.projects||[]).filter(p=>Number(p.assigned_editor_id)===Number(eid))}
 // Returns the monthly video target for a client. Tries multiple column names then falls back to summing smm_shoots.vids for current month.
 function videoTarget(client){
   if(!client)return 0;
@@ -658,9 +658,14 @@ function videosPostedThisMonth(clientId){
 function stageDurationSecs(projectId,stageKeys){
   if(!DATA.stageHistory)return 0;
   const stages=Array.isArray(stageKeys)?stageKeys:[stageKeys];
+  const now=Date.now();
   return DATA.stageHistory
-    .filter(h=>h.video_project_id===projectId&&stages.includes(h.stage)&&h.duration_seconds)
-    .reduce((sum,h)=>sum+(h.duration_seconds||0),0);
+    .filter(h=>Number(h.video_project_id)===Number(projectId)&&stages.includes(h.stage))
+    .reduce((sum,h)=>{
+      if(h.duration_seconds)return sum+h.duration_seconds;
+      if(h.entered_at&&!h.exited_at)return sum+Math.floor((now-new Date(h.entered_at).getTime())/1000);
+      return sum;
+    },0);
 }
 // Format seconds as "Xh Ym" or "Xm" or "—"
 function fmtDuration(secs){if(!secs||secs<0)return '—';const h=Math.floor(secs/3600);const m=Math.floor((secs%3600)/60);if(h>0)return `${h}h ${m}m`;return `${m}m`;}
@@ -1347,8 +1352,8 @@ async function openProjectDetail(id){
     </div></div>
     ${stageTimingSection(id)}
     ${p.description?`<div class="detail-section"><div class="detail-section-title">Description</div><div class="detail-description">${esc(p.description)}</div></div>`:''}
-    <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Raw Footage</div>${isAdmin()?`<button class="btn btn-ghost btn-sm" data-add-link="raw_footage">+ Add raw link</button>`:''}</div>${linkListHtml(rawLinks,'raw_footage')}</div>
-    <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Final Video</div>${isAdmin()?`<button class="btn btn-ghost btn-sm" data-add-link="final_cut">+ Add final link</button>`:''}</div>${linkListHtml(finalLinks,'final_cut')}</div>
+    <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Raw Footage</div><button class="btn btn-ghost btn-sm" data-add-link="raw_footage">+ Add raw link</button></div>${linkListHtml(rawLinks,'raw_footage')}</div>
+    <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Final Video</div><button class="btn btn-ghost btn-sm" data-add-link="final_cut">+ Add final link</button></div>${linkListHtml(finalLinks,'final_cut')}</div>
     ${otherLinks.length?`<div class="detail-section"><div class="detail-section-title">Other Links</div>${linkListHtml(otherLinks,'other')}</div>`:''}
     <div class="detail-section"><div class="detail-section-title">Team Discussion</div>
       <div class="comment-list">${comments.length?comments.map(c=>`<div class="comment"><div class="comment-head"><div class="comment-author">${esc(c.author)}</div><div class="comment-time">${timeAgo(c.created_at)}</div></div>${c.body?`<div class="comment-body">${esc(c.body)}</div>`:''}${c.image_url?`<img class="comment-img" src="${esc(c.image_url)}" onerror="this.style.display='none'">`:''}</div>`).join(''):'<div class="comment-empty">No comments yet</div>'}</div>
@@ -1373,7 +1378,7 @@ async function openProjectDetail(id){
 }
 function linkListHtml(links,kind){
   if(!links.length)return `<div class="link-empty">No ${kind==='raw_footage'?'raw footage':kind==='final_cut'?'final video':''} links yet</div>`;
-  return `<div class="link-list">${links.map(l=>`<div class="link-row"><div class="link-icon">${linkIcon(l.url)}</div><div class="link-info"><div class="link-title"><a href="${esc(l.url)}" target="_blank">${esc(l.label||l.url)}</a></div><div class="link-meta">${esc(l.added_by||'')} · ${fmtDateTime(l.created_at)}</div></div>${isAdmin()?`<button class="btn btn-ghost btn-sm btn-danger" data-del-link="${l.id}">×</button>`:''}</div>`).join('')}</div>`;
+  return `<div class="link-list">${links.map(l=>`<div class="link-row"><div class="link-icon">${linkIcon(l.url)}</div><div class="link-info"><div class="link-title"><a href="${esc(l.url)}" target="_blank">${esc(l.label||l.url)}</a></div><div class="link-meta">${esc(l.added_by||'')} · ${fmtDateTime(l.created_at)}</div></div><button class="btn btn-ghost btn-sm btn-danger" data-del-link="${l.id}">×</button></div>`).join('')}</div>`;
 }
 function linkIcon(url){if(!url)return '🔗';const u=url.toLowerCase();if(u.includes('drive.google'))return 'GD';if(u.includes('dropbox'))return 'DB';if(u.includes('frame.io'))return 'F';if(u.includes('youtube')||u.includes('youtu.be'))return 'YT';if(u.includes('imgur'))return 'IM';return '🔗'}
 function openAddLinkForm(projectId,tag){
