@@ -349,6 +349,7 @@ a:hover{text-decoration:underline}
 .shoot-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .shoot-card-meta{font-size:11px;color:var(--text-3);margin-top:6px}
 .card-smm{font-size:10px;color:var(--text-3);margin-top:3px;text-transform:uppercase;letter-spacing:.03em}
+.card-editor-name{font-size:10px;color:var(--text-2);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-left:6px;align-self:center}
 .shoot-card-actions{display:flex;gap:6px;margin-top:10px}
 .shoot-card-actions .btn{flex:1}
 .shoot-card-actions .shoot-del{flex:0 0 auto;width:34px;color:var(--text-3)}
@@ -1155,7 +1156,7 @@ function cardHtml(p){
   const selClass=sel?'selected':'';
   const smm=clientSmm(p.client_id);
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
-  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div></div>${mv}</div>`;
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div><div class="card-avatar ${ed?'assigned':''}" title="${esc(ed?.name||'Unassigned')}">${ed?initials(ed.name):'?'}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:''}</div>${mv}</div>`;
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
@@ -1164,6 +1165,7 @@ function attachCardListeners(){
       if(c.classList.contains('dragging'))return;
       const pid=parseInt(c.dataset.pid);
       if(PIPELINE_STATE.bulkMode){
+        e.stopPropagation();e.preventDefault();
         if(PIPELINE_STATE.selected.has(pid))PIPELINE_STATE.selected.delete(pid);
         else PIPELINE_STATE.selected.add(pid);
         renderPipeline();
@@ -1581,9 +1583,45 @@ function drawTimeTracker(){
   const totalSec=thisMonth.reduce((s,l)=>s+(l.duration_seconds||0),0);
   const perEditor={};
   thisMonth.forEach(l=>{const k=l.team_member_id;if(!perEditor[k])perEditor[k]={sec:0,count:0};perEditor[k].sec+=l.duration_seconds||0;perEditor[k].count++});
+  // ===== WEEKLY AUTO REPORT (Mon-Sun, from video_stage_history, attributed to assigned_editor_id) =====
+  const weeklyReport=(()=>{
+    const now=new Date();
+    const dow=now.getDay();const offsetToMon=dow===0?-6:1-dow;
+    const wkStart=new Date(now.getFullYear(),now.getMonth(),now.getDate()+offsetToMon,0,0,0,0);
+    const wkEnd=new Date(wkStart.getTime()+7*24*3600*1000);
+    const hist=DATA.stageHistory||[];
+    const projectsById={}; (DATA.projects||[]).forEach(p=>{projectsById[p.id]=p});
+    const byEditor={};
+    hist.forEach(h=>{
+      const p=projectsById[h.video_project_id]; if(!p||!p.assigned_editor_id)return;
+      const enter=h.entered_at?new Date(h.entered_at):null; if(!enter)return;
+      const exit=h.exited_at?new Date(h.exited_at):new Date();
+      const overlapStart=enter>wkStart?enter:wkStart;
+      const overlapEnd=exit<wkEnd?exit:wkEnd;
+      const secs=Math.floor((overlapEnd-overlapStart)/1000);
+      if(secs<=0)return;
+      const eid=Number(p.assigned_editor_id);
+      if(!byEditor[eid])byEditor[eid]={total:0,stages:{},bounces:{}};
+      byEditor[eid].total+=secs;
+      byEditor[eid].stages[h.stage]=(byEditor[eid].stages[h.stage]||0)+secs;
+      const bk=p.id+'|'+h.stage;
+      byEditor[eid].bounces[bk]=(byEditor[eid].bounces[bk]||0)+1;
+    });
+    const rows=Object.entries(byEditor).map(([eid,v])=>{
+      const m=getMember(Number(eid));
+      const topStages=Object.entries(v.stages).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s,sec])=>`${STAGES.find(x=>x.key===s)?.label||s}: ${secsToHrs(sec)}`).join(' · ');
+      const bounceTotal=Object.values(v.bounces).reduce((s,n)=>s+(n>1?n-1:0),0);
+      return {name:m?.name||'Unknown',total:v.total,topStages,bounces:bounceTotal};
+    }).filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
+    const wkLabel=`${wkStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${new Date(wkEnd.getTime()-1).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
+    return {rows,wkLabel,grandTotal:rows.reduce((s,r)=>s+r.total,0)};
+  })();
+  const weeklyReportHtml=`<div class="panel"><div class="panel-head"><div class="panel-title">Weekly Editor Report · ${esc(weeklyReport.wkLabel)}</div><div class="text-3 fs-11">Auto from stage moves · ${secsToHrs(weeklyReport.grandTotal)} this week</div></div>${weeklyReport.rows.length?`<table class="tbl"><thead><tr><th>Editor</th><th>Total this week</th><th>Top stages</th><th>Bounces</th></tr></thead><tbody>${weeklyReport.rows.map(r=>`<tr><td><strong>${esc(r.name)}</strong></td><td>${secsToHrs(r.total)}</td><td class="muted fs-11">${esc(r.topStages||'—')}</td><td class="${r.bounces>0?'':'muted'}">${r.bounces||'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No stage activity attributed to editors this week yet</div>'}</div>
+  `;
   $('#pageSub').textContent=`${thisMonth.length} logs this month · ${secsToHrs(totalSec)} total`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Time Tracker</div><div class="page-sub">Editing hours logged per video</div></div></div>
     <div class="stat-grid">${statCard('This Month',secsToHrs(totalSec))}${statCard('Logs',thisMonth.length+'')}${statCard('Avg/Log',thisMonth.length?secsToHrs(totalSec/thisMonth.length):'0')}</div>
+    ${weeklyReportHtml}
     ${Object.keys(perEditor).length?`<div class="panel"><div class="panel-head"><div class="panel-title">By Editor (this month)</div></div><table class="tbl"><thead><tr><th>Editor</th><th>Logs</th><th>Total</th><th>Avg/log</th></tr></thead><tbody>${Object.entries(perEditor).sort((a,b)=>b[1].sec-a[1].sec).map(([id,v])=>{const m=getMember(parseInt(id));return `<tr><td>${esc(m?.name||'Unknown')}</td><td>${v.count}</td><td>${secsToHrs(v.sec)}</td><td>${secsToHrs(v.sec/v.count)}</td></tr>`}).join('')}</tbody></table></div>`:''}
     <div class="panel"><div class="panel-head"><div class="panel-title">Recent Logs</div></div>${logs.length?`<table class="tbl"><thead><tr><th>Project</th><th>Editor</th><th>Stage</th><th>Started</th><th>Duration</th><th>Notes</th></tr></thead><tbody>${logs.slice(0,50).map(l=>{const p=getProject(l.video_project_id);const m=getMember(l.team_member_id);return `<tr><td>${esc(p?.title||'—')}</td><td>${esc(m?.name||'—')}</td><td class="muted">${esc(STAGES.find(s=>s.key===l.stage)?.label||l.stage||'')}</td><td class="muted">${fmtDateTime(l.started_at)}</td><td>${secsToHrs(l.duration_seconds||0)}</td><td class="muted">${esc(l.notes||'')}</td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No time logged yet — click "+ Log Time" to start</div>'}</div>
   `;
