@@ -252,6 +252,32 @@ a:hover{text-decoration:underline}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 .image-attach{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border:1px dashed var(--border-strong);border-radius:8px;flex-wrap:wrap}
+.image-attach.img-drop-hot{border-color:var(--accent);background:var(--accent-soft);border-style:solid}
+.notif-wrap{position:relative;display:flex;align-items:center}
+.notif-bell{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;font-size:17px;cursor:pointer;color:var(--text-2);transition:all .15s}
+.notif-bell:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red,#ef4444);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
+.notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:380px;max-height:540px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.4);z-index:120;display:flex;flex-direction:column;overflow:hidden}
+.notif-head{padding:14px 16px;border-bottom:1px solid var(--border)}
+.notif-title{font-size:14px;font-weight:700;color:var(--text)}
+.notif-sub{font-size:11px;color:var(--text-3);margin-top:2px}
+.notif-list{overflow-y:auto;flex:1;padding:4px 0}
+.notif-empty{padding:36px 20px;text-align:center;color:var(--text-3);font-size:12px;font-style:italic}
+.notif-item{display:flex;gap:10px;padding:11px 16px;cursor:pointer;border-left:3px solid transparent;transition:background .12s}
+.notif-item:hover{background:var(--surface-2)}
+.notif-item.new{border-left-color:var(--accent);background:var(--accent-soft)}
+.notif-item.new:hover{background:var(--accent-soft);filter:brightness(1.15)}
+.notif-icon{font-size:15px;flex-shrink:0;width:24px;text-align:center}
+.notif-body{flex:1;min-width:0}
+.notif-line{font-size:12px;color:var(--text);line-height:1.4}
+.notif-preview{font-size:11px;color:var(--text-3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notif-time{font-size:10px;color:var(--text-3);margin-top:3px}
+.notif-foot{padding:8px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
+@media (max-width:768px){
+  .notif-panel{position:fixed;top:64px;left:8px;right:8px;width:auto;max-height:75vh}
+  .notif-bell{width:36px;height:36px}
+}
+.field-textarea.img-drop-hot{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .image-attach-btn{padding:7px 12px;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px}
 .image-attach-btn:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .image-attach-hint{font-size:11px;color:var(--text-3);font-style:italic}
@@ -499,6 +525,7 @@ a:hover{text-decoration:underline}
       <button class="m-menu-btn" id="mMenuBtn" aria-label="Open menu">&#9776;</button>
       <div><div class="topbar-title" id="pageTitle">Dashboard</div><div class="topbar-subtitle" id="pageSub"></div></div>
       <div class="topbar-actions" id="pageActions"></div>
+      <div class="notif-wrap" id="notifWrap"></div>
     </header>
     <div class="page" id="pageContent"></div>
   </main>
@@ -707,10 +734,10 @@ function startClock(){updateClock();if(clockTimer)clearInterval(clockTimer);cloc
 // Used by both project comments and team chat. Bound to elements by hostId.
 const PENDING_IMG = {}; // hostId -> base64
 function imageAttachHtml(hostId){
-  return `<div class="image-attach">
+  return `<div class="image-attach" data-drop-host="${hostId}">
     <button type="button" class="image-attach-btn" data-attach-host="${hostId}">📎 Attach image</button>
     <input type="file" accept="image/*" hidden id="${hostId}-file">
-    <span class="image-attach-hint">or paste from clipboard (Cmd+V / Ctrl+V)</span>
+    <span class="image-attach-hint">paste (Cmd/Ctrl+V) or drag & drop an image here</span>
   </div>
   <div id="${hostId}-preview"></div>`;
 }
@@ -718,22 +745,133 @@ function wireImageAttach(hostId,hostTextarea){
   // file pick
   const btn=document.querySelector(`[data-attach-host="${hostId}"]`);
   const file=$(`#${hostId}-file`);
-  if(btn&&file){btn.addEventListener('click',()=>file.click());file.addEventListener('change',e=>{const f=e.target.files[0];if(f)readImageFile(f,hostId)});}
+  if(btn&&file){btn.addEventListener('click',()=>file.click());file.addEventListener('change',e=>{const f=e.target.files[0];if(f)readImageFile(f,hostId);e.target.value=''});}
   // paste handler attached to the textarea
   const ta=hostTextarea?$(hostTextarea):null;
   if(ta){ta.addEventListener('paste',e=>{const items=(e.clipboardData||window.clipboardData).items;for(const it of items){if(it.type.indexOf('image')===0){const f=it.getAsFile();if(f){e.preventDefault();readImageFile(f,hostId)}break}}});}
+  // drag and drop on the attach block AND the textarea
+  const dropZones=[document.querySelector(`[data-drop-host="${hostId}"]`),ta].filter(Boolean);
+  dropZones.forEach(zone=>{
+    zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('img-drop-hot')});
+    zone.addEventListener('dragleave',()=>zone.classList.remove('img-drop-hot'));
+    zone.addEventListener('drop',e=>{
+      e.preventDefault();zone.classList.remove('img-drop-hot');
+      const files=e.dataTransfer?.files||[];
+      if(!files.length)return;
+      if(files.length>1){toast('Only one image at a time — using the first','info')}
+      const f=files[0];
+      if(!f.type.startsWith('image/')){toast('Only images can be dropped here','error');return}
+      readImageFile(f,hostId);
+    });
+  });
 }
 function readImageFile(file,hostId){
   if(file.size>3*1024*1024){toast('Image too large (max 3MB)','error');return}
+  if(PENDING_IMG[hostId]){toast('Replaced previous image','info')}
   const r=new FileReader();
+  r.onerror=()=>toast('Could not read image file','error');
   r.onload=ev=>{
     PENDING_IMG[hostId]=ev.target.result;
     const pv=$(`#${hostId}-preview`);
-    if(pv){pv.innerHTML=`<div class="image-preview-wrap"><img class="image-preview" src="${ev.target.result}"><div class="image-preview-remove" data-clear-img="${hostId}">×</div></div>`;}
+    if(pv){pv.innerHTML=`<div class="image-preview-wrap"><img class="image-preview" src="${ev.target.result}"><div class="image-preview-remove" data-clear-img="${hostId}" title="Remove image">×</div></div>`;}
   };
   r.readAsDataURL(file);
 }
 function clearPendingImg(hostId){delete PENDING_IMG[hostId];const pv=$(`#${hostId}-preview`);if(pv)pv.innerHTML='';const f=$(`#${hostId}-file`);if(f)f.value='';}
+
+// === NOTIFICATIONS ===
+// Derived from DATA on every render — no new tables, no extra writes.
+// Per-user "last seen" stored in localStorage so unread state is personal & local.
+function notifLastSeenKey(){return 'bb_notif_seen_'+(currentUser?.name||'anon').toUpperCase()}
+function notifLastSeen(){const v=localStorage.getItem(notifLastSeenKey());return v?parseInt(v):0}
+function notifMarkAllSeen(){localStorage.setItem(notifLastSeenKey(),Date.now().toString())}
+function deriveNotifications(){
+  if(!currentUser||!DATA.projects||!DATA.teamMembers)return [];
+  const isAdminUser=isAdmin();
+  const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
+  const meId=me?Number(me.id):null;
+  // Window: last 30 days only; anything older is irrelevant noise
+  const cutoff=Date.now()-30*24*3600*1000;
+  // Build a project lookup so we can attach project metadata to each event
+  const projectById={};(DATA.projects||[]).forEach(p=>projectById[p.id]=p);
+  const events=[];
+  // 1) Comments
+  (DATA.projectComments||[]).forEach(c=>{
+    const t=c.created_at?new Date(c.created_at).getTime():0;
+    if(!t||t<cutoff)return;
+    const p=projectById[c.video_project_id]; if(!p)return;
+    // Admin: see everything. Editor: only their own projects.
+    if(!isAdminUser&&Number(p.assigned_editor_id)!==meId)return;
+    // Self-notify: skip own comments
+    if((c.author||'').toUpperCase()===currentUser.name.toUpperCase())return;
+    events.push({t,kind:'comment',pid:p.id,projectTitle:p.title,who:c.author||'Someone',preview:(c.body||'').slice(0,80)||(c.image_url?'[image]':'')});
+  });
+  // 2) Stage moves (Changes / Editing / video_head_review only — high-signal stages)
+  const NOTIFY_STAGES=['changes','client_changes','editing','video_head_review'];
+  (DATA.stageHistory||[]).forEach(h=>{
+    const t=h.entered_at?new Date(h.entered_at).getTime():0;
+    if(!t||t<cutoff)return;
+    if(!NOTIFY_STAGES.includes(h.stage))return;
+    const p=projectById[h.video_project_id]; if(!p)return;
+    if(!isAdminUser&&Number(p.assigned_editor_id)!==meId)return;
+    if((h.moved_by||'').toUpperCase()===currentUser.name.toUpperCase())return;
+    const stageLabel=STAGES.find(s=>s.key===h.stage)?.label||h.stage;
+    events.push({t,kind:'move',pid:p.id,projectTitle:p.title,who:h.moved_by||'Someone',preview:'→ '+stageLabel});
+  });
+  // 3) New project assigned to you (editor only — admins create them, they don't get "assigned")
+  if(!isAdminUser&&meId){
+    (DATA.projects||[]).forEach(p=>{
+      if(Number(p.assigned_editor_id)!==meId)return;
+      const t=p.created_at?new Date(p.created_at).getTime():0;
+      if(!t||t<cutoff)return;
+      if((p.created_by||'').toUpperCase()===currentUser.name.toUpperCase())return;
+      events.push({t,kind:'assigned',pid:p.id,projectTitle:p.title,who:p.created_by||'Someone',preview:'Assigned to you'});
+    });
+  }
+  events.sort((a,b)=>b.t-a.t);
+  return events.slice(0,30); // cap shown
+}
+function timeAgoShort(t){
+  const s=Math.floor((Date.now()-t)/1000);
+  if(s<60)return s+'s ago';
+  const m=Math.floor(s/60); if(m<60)return m+'m ago';
+  const h=Math.floor(m/60); if(h<24)return h+'h ago';
+  const d=Math.floor(h/24); return d+'d ago';
+}
+function renderNotifications(){
+  const wrap=$('#notifWrap'); if(!wrap)return;
+  if(!currentUser){wrap.innerHTML='';return}
+  const events=deriveNotifications();
+  const lastSeen=notifLastSeen();
+  const unread=events.filter(e=>e.t>lastSeen).length;
+  wrap.innerHTML=`<button class="notif-bell" id="notifBell" aria-label="Notifications" title="${unread} unread">🔔${unread>0?`<span class="notif-badge">${unread>99?'99+':unread}</span>`:''}</button>`;
+  const bell=$('#notifBell'); if(!bell)return;
+  bell.onclick=e=>{e.stopPropagation();toggleNotifPanel(events)};
+}
+function toggleNotifPanel(events){
+  const existing=$('#notifPanel');
+  if(existing){existing.remove();return}
+  const wrap=$('#notifWrap'); if(!wrap)return;
+  const lastSeen=notifLastSeen();
+  const html=`<div class="notif-panel" id="notifPanel">
+    <div class="notif-head"><div class="notif-title">Notifications</div><div class="notif-sub">${events.length?events.length+' in last 30 days':'No recent activity'}</div></div>
+    <div class="notif-list">${events.length?events.map(e=>{
+      const isNew=e.t>lastSeen;
+      const icon=e.kind==='comment'?'💬':(e.kind==='move'?'↻':'➕');
+      return `<div class="notif-item ${isNew?'new':''}" data-notif-pid="${e.pid}"><div class="notif-icon">${icon}</div><div class="notif-body"><div class="notif-line"><strong>${esc(e.who)}</strong> ${e.kind==='comment'?'commented on':(e.kind==='move'?'moved':'created')} <strong>${esc(e.projectTitle||'a project')}</strong></div>${e.preview?`<div class="notif-preview">${esc(e.preview)}</div>`:''}<div class="notif-time">${timeAgoShort(e.t)}</div></div></div>`;
+    }).join(''):'<div class="notif-empty">You\'re all caught up</div>'}</div>
+    ${events.length?'<div class="notif-foot"><button class="btn btn-ghost btn-sm" id="notifMarkRead">Mark all as read</button></div>':''}
+  </div>`;
+  wrap.insertAdjacentHTML('beforeend',html);
+  const panel=$('#notifPanel');
+  panel.addEventListener('click',ev=>{
+    const item=ev.target.closest('[data-notif-pid]');
+    if(item){const pid=parseInt(item.dataset.notifPid);panel.remove();notifMarkAllSeen();renderNotifications();if(typeof openProjectDetail==='function')openProjectDetail(pid);return}
+    if(ev.target.closest('#notifMarkRead')){notifMarkAllSeen();renderNotifications();panel.remove();return}
+  });
+  // close on outside click
+  setTimeout(()=>{const off=e=>{if(!panel.contains(e.target)&&!e.target.closest('#notifBell')){panel.remove();document.removeEventListener('click',off)}};document.addEventListener('click',off)},10);
+}
 
 // === SUPABASE INIT ===
 function initSupabase(){if(!window.supabase){console.error('SDK not loaded');return}sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}
@@ -863,6 +1001,7 @@ function renderPage(){
   const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,drive_links:renderDriveLinks,clients:renderClients,team:renderTeam,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub};
   const fn=map[currentPage]||renderDashboard;
   try{fn()}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">⚠</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
+  try{renderNotifications()}catch(_){}
 }
 
 // === PAGE: MY DASHBOARD (editor personal view) ===
@@ -1427,7 +1566,9 @@ async function postComment(pid){
   const body=$('#newComment').value.trim();
   const img=PENDING_IMG['cmt-'+pid]||null;
   if(!body&&!img)return;
-  try{const {error}=await sb.from('video_project_comments').insert({video_project_id:pid,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;clearPendingImg('cmt-'+pid);openProjectDetail(pid)}catch(err){toast('Comment failed: '+(err.message||''),'error')}
+  const btn=document.querySelector(`[data-post-comment="${pid}"]`);
+  if(btn){btn.disabled=true;btn.textContent='Posting…'}
+  try{const {error}=await sb.from('video_project_comments').insert({video_project_id:pid,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;clearPendingImg('cmt-'+pid);openProjectDetail(pid)}catch(err){if(btn){btn.disabled=false;btn.textContent='Post Comment'}toast('Comment failed: '+(err.message||''),'error')}
 }
 function closeModal(){const m=$('#modalRoot');if(m)m.innerHTML='';const m2=$('#modal2');if(m2)m2.remove()}
 
