@@ -254,8 +254,12 @@ a:hover{text-decoration:underline}
 .image-attach{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border:1px dashed var(--border-strong);border-radius:8px;flex-wrap:wrap}
 .image-attach.img-drop-hot{border-color:var(--accent);background:var(--accent-soft);border-style:solid}
 .notif-wrap{position:relative;display:flex;align-items:center}
-.notif-bell{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;font-size:17px;cursor:pointer;color:var(--text-2);transition:all .15s}
-.notif-bell:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.notif-bell{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:color .2s,border-color .2s,box-shadow .2s,background .2s;padding:0}
+.notif-bell .notif-bell-svg{width:20px;height:20px;display:block;transition:filter .2s}
+.notif-bell:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.notif-bell.has-unread{color:var(--accent);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 14px 1px rgba(155,93,229,.45)}
+.notif-bell.has-unread .notif-bell-svg{filter:drop-shadow(0 0 4px rgba(155,93,229,.7));animation:notif-pulse 2.4s ease-in-out infinite}
+@keyframes notif-pulse{0%,100%{filter:drop-shadow(0 0 3px rgba(155,93,229,.55))}50%{filter:drop-shadow(0 0 9px rgba(155,93,229,.95))}}
 .notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red,#ef4444);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
 .notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:380px;max-height:540px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.4);z-index:120;display:flex;flex-direction:column;overflow:hidden}
 .notif-head{padding:14px 16px;border-bottom:1px solid var(--border)}
@@ -844,7 +848,7 @@ function renderNotifications(){
   const events=deriveNotifications();
   const lastSeen=notifLastSeen();
   const unread=events.filter(e=>e.t>lastSeen).length;
-  wrap.innerHTML=`<button class="notif-bell" id="notifBell" aria-label="Notifications" title="${unread} unread">🔔${unread>0?`<span class="notif-badge">${unread>99?'99+':unread}</span>`:''}</button>`;
+  wrap.innerHTML=`<button class="notif-bell${unread>0?' has-unread':''}" id="notifBell" aria-label="Notifications" title="${unread} unread"><svg class="notif-bell-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 4.5 1.5 5.5 2 7H4c.5-1.5 2-2.5 2-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 18a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>${unread>0?`<span class="notif-badge">${unread>99?'99+':unread}</span>`:''}</button>`;
   const bell=$('#notifBell'); if(!bell)return;
   bell.onclick=e=>{e.stopPropagation();toggleNotifPanel(events)};
 }
