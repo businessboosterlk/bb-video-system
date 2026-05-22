@@ -260,6 +260,33 @@ a:hover{text-decoration:underline}
 .notif-bell.has-unread{color:var(--accent);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 14px 1px rgba(155,93,229,.45)}
 .notif-bell.has-unread .notif-bell-svg{filter:drop-shadow(0 0 4px rgba(155,93,229,.7));animation:notif-pulse 2.4s ease-in-out infinite}
 @keyframes notif-pulse{0%,100%{filter:drop-shadow(0 0 3px rgba(155,93,229,.55))}50%{filter:drop-shadow(0 0 9px rgba(155,93,229,.95))}}
+.qp-section{background:linear-gradient(180deg,var(--surface-2),transparent);border-radius:12px;padding:18px;margin-bottom:18px;border:1px solid var(--border)}
+.qp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.qp-month{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.qp-month-name{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px}
+.qp-big{font-size:32px;font-weight:800;color:var(--text);line-height:1;margin-bottom:10px}
+.qp-big-sub{font-size:18px;color:var(--text-3);font-weight:500}
+.qp-row{display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);padding:4px 0;border-top:1px dashed var(--border)}
+.qp-row strong{color:var(--text);font-weight:700}
+.qp-row-accent strong{color:var(--accent)}
+.qp-warn{font-size:10px;color:var(--text-3);font-style:italic;margin-top:6px}
+.qp-chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.qp-chart{width:100%;height:auto;max-height:200px;display:block}
+.qp-summary{background:var(--surface);border-left:3px solid var(--accent);border-radius:6px;padding:12px 14px;margin-bottom:14px}
+.qp-summary-label{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px}
+.qp-summary-body{font-size:13px;color:var(--text);line-height:1.6}
+.qp-edit{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.qp-edit-title{font-size:12px;color:var(--text-2);font-weight:600;margin-bottom:10px}
+.qp-inputs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.qp-input-cell{display:flex;flex-direction:column;gap:4px}
+.qp-input-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.qp-input{padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-weight:600}
+.qp-input:focus{outline:none;border-color:var(--accent)}
+.qp-input-source{font-size:10px;color:var(--text-3)}
+@media (max-width:768px){
+  .qp-grid,.qp-inputs{grid-template-columns:1fr}
+  .qp-big{font-size:26px}
+}
 .notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red,#ef4444);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
 .notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:380px;max-height:540px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.4);z-index:120;display:flex;flex-direction:column;overflow:hidden}
 .notif-head{padding:14px 16px;border-bottom:1px solid var(--border)}
@@ -600,7 +627,7 @@ const PAGES_EDITOR = [
 
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
-let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [] };
+let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [] };
 let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 function monthLabel(p){if(!p||!p.target_month)return null;const mi=parseInt(p.target_month);if(isNaN(mi)||mi<1||mi>12)return null;return MONTHS[mi-1]+(p.target_year?' '+p.target_year:'');}
@@ -969,7 +996,7 @@ function navTo(page){
 // === DATA FETCH ===
 async function fetchAll(silent=false){
   try{
-    const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr]=await Promise.all([
+    const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
       sb.from('clients').select('*'),
       sb.from('team_members').select('id, name, role'),
@@ -980,6 +1007,7 @@ async function fetchAll(silent=false){
       sb.from('video_inspo').select('*').order('created_at',{ascending:false}),
       sb.from('video_stage_history').select('*').order('entered_at',{ascending:true}),
       sb.from('video_project_comments').select('*').order('created_at',{ascending:true}),
+      sb.from('client_monthly_targets').select('*'),
     ]);
     DATA.projects=pr.data||[];
     DATA.clients=cr.data||[];
@@ -991,6 +1019,7 @@ async function fetchAll(silent=false){
     DATA.inspo=inr.data||[];
     DATA.stageHistory=shr.data||[];
     DATA.projectComments=pcr.data||[];
+    DATA.clientTargets=cmtr.data||[];
     // Filter projects for editors
     if(isEditor()){
       const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
@@ -1885,19 +1914,162 @@ function renderClients(){
   if(mp)mp.onchange=e=>{FILTERS.clientsMonth=e.target.value;renderClients()};
   $('#pageContent').onclick=e=>{const r=e.target.closest('[data-cid]');if(r)openClientDetail(parseInt(r.dataset.cid))};
 }
+// === QUARTERLY PLAN PER CLIENT ===
+// Computes contract / published / pipeline / remaining / shoot target with next-month buffer.
+// Uses target_month + target_year on video_projects to decide which month a video belongs to.
+// "Published" = current_stage in (posted, add_to_drive, sent_to_client) — anything past editing/review.
+function getClientMonthlyContract(clientId,year,month,defaultMonthly){
+  const override=(DATA.clientTargets||[]).find(t=>Number(t.client_id)===Number(clientId)&&Number(t.year)===Number(year)&&Number(t.month)===Number(month));
+  if(override&&override.contracted_count!=null)return {value:override.contracted_count,source:'override'};
+  if(defaultMonthly!=null)return {value:defaultMonthly,source:'default'};
+  return {value:0,source:'none'};
+}
+function computeMonthStats(clientProjects,year,month,contracted){
+  const inMonth=clientProjects.filter(p=>Number(p.target_year)===Number(year)&&Number(p.target_month)===Number(month));
+  const PUBLISHED=['posted','add_to_drive','sent_to_client'];
+  const published=inMonth.filter(p=>PUBLISHED.includes(p.current_stage)).length;
+  const inPipeline=inMonth.filter(p=>!PUBLISHED.includes(p.current_stage)).length;
+  const remaining=Math.max(0,contracted-published);
+  const carryFromPipeline=Math.min(inPipeline,remaining);
+  const needNewShoots=Math.max(0,remaining-carryFromPipeline);
+  return {contracted,published,inPipeline,remaining,carryFromPipeline,needNewShoots,tagged:inMonth.length};
+}
+function quarterlyPlanSection(client,clientProjects){
+  const now=new Date();
+  // Q2 fixed for now per user's notebook: April / May / June of current year
+  const year=now.getFullYear();
+  const months=[{m:4,name:'April'},{m:5,name:'May'},{m:6,name:'June'}];
+  const defaultMonthly=client.monthly_videos;
+  const monthData=months.map(({m,name})=>{
+    const ct=getClientMonthlyContract(client.id,year,m,defaultMonthly);
+    const st=computeMonthStats(clientProjects,year,m,ct.value);
+    return {m,name,year,contracted:ct.value,contractSource:ct.source,...st};
+  });
+  // Shoot target for the latest month includes carry-over need from prior months not yet shot.
+  // For each month, "shoot target = needNewShoots". Next-month buffer (per notebook): June shoot target also includes July's contracted count if we want a buffer — we don't have July data, so we'll just surface this month's need.
+  const totalShootNeed=monthData.reduce((s,d)=>s+d.needNewShoots,0);
+  // Situation summary (plain English)
+  const summary=buildSituationSummary(client.name,monthData);
+  // Chart data — stacked bar per month
+  const chart=monthChartSvg(monthData);
+  // Inputs for setting contracts per month
+  const inputs=months.map(({m,name})=>{
+    const d=monthData.find(x=>x.m===m);
+    return `<div class="qp-input-cell">
+      <label class="qp-input-label">${name}</label>
+      <input type="number" min="0" class="qp-input" data-month="${m}" value="${d.contracted}">
+      <div class="qp-input-source">${d.contractSource==='override'?'<span style="color:var(--accent)">override</span>':d.contractSource==='default'?'<span class="muted">from monthly_videos</span>':'<span class="muted">not set</span>'}</div>
+    </div>`;
+  }).join('');
+  // Metric grid
+  const grid=monthData.map(d=>`<div class="qp-month">
+    <div class="qp-month-name">${d.name} ${d.year}</div>
+    <div class="qp-big">${d.published}<span class="qp-big-sub">/${d.contracted}</span></div>
+    <div class="qp-row"><span>In pipeline</span><strong>${d.inPipeline}</strong></div>
+    <div class="qp-row"><span>Remaining</span><strong>${d.remaining}</strong></div>
+    <div class="qp-row qp-row-accent"><span>Need to shoot</span><strong>${d.needNewShoots}</strong></div>
+    ${d.tagged===0?'<div class="qp-warn">No videos tagged this month yet</div>':''}
+  </div>`).join('');
+  return `<div class="detail-section qp-section"><div class="detail-section-title">Q2 Video Plan — ${year}</div>
+    <div class="qp-grid">${grid}</div>
+    <div class="qp-chart-wrap">${chart}</div>
+    <div class="qp-summary"><div class="qp-summary-label">Situation</div><div class="qp-summary-body">${summary}</div></div>
+    <div class="qp-edit"><div class="qp-edit-title">Contracted count per month <span class="muted fs-11">(blank = use client default ${defaultMonthly||'unset'})</span></div>
+      <div class="qp-inputs">${inputs}</div>
+      <button class="btn btn-primary btn-sm" data-save-qp="${client.id}">Save contracts</button>
+    </div>
+  </div>`;
+}
+function buildSituationSummary(clientName,monthData){
+  const bits=[];
+  const now=new Date(),thisMonth=now.getMonth()+1;
+  monthData.forEach(d=>{
+    const past=d.m<thisMonth;
+    if(d.contracted===0&&d.tagged===0){bits.push(`<strong>${d.name}</strong>: no contract set, nothing tagged.`);return}
+    if(d.published>=d.contracted&&d.contracted>0){bits.push(`<strong>${d.name}</strong>: done (${d.published}/${d.contracted}).`);return}
+    if(past&&d.remaining>0){bits.push(`<strong>${d.name}</strong>: missed by ${d.remaining}. ${d.published}/${d.contracted} published.`);return}
+    const parts=[`${d.published}/${d.contracted} published`];
+    if(d.inPipeline>0)parts.push(`${d.inPipeline} in pipeline`);
+    if(d.needNewShoots>0)parts.push(`needs ${d.needNewShoots} new shot${d.needNewShoots>1?'s':''}`);
+    bits.push(`<strong>${d.name}</strong>: ${parts.join(', ')}.`);
+  });
+  return bits.join(' ');
+}
+function monthChartSvg(monthData){
+  const w=480,h=160,pad=28,bw=80,gap=60;
+  const max=Math.max(...monthData.map(d=>Math.max(d.contracted,d.published+d.inPipeline)),1);
+  const bars=monthData.map((d,i)=>{
+    const x=pad+i*(bw+gap);
+    const baseY=h-pad;
+    const scale=(h-pad*2)/max;
+    const targetH=d.contracted*scale;
+    const pubH=d.published*scale;
+    const pipeH=d.inPipeline*scale;
+    return `
+      <rect x="${x}" y="${baseY-targetH}" width="${bw}" height="${targetH}" fill="none" stroke="var(--border-strong)" stroke-dasharray="4 3" rx="3"/>
+      <rect x="${x}" y="${baseY-pubH}" width="${bw}" height="${pubH}" fill="var(--accent)" rx="3"/>
+      <rect x="${x}" y="${baseY-pubH-pipeH}" width="${bw}" height="${pipeH}" fill="var(--accent)" opacity="0.35" rx="3"/>
+      <text x="${x+bw/2}" y="${h-8}" text-anchor="middle" font-size="11" fill="var(--text-3)" font-weight="600">${d.name}</text>
+      <text x="${x+bw/2}" y="${baseY-targetH-6}" text-anchor="middle" font-size="11" fill="var(--text-2)" font-weight="700">${d.published}/${d.contracted}</text>
+    `;
+  }).join('');
+  const legend=`
+    <g transform="translate(${pad},10)">
+      <rect width="12" height="10" fill="var(--accent)" rx="2"/><text x="18" y="9" font-size="10" fill="var(--text-3)">Published</text>
+      <rect x="92" width="12" height="10" fill="var(--accent)" opacity="0.35" rx="2"/><text x="110" y="9" font-size="10" fill="var(--text-3)">In pipeline</text>
+      <rect x="200" width="12" height="10" fill="none" stroke="var(--border-strong)" stroke-dasharray="3 2" rx="2"/><text x="218" y="9" font-size="10" fill="var(--text-3)">Contracted</text>
+    </g>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="qp-chart" preserveAspectRatio="xMidYMid meet">${legend}${bars}</svg>`;
+}
+async function saveQuarterlyTargets(clientId,inputs){
+  const year=new Date().getFullYear();
+  const c=DATA.clients.find(x=>x.id===clientId);
+  const def=c?.monthly_videos;
+  const upserts=[];
+  inputs.forEach(({month,value})=>{
+    const num=parseInt(value);
+    if(isNaN(num)||num<0)return;
+    // Only upsert if value differs from default (keeps override table sparse)
+    if(def!=null&&num===def){
+      // delete existing override if any — value matches default, no override needed
+      sb.from('client_monthly_targets').delete().match({client_id:clientId,year,month}).then(()=>{});
+      return;
+    }
+    upserts.push({client_id:clientId,year,month,contracted_count:num,updated_by:currentUser.name,updated_at:new Date().toISOString()});
+  });
+  try{
+    if(upserts.length){const {error}=await sb.from('client_monthly_targets').upsert(upserts,{onConflict:'client_id,year,month'});if(error)throw error}
+    toast('Contracts saved','success');
+    await fetchAll(true);
+    openClientDetail(clientId);
+  }catch(err){toast('Save failed: '+(err.message||''),'error')}
+}
+
 function openClientDetail(cid){
   const c=DATA.clients.find(x=>x.id===cid);if(!c)return;
   const proj=DATA.projects.filter(p=>p.client_id===cid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const active=proj.filter(p=>p.current_stage!=='posted');
   const done=proj.filter(p=>p.current_stage==='posted');
+  const planHtml=quarterlyPlanSection(c,proj);
   const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(c.name)}</div><div class="modal-sub">${proj.length} total · ${active.length} active · ${done.length} completed</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
+    ${planHtml}
     <div class="detail-section"><div class="detail-section-title">Active Projects (${active.length})</div>
       ${active.length?`<table class="tbl"><thead><tr><th>Title</th><th>Stage</th><th>Editor</th><th>Deadline</th></tr></thead><tbody>${active.map(p=>{const ed=getMember(p.assigned_editor_id);const ov=p.deadline&&isOverdue(p.deadline);return `<tr class="clickable" data-pid="${p.id}"><td>${esc(p.title)}</td><td><span class="tag">${esc(STAGES.find(s=>s.key===p.current_stage)?.label||'')}</span></td><td class="muted">${esc(ed?.name||'Unassigned')}</td><td class="${ov?'':'muted'}" style="${ov?'color:var(--red)':''}">${p.deadline?fmtDate(p.deadline):'—'}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No active projects</div>'}
     </div>
     ${done.length?`<div class="detail-section"><div class="detail-section-title">Recent Completed (${done.length})</div><table class="tbl"><thead><tr><th>Title</th><th>Editor</th><th>Completed</th></tr></thead><tbody>${done.slice(0,15).map(p=>{const ed=getMember(p.assigned_editor_id);return `<tr class="clickable" data-pid="${p.id}"><td>${esc(p.title)}</td><td class="muted">${esc(ed?.name||'—')}</td><td class="muted">${p.completed_at?fmtDate(p.completed_at):'—'}</td></tr>`}).join('')}</tbody></table></div>`:''}
   </div><div class="modal-footer"><button class="btn btn-primary" data-close>Close</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
-  $('#modalRoot').onclick=e=>{if(e.target.closest('[data-close]'))closeModal();const r=e.target.closest('[data-pid]');if(r){closeModal();setTimeout(()=>openProjectDetail(parseInt(r.dataset.pid)),100)}};
+  $('#modalRoot').onclick=e=>{
+    if(e.target.closest('[data-close]')){closeModal();return}
+    const sv=e.target.closest('[data-save-qp]');
+    if(sv){
+      const cid=parseInt(sv.dataset.saveQp);
+      const inputs=Array.from($('#modalRoot').querySelectorAll('.qp-input')).map(el=>({month:parseInt(el.dataset.month),value:el.value}));
+      saveQuarterlyTargets(cid,inputs);return;
+    }
+    const r=e.target.closest('[data-pid]');
+    if(r){closeModal();setTimeout(()=>openProjectDetail(parseInt(r.dataset.pid)),100)}
+  };
 }
 
 // === PAGE: TEAM ===
