@@ -1268,10 +1268,11 @@ function renderPipeline(){
   if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
   const editors=DATA.teamMembers.filter(m=>(m.role||'').toLowerCase()==='editor'||(m.role||'').toLowerCase()==='video_editor');
   const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
-  $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
+  $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">🗄</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
     if(e.target.closest('[data-action="refresh"]'))fetchAll();
     if(e.target.closest('[data-action="new"]'))openProjectForm();
+    if(e.target.closest('[data-action="archived"]'))openArchivedView();
     if(e.target.closest('[data-action="bulk-toggle"]')){PIPELINE_STATE.bulkMode=!PIPELINE_STATE.bulkMode;PIPELINE_STATE.selected.clear();renderPipeline()}
   };
   $('#pageSub').textContent=`${ps.length} of ${DATA.projects.length} project${DATA.projects.length===1?'':'s'}`;
@@ -1395,6 +1396,38 @@ async function bulkDuplicateProjects(){
   toast(`Duplicated ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
   renderPipeline();
 }
+async function archiveProject(pid){
+  try{
+    const {error}=await sb.from('video_projects').update({is_archived:true,updated_at:new Date().toISOString()}).eq('id',pid);
+    if(error)throw error;
+    toast('Project archived','success');
+    closeModal();
+    await fetchAll();renderPage();
+  }catch(err){toast('Archive failed: '+(err.message||''),'error')}
+}
+async function restoreProject(pid){
+  try{
+    const {error}=await sb.from('video_projects').update({is_archived:false,updated_at:new Date().toISOString()}).eq('id',pid);
+    if(error)throw error;
+    toast('Project restored','success');
+    await fetchAll();
+    await openArchivedView();
+  }catch(err){toast('Restore failed: '+(err.message||''),'error')}
+}
+async function openArchivedView(){
+  let arch=[];
+  try{const {data}=await sb.from('video_projects').select('*').eq('is_archived',true).order('updated_at',{ascending:false});arch=data||[]}catch(_){toast('Could not load archived projects','error');return}
+  const rows=arch.length?arch.map(p=>{const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);return `<tr><td>${esc(p.title||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td class="muted">${esc(ed?.name||'—')}</td><td class="muted">${p.updated_at?fmtDate(p.updated_at):'—'}</td><td>${isAdmin()?`<button class="btn btn-secondary btn-sm" data-restore="${p.id}">Restore</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:30px">No archived projects</td></tr>';
+  const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">Archived Projects</div><div class="modal-sub">${arch.length} archived · click Restore to bring back to the pipeline</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body"><table class="tbl"><thead><tr><th>Title</th><th>Client</th><th>Editor</th><th>Archived</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div class="modal-footer"><button class="btn btn-primary" data-close>Close</button></div></div></div>`;
+  $('#modalRoot').innerHTML=html;
+  $('#modalRoot').onclick=async e=>{
+    if(e.target.closest('[data-close]'))closeModal();
+    const r=e.target.closest('[data-restore]');
+    if(r){const pid=parseInt(r.dataset.restore);if(confirm('Restore this project to the pipeline?'))await restoreProject(pid)}
+  };
+}
+window.openArchivedView=openArchivedView;
+
 async function duplicateProject(pid){
   const orig=getProject(pid);
   if(!orig)throw new Error('not found');
@@ -1466,7 +1499,7 @@ function openProjectForm(existing=null){
     <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">— Unassigned —</option>${DATA.teamMembers.filter(m=>(m.role||'').toLowerCase()==='editor'||(m.role||'').toLowerCase()==='video_editor').map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p=>`<option value="${p}" ${(existing?.priority||'medium')===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select></div><div><label class="field-label">Type</label><select class="field-select" name="type">${['reel','ad','testimonial','product','educational'].map(t=>`<option value="${t}" ${(existing?.type||'reel')===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||''}"></div></div>
-    <div class="form-row"><div><label class="field-label">Month ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month"><option value="">— Not set —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
+    <div class="form-row"><div><label class="field-label">Month <span style="color:var(--red,#ef4444)">*</span> ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month" required><option value="" disabled ${!parseInt(existing?.target_month)?'selected':''}>— Select month —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
     <div><label class="field-label">Description / Notes</label><textarea class="field-textarea" name="description" rows="3">${esc(existing?.description||'')}</textarea></div>
   </div></form><div class="modal-footer">${ie&&currentUser.role==='admin'?`<button class="btn btn-ghost btn-danger" data-del="${existing.id}">Delete</button>`:''}<button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save="${ie?existing.id:''}">${ie?'Save':'Create'}</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
@@ -1484,6 +1517,7 @@ async function saveProject(id){
   if(tm){const ex=id?getProject(id):null;d.target_year=(ex&&ex.target_year)?ex.target_year:new Date().getFullYear();}
   else{d.target_year=null;}
   if(!d.title){toast('Title required','error');return}
+  if(!tm){toast('Month is required — please pick which month this video is for','error');return}
   try{
     if(id){const o=getProject(id);if(o&&o.current_stage!==d.current_stage)await moveProject(o,d.current_stage);d.updated_at=new Date().toISOString();const {error}=await sb.from('video_projects').update(d).eq('id',id);if(error)throw error;toast('Project updated','success')}
     else{d.created_by=currentUser.name;const {data:ins,error}=await sb.from('video_projects').insert(d).select().single();if(error)throw error;await sb.from('video_stage_history').insert({video_project_id:ins.id,stage:ins.current_stage,moved_by:currentUser.name});toast('Project created','success')}
@@ -1561,13 +1595,14 @@ async function openProjectDetail(id){
         <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" data-post-comment="${id}">Post Comment</button></div>
       </div>
     </div>
-  </div><div class="modal-footer">${isAdmin()?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
+  </div><div class="modal-footer">${isAdmin()?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-ghost" data-archive="${id}" style="color:var(--red,#ef4444)">🗄 Archive</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
   wireImageAttach('cmt-'+id,'#newComment');
   $('#modalRoot').onclick=async e=>{
     if(e.target.closest('[data-close]'))closeModal();
     const ed=e.target.closest('[data-edit]');if(ed){closeModal();openProjectForm(getProject(parseInt(ed.dataset.edit)))}
     const dp=e.target.closest('[data-dup]');if(dp){const pid=parseInt(dp.dataset.dup);if(confirm('Duplicate this project? Times reset to zero, fresh project starts at "Video Shot".')){try{await duplicateProject(pid);closeModal();await fetchAll();renderPage();toast('Project duplicated','success')}catch(err){toast('Duplicate failed: '+(err.message||''),'error')}}}
+    const ar=e.target.closest('[data-archive]');if(ar){const pid=parseInt(ar.dataset.archive);const p=getProject(pid);if(confirm(`Archive "${p?.title||'this project'}"?\n\nIt will be hidden from the pipeline but recoverable from Archived Projects.`)){await archiveProject(pid)}}
     const pc=e.target.closest('[data-post-comment]');if(pc)await postComment(parseInt(pc.dataset.postComment));
     const al=e.target.closest('[data-add-link]');if(al)openAddLinkForm(id,al.dataset.addLink);
     const dl=e.target.closest('[data-del-link]');if(dl)await deleteLink(parseInt(dl.dataset.delLink),id);
