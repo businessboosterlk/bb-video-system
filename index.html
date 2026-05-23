@@ -283,6 +283,18 @@ a:hover{text-decoration:underline}
 .qp-chart-legend span{display:inline-flex;align-items:center;gap:5px}
 .qp-leg-sw{width:12px;height:10px;border-radius:2px;display:inline-block}
 .qp-leg-dash{border:1px dashed var(--border-strong);background:none}
+.shoots-mini{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.shoots-mini-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:6px}
+.shoots-mini-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed var(--border);font-size:13px;color:var(--text)}
+.shoots-mini-row:first-of-type{border-top:none}
+.qp-shoot-strip{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+.qp-shoot-strip-title{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:10px}
+.qp-shoot-cells{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.qp-shoot-cell{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.qp-shoot-month{font-size:11px;color:var(--text-2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.qp-shoot-nums{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--text-2)}
+.qp-shoot-nums strong{color:var(--text);font-weight:700;margin-right:4px}
+@media (max-width:768px){.qp-shoot-cells{grid-template-columns:1fr}}
 .qp-summary{background:var(--surface);border-left:3px solid var(--accent);border-radius:6px;padding:12px 14px;margin-bottom:14px}
 .qp-summary-label{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px}
 .qp-summary-body{font-size:13px;color:var(--text);line-height:1.6}
@@ -639,7 +651,7 @@ const PAGES_EDITOR = [
 
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
-let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [] };
+let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [], archivedProjects: [] };
 let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 function monthLabel(p){if(!p||!p.target_month)return null;const mi=parseInt(p.target_month);if(isNaN(mi)||mi<1||mi>12)return null;return MONTHS[mi-1]+(p.target_year?' '+p.target_year:'');}
@@ -1032,10 +1044,17 @@ async function fetchAll(silent=false){
     DATA.stageHistory=shr.data||[];
     DATA.projectComments=pcr.data||[];
     DATA.clientTargets=cmtr.data||[];
+    // Load archived projects separately — Q2 plan needs them so counts don't break when archive happens
+    try{const {data:arch}=await sb.from('video_projects').select('id,client_id,target_month,target_year,current_stage,is_archived').eq('is_archived',true);DATA.archivedProjects=arch||[]}catch(_){DATA.archivedProjects=[]}
     // Filter projects for editors
     if(isEditor()){
       const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
       DATA.projects=me?DATA.projects.filter(p=>p.assigned_editor_id===me.id):[];
+    }
+    // Auto-archive: admin/video_head only. Anything at posted/add_to_drive/sent_to_client for >72h gets archived.
+    // We only check projects already in memory (no extra query). Run silently — toast only on error.
+    if(currentUser&&(currentUser.role==='admin'||currentUser.role==='video_head')){
+      try{await autoArchiveStale()}catch(err){console.warn('auto-archive failed',err)}
     }
     renderPage();
   }catch(err){console.error(err);if(!silent)toast('Failed to load data: '+(err.message||''),'error')}
@@ -1408,6 +1427,39 @@ async function bulkDuplicateProjects(){
   toast(`Duplicated ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
   renderPipeline();
 }
+// Auto-archive: scan projects at terminal stages (posted/add_to_drive/sent_to_client) whose
+// last stage entry is >72h old, batch-archive them. Uses video_stage_history to find when
+// they entered their current stage. Skips if already archived or if entry time unknown.
+async function autoArchiveStale(){
+  const TERMINAL=['posted','add_to_drive','sent_to_client'];
+  const THRESH_MS=72*3600*1000;
+  const now=Date.now();
+  if(!DATA.projects||!DATA.stageHistory)return;
+  // Build a lookup: when each project entered its current (still-open) stage
+  const latestStageEntry={};
+  DATA.stageHistory.forEach(h=>{
+    if(h.exited_at)return;
+    const pid=Number(h.video_project_id);
+    const t=h.entered_at?new Date(h.entered_at).getTime():0;
+    if(!t)return;
+    if(!latestStageEntry[pid]||t>latestStageEntry[pid])latestStageEntry[pid]=t;
+  });
+  const stale=DATA.projects.filter(p=>{
+    if(!TERMINAL.includes(p.current_stage))return false;
+    const t=latestStageEntry[Number(p.id)];
+    if(!t)return false;
+    return (now-t)>=THRESH_MS;
+  });
+  if(!stale.length)return;
+  const ids=stale.map(p=>p.id);
+  const {error}=await sb.from('video_projects').update({is_archived:true,updated_at:new Date().toISOString()}).in('id',ids);
+  if(error)throw error;
+  // Update in-memory caches: remove from projects, add to archivedProjects (so Q2 plan still counts them)
+  DATA.archivedProjects=(DATA.archivedProjects||[]).concat(stale.map(p=>({id:p.id,client_id:p.client_id,target_month:p.target_month,target_year:p.target_year,current_stage:p.current_stage,is_archived:true})));
+  DATA.projects=DATA.projects.filter(p=>!ids.includes(p.id));
+  if(typeof toast==='function')toast(`Auto-archived ${stale.length} completed video${stale.length===1?'':'s'} (>72h at final stage)`,'success');
+}
+
 async function archiveProject(pid){
   try{
     const {error}=await sb.from('video_projects').update({is_archived:true,updated_at:new Date().toISOString()}).eq('id',pid);
@@ -1713,6 +1765,22 @@ function shootCalendarHtml(){
   return `<div class="cal-head"><button class="btn btn-secondary btn-sm" data-cal-prev>← Prev</button><div class="cal-month">${monthName}</div><button class="btn btn-secondary btn-sm" data-cal-next>Next →</button></div><div class="cal-sub text-3 fs-11">${inMonth.length} shoots this month</div><div class="cal-grid"><div class="cal-dow">SUN</div><div class="cal-dow">MON</div><div class="cal-dow">TUE</div><div class="cal-dow">WED</div><div class="cal-dow">THU</div><div class="cal-dow">FRI</div><div class="cal-dow">SAT</div>${cells}</div>`;
 }
 async function writeShootStage(sh,newKey){
+  // Gate: can't mark a shoot as Shot without recording how many videos it produced.
+  // Prompt inline rather than just rejecting — more helpful, fewer steps.
+  if(newKey==='Shot' && (!sh.video_count || sh.video_count<=0)){
+    const raw=prompt(`How many videos did this shoot produce?\n\nShoot: ${sh.title||'(untitled)'}\n\nEnter a number greater than 0:`);
+    if(raw===null)return; // cancelled
+    const n=parseInt(raw);
+    if(isNaN(n)||n<=0){toast('Video count must be a number greater than 0 to mark a shoot as Shot','error');return}
+    try{
+      const {error}=await sb.from('smm_shoots').update({stage:newKey,video_count:n,updated_at:new Date().toISOString()}).eq('id',sh.id);
+      if(error)throw error;
+      sh.stage=newKey;sh.video_count=n;
+      toast(`Shoot marked Shot · ${n} video${n===1?'':'s'} recorded`,'success');
+      renderShootPipeline();fetchAll(true);
+    }catch(err){toast('Move failed: '+(err.message||''),'error')}
+    return;
+  }
   try{
     const {error}=await sb.from('smm_shoots').update({stage:newKey,updated_at:new Date().toISOString()}).eq('id',sh.id);
     if(error)throw error;
@@ -1742,7 +1810,7 @@ function openShootForm(id){
     <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— No client —</option>${clientOpts}</select></div><div><label class="field-label">Title *</label><input class="field-input" name="title" value="${esc(ex?.title||'')}" required></div></div>
     <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="stage">${stageOpts}</select></div><div><label class="field-label">Shoot date</label><input class="field-input" type="date" name="shoot_date" value="${ex?.shoot_date||''}"></div></div>
     <div class="form-row"><div><label class="field-label">Quarter</label><input class="field-input" name="quarter" value="${esc(ex?.quarter||'')}" placeholder="Q2"></div><div><label class="field-label">Month</label><input class="field-input" name="month" value="${esc(ex?.month||'')}" placeholder="May"></div></div>
-    <div class="form-row"><div><label class="field-label">Video count</label><input class="field-input" type="number" name="video_count" value="${ex?.video_count!=null?ex.video_count:''}"></div><div></div></div>
+    <div class="form-row"><div><label class="field-label">Video count <span class="muted fs-11">(required if stage = Shot)</span></label><input class="field-input" type="number" min="0" name="video_count" value="${ex?.video_count!=null?ex.video_count:''}"></div><div></div></div>
   </form></div><div class="modal-footer"><button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save-shoot="${ex?ex.id:''}">${ex?'Save':'Create'}</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
   $('#modalRoot').onclick=async e=>{
@@ -1753,6 +1821,8 @@ function openShootForm(id){
       const title=(fd.get('title')||'').trim();
       if(!title){toast('Title is required','error');return}
       const d={title,client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,stage:fd.get('stage'),shoot_date:fd.get('shoot_date')||null,quarter:(fd.get('quarter')||'').trim()||null,month:(fd.get('month')||'').trim()||null,video_count:fd.get('video_count')!==''?parseInt(fd.get('video_count')):null,updated_at:new Date().toISOString()};
+      // Gate: if stage is Shot, video_count must be > 0
+      if(d.stage==='Shot' && (!d.video_count || d.video_count<=0)){toast('How many videos did this shoot produce? Set Video Count > 0 before marking as Shot','error');return}
       try{
         const sid=sv.dataset.saveShoot;
         if(sid){const {error}=await sb.from('smm_shoots').update(d).eq('id',parseInt(sid));if(error)throw error;toast('Shoot updated','success')}
@@ -1863,12 +1933,30 @@ function drawTimeTracker(){
   })();
   const weeklyReportHtml=`<div class="panel"><div class="panel-head"><div class="panel-title">Weekly Editor Report · ${esc(weeklyReport.wkLabel)}</div><div class="text-3 fs-11">Auto from stage moves · ${secsToHrs(weeklyReport.grandTotal)} this week</div></div>${weeklyReport.rows.length?`<table class="tbl"><thead><tr><th>Editor</th><th>Total this week</th><th>Top stages</th><th>Bounces</th></tr></thead><tbody>${weeklyReport.rows.map(r=>`<tr><td><strong>${esc(r.name)}</strong></td><td>${secsToHrs(r.total)}</td><td class="muted fs-11">${esc(r.topStages||'—')}</td><td class="${r.bounces>0?'':'muted'}">${r.bounces||'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No stage activity attributed to editors this week yet</div>'}</div>
   `;
-  $('#pageSub').textContent=`${thisMonth.length} logs this month · ${secsToHrs(totalSec)} total`;
-  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Time Tracker</div><div class="page-sub">Editing hours logged per video</div></div></div>
-    <div class="stat-grid">${statCard('This Month',secsToHrs(totalSec))}${statCard('Logs',thisMonth.length+'')}${statCard('Avg/Log',thisMonth.length?secsToHrs(totalSec/thisMonth.length):'0')}</div>
+  $('#pageSub').textContent=`Workflow time tracked from stage moves · ${weeklyReport.rows.length} editors active this week`;
+  // Month-level workflow time per editor (same math as weekly, monthly window)
+  const monthStartTs=monthStart.getTime(),now=Date.now();
+  const monthlyByEditor={};
+  const projectsByIdM={};(DATA.projects||[]).forEach(p=>{projectsByIdM[p.id]=p});
+  (DATA.stageHistory||[]).forEach(h=>{
+    const p=projectsByIdM[h.video_project_id]; if(!p||!p.assigned_editor_id)return;
+    const enter=h.entered_at?new Date(h.entered_at).getTime():0; if(!enter)return;
+    const exit=h.exited_at?new Date(h.exited_at).getTime():now;
+    const overlapStart=Math.max(enter,monthStartTs),overlapEnd=Math.min(exit,now);
+    const secs=Math.floor((overlapEnd-overlapStart)/1000); if(secs<=0)return;
+    const eid=Number(p.assigned_editor_id);
+    if(!monthlyByEditor[eid])monthlyByEditor[eid]={sec:0,projects:new Set()};
+    monthlyByEditor[eid].sec+=secs;
+    monthlyByEditor[eid].projects.add(p.id);
+  });
+  const monthlyTotalSec=Object.values(monthlyByEditor).reduce((s,v)=>s+v.sec,0);
+  const monthlyActiveEditors=Object.keys(monthlyByEditor).length;
+  const monthlyAvgPerEditor=monthlyActiveEditors?monthlyTotalSec/monthlyActiveEditors:0;
+  $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Time Tracker</div><div class="page-sub">Workflow time = how long projects sit in stages, attributed to assigned editor. Not the same as effort hours.</div></div></div>
+    <div class="stat-grid">${statCard('Workflow time this month',secsToHrs(monthlyTotalSec))}${statCard('Active editors',monthlyActiveEditors+'')}${statCard('Avg per editor',secsToHrs(monthlyAvgPerEditor))}</div>
     ${weeklyReportHtml}
-    ${Object.keys(perEditor).length?`<div class="panel"><div class="panel-head"><div class="panel-title">By Editor (this month)</div></div><table class="tbl"><thead><tr><th>Editor</th><th>Logs</th><th>Total</th><th>Avg/log</th></tr></thead><tbody>${Object.entries(perEditor).sort((a,b)=>b[1].sec-a[1].sec).map(([id,v])=>{const m=getMember(parseInt(id));return `<tr><td>${esc(m?.name||'Unknown')}</td><td>${v.count}</td><td>${secsToHrs(v.sec)}</td><td>${secsToHrs(v.sec/v.count)}</td></tr>`}).join('')}</tbody></table></div>`:''}
-    <div class="panel"><div class="panel-head"><div class="panel-title">Recent Logs</div></div>${logs.length?`<table class="tbl"><thead><tr><th>Project</th><th>Editor</th><th>Stage</th><th>Started</th><th>Duration</th><th>Notes</th></tr></thead><tbody>${logs.slice(0,50).map(l=>{const p=getProject(l.video_project_id);const m=getMember(l.team_member_id);return `<tr><td>${esc(p?.title||'—')}</td><td>${esc(m?.name||'—')}</td><td class="muted">${esc(STAGES.find(s=>s.key===l.stage)?.label||l.stage||'')}</td><td class="muted">${fmtDateTime(l.started_at)}</td><td>${secsToHrs(l.duration_seconds||0)}</td><td class="muted">${esc(l.notes||'')}</td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No time logged yet — click "+ Log Time" to start</div>'}</div>
+    ${Object.keys(perEditor).length?`<div class="panel"><div class="panel-head"><div class="panel-title">Manual logs (this month)</div><div class="text-3 fs-11">From editors who use the + Log Time button</div></div><table class="tbl"><thead><tr><th>Editor</th><th>Logs</th><th>Total</th><th>Avg/log</th></tr></thead><tbody>${Object.entries(perEditor).sort((a,b)=>b[1].sec-a[1].sec).map(([id,v])=>{const m=getMember(parseInt(id));return `<tr><td>${esc(m?.name||'Unknown')}</td><td>${v.count}</td><td>${secsToHrs(v.sec)}</td><td>${secsToHrs(v.sec/v.count)}</td></tr>`}).join('')}</tbody></table></div>`:''}
+    <div class="panel"><div class="panel-head"><div class="panel-title">Recent Logs</div><div class="text-3 fs-11">Manual log entries · ${thisMonth.length} this month</div></div>${logs.length?`<table class="tbl"><thead><tr><th>Project</th><th>Editor</th><th>Stage</th><th>Started</th><th>Duration</th><th>Notes</th></tr></thead><tbody>${logs.slice(0,50).map(l=>{const p=getProject(l.video_project_id);const m=getMember(l.team_member_id);return `<tr><td>${esc(p?.title||'—')}</td><td>${esc(m?.name||'—')}</td><td class="muted">${esc(STAGES.find(s=>s.key===l.stage)?.label||l.stage||'')}</td><td class="muted">${fmtDateTime(l.started_at)}</td><td>${secsToHrs(l.duration_seconds||0)}</td><td class="muted">${esc(l.notes||'')}</td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No manual time logs yet — click "+ Log Time" to add one</div>'}</div>
   `;
 }
 function openTimeForm(){
@@ -2026,8 +2114,35 @@ function quarterlyPlanSection(client,clientProjects){
     <div class="qp-row qp-row-accent"><span>Shoot target +buffer</span><strong>${d.shootTargetWithBuffer}</strong></div>
     ${d.tagged===0?'<div class="qp-warn">No videos tagged this month yet</div>':''}
   </div>`).join('');
+  // === SHOOT STATS PER MONTH ===
+  // Read from DATA.shoots, filter by this client, group by month of shoot_date.
+  // Three numbers per month: planned (any stage with a date in that month),
+  // done (stage='Shot'), videos shot (sum of video_count where stage='Shot').
+  const clientShootsAll=(DATA.shoots||[]).filter(s=>Number(s.client_id)===Number(client.id)&&s.shoot_date);
+  const shootStats=months.map(({m,name})=>{
+    const inMonth=clientShootsAll.filter(s=>{
+      const dt=new Date(s.shoot_date);
+      return dt.getFullYear()===year && (dt.getMonth()+1)===m;
+    });
+    const done=inMonth.filter(s=>s.stage==='Shot');
+    const videosShot=done.reduce((sum,s)=>sum+(parseInt(s.video_count)||0),0);
+    return {name,planned:inMonth.length,done:done.length,videosShot};
+  });
+  const shootStrip=`<div class="qp-shoot-strip">
+    <div class="qp-shoot-strip-title">Shoot activity <span class="muted fs-11" style="font-weight:400">· from Shoot Pipeline</span></div>
+    <div class="qp-shoot-cells">${shootStats.map(s=>`
+      <div class="qp-shoot-cell">
+        <div class="qp-shoot-month">${s.name}</div>
+        <div class="qp-shoot-nums">
+          <span title="Shoots planned this month"><strong>${s.planned}</strong> planned</span>
+          <span title="Shoots completed (stage = Shot)"><strong>${s.done}</strong> done</span>
+          <span title="Total videos produced by shoots this month"><strong>${s.videosShot}</strong> videos shot</span>
+        </div>
+      </div>`).join('')}</div>
+  </div>`;
   return `<div class="detail-section qp-section"><div class="detail-section-title">Q2 Video Plan — ${year}</div>
     <div class="qp-grid">${grid}</div>
+    ${shootStrip}
     <div class="qp-chart-wrap">${chart}</div>
     <div class="qp-summary"><div class="qp-summary-label">Situation</div><div class="qp-summary-body">${summary}</div></div>
     <div class="qp-edit"><div class="qp-edit-title">Contracted count per month <span class="muted fs-11">(blank = use client default ${defaultMonthly||'unset'})</span></div>
@@ -2110,9 +2225,21 @@ function openClientDetail(cid){
   const proj=DATA.projects.filter(p=>p.client_id===cid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const active=proj.filter(p=>p.current_stage!=='posted');
   const done=proj.filter(p=>p.current_stage==='posted');
-  const planHtml=quarterlyPlanSection(c,proj);
+  // Q2 plan needs to count archived "published" videos too (auto-archive moves them out of DATA.projects)
+  const archivedForClient=(DATA.archivedProjects||[]).filter(p=>Number(p.client_id)===Number(cid));
+  const planHtml=quarterlyPlanSection(c,[...proj,...archivedForClient]);
+  // Upcoming shoots: pull from smm_shoots (read-only — shoot pipeline owns writes)
+  const today=new Date();today.setHours(0,0,0,0);
+  const clientShoots=(DATA.shoots||[]).filter(s=>Number(s.client_id)===Number(cid)).sort((a,b)=>new Date(a.shoot_date||'2099')-new Date(b.shoot_date||'2099'));
+  const upcoming=clientShoots.filter(s=>s.shoot_date&&new Date(s.shoot_date)>=today&&s.stage!=='Shot').slice(0,5);
+  const recent=clientShoots.filter(s=>s.shoot_date&&new Date(s.shoot_date)<today).slice(-3).reverse();
+  const shootsHtml=`<div class="detail-section"><div class="detail-section-title">Shoots <span class="muted fs-11" style="font-weight:400">· managed in Shoot Pipeline</span></div>
+    ${upcoming.length?`<div class="shoots-mini"><div class="shoots-mini-label">Upcoming</div>${upcoming.map(s=>`<div class="shoots-mini-row"><div><strong>${esc(s.title||'Shoot')}</strong><span class="muted fs-11"> · ${esc(s.stage||'')}</span></div><div class="text-2 fs-12">${fmtDate(s.shoot_date)}${s.video_count?' · '+s.video_count+' vids':''}</div></div>`).join('')}</div>`:'<div class="link-empty">No upcoming shoots</div>'}
+    ${recent.length?`<div class="shoots-mini" style="margin-top:10px"><div class="shoots-mini-label">Recent</div>${recent.map(s=>`<div class="shoots-mini-row"><div><strong>${esc(s.title||'Shoot')}</strong><span class="muted fs-11"> · ${esc(s.stage||'')}</span></div><div class="text-3 fs-12">${fmtDate(s.shoot_date)}</div></div>`).join('')}</div>`:''}
+  </div>`;
   const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(c.name)}</div><div class="modal-sub">${proj.length} total · ${active.length} active · ${done.length} completed</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
     ${planHtml}
+    ${shootsHtml}
     <div class="detail-section"><div class="detail-section-title">Active Projects (${active.length})</div>
       ${active.length?`<table class="tbl"><thead><tr><th>Title</th><th>Stage</th><th>Editor</th><th>Deadline</th></tr></thead><tbody>${active.map(p=>{const ed=getMember(p.assigned_editor_id);const ov=p.deadline&&isOverdue(p.deadline);return `<tr class="clickable" data-pid="${p.id}"><td>${esc(p.title)}</td><td><span class="tag">${esc(STAGES.find(s=>s.key===p.current_stage)?.label||'')}</span></td><td class="muted">${esc(ed?.name||'Unassigned')}</td><td class="${ov?'':'muted'}" style="${ov?'color:var(--red)':''}">${p.deadline?fmtDate(p.deadline):'—'}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No active projects</div>'}
     </div>
