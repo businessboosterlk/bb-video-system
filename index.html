@@ -605,7 +605,7 @@ const USERS = [
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
   { name: 'USHANE',  pin: '628474', role: 'video_head' },
   { name: 'KENULI',  pin: '1010', role: 'video_head' },
-  { name: 'RAJEEWA', pin: '1212', role: 'editor' },
+  { name: 'RAJEEWA', pin: '1212', role: 'video_head' },
   { name: 'HASEEB',  pin: '1313', role: 'editor' },
   { name: 'DIRAN',   pin: '1414', role: 'editor' },
   { name: 'BEVAN',   pin: '1515', role: 'editor' },
@@ -972,8 +972,12 @@ function bootApp(){
   $('#logoutBtn').onclick=logout;
   currentPage=isEditor()?'my_dashboard':'dashboard';
   navTo(currentPage);
-  document.addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+  // Guard: bootApp runs on every login. Without this, each login stacks another global listener.
+  if(!window._bbGlobalListeners){
+    document.addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+    window._bbGlobalListeners=true;
+  }
   fetchAll();
   if(refreshTimer)clearInterval(refreshTimer);
   refreshTimer=setInterval(()=>{fetchAll(true)},REFRESH_MS);
