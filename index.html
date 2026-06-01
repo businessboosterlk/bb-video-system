@@ -149,9 +149,11 @@ a:hover{text-decoration:underline}
 .stage-dot.s-editing{background:#f59e0b}
 .stage-dot.s-team_review{background:#a855f7}
 .stage-dot.s-changes{background:#ef4444}
+.stage-dot.s-client_review{background:#2563eb}
+.stage-dot.s-client_changes{background:#f97316}
 .stage-dot.s-coo_check{background:#ec4899}
 .stage-dot.s-sent_to_client{background:#22c55e}
-.stage-dot.s-client_changes{background:#f97316}
+.stage-dot.s-video_head_review{background:#7c3aed}
 .stage-dot.s-add_to_drive{background:#14b8a6}
 .stage-dot.s-posted{background:#64748b}
 .stage-count{background:var(--surface-2);color:var(--text-2);font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;min-width:26px;text-align:center}
@@ -262,6 +264,7 @@ a:hover{text-decoration:underline}
 .theme-toggle{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:color .2s,border-color .2s,background .2s;padding:0;font-size:16px}
 .theme-toggle::before{content:"☾";font-size:16px;line-height:1}
 [data-theme="light"] .theme-toggle::before{content:"☀"}
+[data-theme="light"] .bb-logo-img,[data-theme="light"] .sidebar-bb-logo-img{filter:invert(1)}
 .theme-toggle:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 @media (max-width:768px){.theme-toggle{width:36px;height:36px}}
 .notif-bell{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:color .2s,border-color .2s,box-shadow .2s,background .2s;padding:0}
@@ -620,9 +623,10 @@ const STAGES = [
   { key: 'video_head_review', label: 'Video Head Review' },
   { key: 'team_review', label: 'Team Review' },
   { key: 'changes', label: 'Changes' },
+  { key: 'client_review', label: 'Client Review' },
+  { key: 'client_changes', label: 'Client Changes' },
   { key: 'coo_check', label: 'COO Check' },
   { key: 'sent_to_client', label: 'Sent to Client' },
-  { key: 'client_changes', label: 'Client Changes' },
   { key: 'add_to_drive', label: 'Add to Drive' },
   { key: 'posted', label: 'Posted' },
 ];
