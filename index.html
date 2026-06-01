@@ -1357,7 +1357,7 @@ function renderPipeline(){
   }
   const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
   // Bulk action floating bar
-  const bulkBarHtml=PIPELINE_STATE.bulkMode&&PIPELINE_STATE.selected.size?`<div class="bulk-action-bar">
+  const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar" style="${PIPELINE_STATE.selected.size?'':'display:none'}">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
     <select class="bulk-action-select" id="bulkMoveTo"><option value="">Move to stage…</option>${STAGES.map(s=>`<option value="${s.key}">${esc(s.label)}</option>`).join('')}</select>
     <button class="bulk-action-btn" data-action="bulk-duplicate">Duplicate</button>
@@ -1370,12 +1370,12 @@ function renderPipeline(){
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
   $('#fPriority').onchange=e=>{FILTERS.pipeline.priority=e.target.value;renderPipeline()};
   $('#fMonth').onchange=e=>{FILTERS.pipeline.month=e.target.value;renderPipeline()};
-  $('#pageContent').addEventListener('click',async e=>{
+  $('#pageContent').onclick=async e=>{
     if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:''};renderPipeline();return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
     if(e.target.closest('[data-action="bulk-duplicate"]')){await bulkDuplicateProjects();return}
     if(e.target.closest('[data-action="bulk-archive"]')){await bulkArchiveProjects();return}
-  });
+  };
   const bulkMove=$('#bulkMoveTo');
   if(bulkMove)bulkMove.onchange=async e=>{const ns=e.target.value;if(!ns)return;await bulkMoveProjects(ns)};
   attachCardListeners();attachDropListeners();
@@ -1385,8 +1385,8 @@ function cardHtml(p){
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
   // Editors get draggable if their current stage allows ANY allowed destination
   const editorCanDragFromHere=isEditor()&&['video_shot','cutting_color_grading','rendering','editing','changes','client_changes'].includes(p.current_stage);
-  const dr=((isAdmin()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
-  const mv=((isAdmin()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
+  const dr=((isAdmin()||isVideoHead()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
+  const mv=((isAdmin()||isVideoHead()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
   const pr=p.priority||'medium';
   const sel=PIPELINE_STATE.selected.has(p.id);
   const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
@@ -1403,14 +1403,18 @@ function attachCardListeners(){
       const pid=parseInt(c.dataset.pid);
       if(PIPELINE_STATE.bulkMode){
         e.stopPropagation();e.preventDefault();
-        if(PIPELINE_STATE.selected.has(pid))PIPELINE_STATE.selected.delete(pid);
-        else PIPELINE_STATE.selected.add(pid);
-        renderPipeline();
+        if(PIPELINE_STATE.selected.has(pid)){PIPELINE_STATE.selected.delete(pid);c.classList.remove('selected')}
+        else{PIPELINE_STATE.selected.add(pid);c.classList.add('selected')}
+        // Update bulk bar count without full re-render (preserves scroll)
+        const countEl=document.querySelector('.bulk-action-count');
+        if(countEl)countEl.textContent=PIPELINE_STATE.selected.size+' selected';
+        const bar=document.querySelector('.bulk-action-bar');
+        if(bar)bar.style.display=PIPELINE_STATE.selected.size?'':'none';
         return;
       }
       openProjectDetail(pid);
     });
-    if((isAdmin()||isEditor())&&!PIPELINE_STATE.bulkMode){
+    if((isAdmin()||isVideoHead()||isEditor())&&!PIPELINE_STATE.bulkMode){
       c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/pid',c.dataset.pid)});
       c.addEventListener('dragend',()=>c.classList.remove('dragging'));
     }
@@ -2544,7 +2548,7 @@ function openStageMenu(pid){
   if(typeof getProject!=='function')return;
   var p=getProject(pid);if(!p)return;
   var old=document.getElementById('m-stage-sheet');if(old)old.remove();
-  var allowed=function(toKey){if(isAdmin())return true;if(isEditor())return toKey===p.current_stage||editorCanMove(p.current_stage,toKey);return false};
+  var allowed=function(toKey){if(isAdmin()||isVideoHead())return true;if(isEditor())return toKey===p.current_stage||editorCanMove(p.current_stage,toKey);return false};
   var opts=STAGES.filter(function(s){return allowed(s.key)}).map(function(s){
     var cur=p.current_stage===s.key?' cur':'';
     return '<button class="m-stage-opt'+cur+'" data-stage="'+s.key+'"><span class="sd s-'+s.key+'" style="background:var(--accent)"></span>'+esc(s.label)+(cur?' &nbsp;·&nbsp; current':'')+'</button>';
