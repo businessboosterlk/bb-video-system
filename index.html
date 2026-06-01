@@ -700,10 +700,14 @@ function canEdit(){return isAdmin()}
 // === VIDEO COUNT HELPER ===
 // Returns {posted, target, progressClass} for a client this month
 function clientVideoCount(clientId){
-  const monthStart=startOfMonth();
-  const posted=(DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=monthStart).length;
+  const now=new Date();
+  const curMonth=now.getMonth()+1; // 1-indexed
+  const curYear=now.getFullYear();
+  const PUBLISHED=['posted','add_to_drive','sent_to_client'];
+  // Count from active + archived projects matching this month
+  const all=(DATA.projects||[]).concat(DATA.archivedProjects||[]);
+  const posted=all.filter(p=>p.client_id===clientId&&PUBLISHED.includes(p.current_stage)&&parseInt(p.target_month)===curMonth&&parseInt(p.target_year||curYear)===curYear).length;
   const cl=getClient(clientId);
-  // Try common column names — gracefully fall back
   const target=cl?.videos_per_month||cl?.monthly_videos||cl?.video_target||null;
   let progressClass='';
   if(target){
@@ -1312,7 +1316,7 @@ function renderPipeline(){
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
   if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
-  const editors=DATA.teamMembers.filter(m=>(m.role||'').toLowerCase()==='editor'||(m.role||'').toLowerCase()==='video_editor');
+  const editors=DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
   const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">🗄</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
@@ -1329,6 +1333,7 @@ function renderPipeline(){
     <select class="filter-select" id="fPriority"><option value="">All priorities</option>${['urgent','high','medium','low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select>
     <select class="filter-select" id="fMonth"><option value="">All months</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(f.month)===i+1?'selected':''}>${m}</option>`).join('')}</select>
     ${(f.search||f.client||f.editor||f.priority||f.month)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
+    <button class="btn btn-ghost btn-sm" data-action="my-work" style="color:var(--accent);font-weight:700">👤 My Work</button>
   </div>`;
   let monthSummaryHtml='';
   if(f.month){
@@ -1372,6 +1377,7 @@ function renderPipeline(){
   $('#fMonth').onchange=e=>{FILTERS.pipeline.month=e.target.value;renderPipeline()};
   $('#pageContent').onclick=async e=>{
     if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:''};renderPipeline();return}
+    if(e.target.closest('[data-action="my-work"]')){const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());if(me){FILTERS.pipeline.editor=String(me.id);renderPipeline()}else{toast('No team member found for '+currentUser.name,'error')};return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
     if(e.target.closest('[data-action="bulk-duplicate"]')){await bulkDuplicateProjects();return}
     if(e.target.closest('[data-action="bulk-archive"]')){await bulkArchiveProjects();return}
