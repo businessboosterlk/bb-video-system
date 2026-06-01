@@ -264,6 +264,7 @@ a:hover{text-decoration:underline}
 .theme-toggle{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:color .2s,border-color .2s,background .2s;padding:0;font-size:16px}
 .theme-toggle::before{content:"☾";font-size:16px;line-height:1}
 [data-theme="light"] .theme-toggle::before{content:"☀"}
+[data-theme="light"] .bb-logo-img,[data-theme="light"] .sidebar-bb-logo-img{filter:invert(1)}
 .theme-toggle:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 @media (max-width:768px){.theme-toggle{width:36px;height:36px}}
 .notif-bell{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);transition:color .2s,border-color .2s,box-shadow .2s,background .2s;padding:0}
@@ -468,6 +469,13 @@ a:hover{text-decoration:underline}
 }
 .m-nav-overlay{display:none}
 .card-move{display:none}
+.card-menu-btn{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-3);font-size:16px;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1;z-index:2;transition:all .12s}
+.card-menu-btn:hover{background:var(--surface-3);color:var(--text)}
+.card-menu-dropdown{position:absolute;top:100%;right:0;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 12px 36px var(--shadow-modal);z-index:50;min-width:160px;padding:6px;display:flex;flex-direction:column;gap:2px}
+.card-menu-dropdown button{background:none;border:none;color:var(--text);font-size:12px;font-weight:500;padding:8px 12px;border-radius:7px;cursor:pointer;text-align:left;transition:background .12s;display:flex;align-items:center;gap:8px}
+.card-menu-dropdown button:hover{background:var(--surface-2)}
+.card-menu-dropdown button.danger{color:var(--red)}
+.card-menu-dropdown button.danger:hover{background:var(--red-soft)}
 
 /* ---- PHONE (portrait + small tablets) ---- */
 @media (max-width:768px){
@@ -699,10 +707,14 @@ function canEdit(){return isAdmin()}
 // === VIDEO COUNT HELPER ===
 // Returns {posted, target, progressClass} for a client this month
 function clientVideoCount(clientId){
-  const monthStart=startOfMonth();
-  const posted=(DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=monthStart).length;
+  const now=new Date();
+  const curMonth=now.getMonth()+1; // 1-indexed
+  const curYear=now.getFullYear();
+  const PUBLISHED=['posted','add_to_drive','sent_to_client'];
+  // Count from active + archived projects matching this month
+  const all=(DATA.projects||[]).concat(DATA.archivedProjects||[]);
+  const posted=all.filter(p=>p.client_id===clientId&&PUBLISHED.includes(p.current_stage)&&parseInt(p.target_month)===curMonth&&parseInt(p.target_year||curYear)===curYear).length;
   const cl=getClient(clientId);
-  // Try common column names — gracefully fall back
   const target=cl?.videos_per_month||cl?.monthly_videos||cl?.video_target||null;
   let progressClass='';
   if(target){
@@ -958,27 +970,6 @@ function doLogin(){
   if(!u){e.textContent=`User "${n}" not found`;return}
   if(u.pin!==p){e.textContent='Wrong PIN';$('#loginPin').value='';return}
   e.textContent='';onLoginSuccess(u);
-  // ══════════════════════════════════════════════
-  // LOG LOGIN TO SUPABASE FOR CC NOTIFICATIONS
-  // Only fires on fresh login (doLogin), NOT session restore
-  // ══════════════════════════════════════════════
-  (async function logLoginToCC(){
-    try {
-      const CC_SB_URL='https://yyviiwnqgphyklcoijyd.supabase.co/rest/v1';
-      const CC_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
-      const LOGIN_IDS={'USHANE':5,'RAJEEWA':6,'RAMANI':11};
-      const name=u.name;
-      const memberId=LOGIN_IDS[name];
-      if(memberId){
-        await fetch(CC_SB_URL+'/team_login_logs',{
-          method:'POST',
-          headers:{'apikey':CC_SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-          body:JSON.stringify({team_member_id:memberId,member_name:name,app:'video-system'})
-        });
-        console.log('[CC] Login logged for',name);
-      }
-    }catch(e){console.error('[CC] Login log error:',e)}
-  })();
 }
 function onLoginSuccess(u){
   currentUser=u;sessionStorage.setItem('bb_video_user',JSON.stringify({name:u.name}));
@@ -1309,41 +1300,8 @@ const USHANE_PILLARS=[
 function ushanePillarKey(){const today=new Date().toISOString().slice(0,10);return `bb_video_ushane_pillars_${today}`}
 function getUshanePillarState(){try{return JSON.parse(localStorage.getItem(ushanePillarKey())||'{}')}catch{return {}}}
 function setUshanePillarState(s){localStorage.setItem(ushanePillarKey(),JSON.stringify(s))}
-function toggleUshanePillar(k){const s=getUshanePillarState();s[k]=!s[k];setUshanePillarState(s);renderDashboard();ccSyncUshanePillars()}
-function resetUshanePillars(){localStorage.removeItem(ushanePillarKey());renderDashboard();ccSyncUshanePillars()}
-
-// ══════════════════════════════════════════════
-// SYNC USHANE PILLARS TO CC SHARED TABLE
-// Converts localStorage key→boolean state to integer done_ids
-// Only syncs when USHANE is logged in
-// ══════════════════════════════════════════════
-const PILLAR_KEY_TO_ID={system_update:1,team_check:2,shiara_brief:3,shoot_check:4,folder_update:5,close_day:6};
-
-function ccSyncUshanePillars(){
-  if(!currentUser||currentUser.name!=='USHANE')return;
-  const s=getUshanePillarState();
-  const doneIds=USHANE_PILLARS.filter(p=>!!s[p.key]).map(p=>PILLAR_KEY_TO_ID[p.key]).filter(Boolean);
-  syncUshanePillarsToCC(doneIds);
-}
-
-async function syncUshanePillarsToCC(doneIds){
-  try{
-    const SB_URL='https://yyviiwnqgphyklcoijyd.supabase.co/rest/v1';
-    const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
-    const headers={'apikey':SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
-    const payload={who:'USHANE',done_ids:JSON.stringify(doneIds),top3:'["","",""]',updated_at:new Date().toISOString()};
-    // Try PATCH first (update existing row)
-    await fetch(SB_URL+'/pillars?who=eq.USHANE',{method:'PATCH',headers:headers,body:JSON.stringify(payload)});
-    // Check if row actually exists — if not, INSERT
-    const check=await fetch(SB_URL+'/pillars?who=eq.USHANE&select=id',{headers:{'apikey':SB_KEY}});
-    const rows=await check.json();
-    if(!rows.length){
-      await fetch(SB_URL+'/pillars',{method:'POST',headers:headers,body:JSON.stringify(payload)});
-      console.log('[CC] Created USHANE pillar row');
-    }
-    console.log('[CC] Ushane pillars synced:',doneIds);
-  }catch(e){console.error('[CC] Pillar sync error:',e)}
-}
+function toggleUshanePillar(k){const s=getUshanePillarState();s[k]=!s[k];setUshanePillarState(s);renderDashboard()}
+function resetUshanePillars(){localStorage.removeItem(ushanePillarKey());renderDashboard()}
 function ushaneDailyPillarsHtml(){
   const s=getUshanePillarState();
   const done=USHANE_PILLARS.filter(p=>s[p.key]).length;
@@ -1365,7 +1323,7 @@ function renderPipeline(){
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
   if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
-  const editors=DATA.teamMembers.filter(m=>(m.role||'').toLowerCase()==='editor'||(m.role||'').toLowerCase()==='video_editor');
+  const editors=DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
   const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">🗄</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
@@ -1382,6 +1340,7 @@ function renderPipeline(){
     <select class="filter-select" id="fPriority"><option value="">All priorities</option>${['urgent','high','medium','low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select>
     <select class="filter-select" id="fMonth"><option value="">All months</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(f.month)===i+1?'selected':''}>${m}</option>`).join('')}</select>
     ${(f.search||f.client||f.editor||f.priority||f.month)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
+    <button class="btn btn-ghost btn-sm" data-action="my-work" style="color:var(--accent);font-weight:700">👤 My Work</button>
   </div>`;
   let monthSummaryHtml='';
   if(f.month){
@@ -1410,10 +1369,12 @@ function renderPipeline(){
   }
   const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
   // Bulk action floating bar
-  const bulkBarHtml=PIPELINE_STATE.bulkMode&&PIPELINE_STATE.selected.size?`<div class="bulk-action-bar">
+  const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar" style="${PIPELINE_STATE.selected.size?'':'display:none'}">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
     <select class="bulk-action-select" id="bulkMoveTo"><option value="">Move to stage…</option>${STAGES.map(s=>`<option value="${s.key}">${esc(s.label)}</option>`).join('')}</select>
     <button class="bulk-action-btn" data-action="bulk-duplicate">Duplicate</button>
+    <button class="bulk-action-btn" data-action="bulk-archive" style="background:var(--red)">🗄 Archive</button>
+    <button class="bulk-action-btn" data-action="bulk-delete" style="background:var(--red)">🗑 Delete</button>
     <button class="bulk-action-btn ghost" data-action="bulk-cancel">Cancel</button>
   </div>`:'';
   $('#pageContent').innerHTML=filtersHtml+monthSummaryHtml+boardHtml+bulkBarHtml;
@@ -1422,11 +1383,14 @@ function renderPipeline(){
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
   $('#fPriority').onchange=e=>{FILTERS.pipeline.priority=e.target.value;renderPipeline()};
   $('#fMonth').onchange=e=>{FILTERS.pipeline.month=e.target.value;renderPipeline()};
-  $('#pageContent').addEventListener('click',async e=>{
+  $('#pageContent').onclick=async e=>{
     if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:''};renderPipeline();return}
+    if(e.target.closest('[data-action="my-work"]')){const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());if(me){FILTERS.pipeline.editor=String(me.id);renderPipeline()}else{toast('No team member found for '+currentUser.name,'error')};return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
     if(e.target.closest('[data-action="bulk-duplicate"]')){await bulkDuplicateProjects();return}
-  });
+    if(e.target.closest('[data-action="bulk-archive"]')){await bulkArchiveProjects();return}
+    if(e.target.closest('[data-action="bulk-delete"]')){await bulkDeleteProjects();return}
+  };
   const bulkMove=$('#bulkMoveTo');
   if(bulkMove)bulkMove.onchange=async e=>{const ns=e.target.value;if(!ns)return;await bulkMoveProjects(ns)};
   attachCardListeners();attachDropListeners();
@@ -1436,32 +1400,61 @@ function cardHtml(p){
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
   // Editors get draggable if their current stage allows ANY allowed destination
   const editorCanDragFromHere=isEditor()&&['video_shot','cutting_color_grading','rendering','editing','changes','client_changes'].includes(p.current_stage);
-  const dr=((isAdmin()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
-  const mv=((isAdmin()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
+  const dr=((isAdmin()||isVideoHead()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
+  const mv=((isAdmin()||isVideoHead()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
   const pr=p.priority||'medium';
   const sel=PIPELINE_STATE.selected.has(p.id);
   const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
   const selClass=sel?'selected':'';
   const smm=clientSmm(p.client_id);
+  const menuBtn=(isAdmin()||isVideoHead())?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
-  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${mv}</div>`;
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${mv}</div>`;
+}
+function openCardMenu(pid,btn){
+  // Close any existing menu
+  const old=document.querySelector('.card-menu-dropdown');if(old)old.remove();
+  const p=getProject(pid);if(!p)return;
+  const wrap=document.createElement('div');
+  wrap.className='card-menu-dropdown';
+  wrap.innerHTML=`<button data-cm="move">↕ Move stage</button><button data-cm="dup">⎘ Duplicate</button><button data-cm="archive">🗄 Archive</button><button data-cm="delete" class="danger">🗑 Delete</button>`;
+  // Position relative to button's parent card
+  btn.closest('.card').appendChild(wrap);
+  // Wire actions
+  wrap.onclick=async e=>{
+    e.stopPropagation();
+    const act=e.target.closest('[data-cm]');if(!act)return;
+    const cm=act.dataset.cm;
+    wrap.remove();
+    if(cm==='move')openStageMenu(pid);
+    if(cm==='dup'){if(confirm('Duplicate this project?')){try{await duplicateProject(pid);await fetchAll();renderPage();toast('Duplicated','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
+    if(cm==='archive'){if(confirm(`Archive "${p.title}"?`)){await archiveProject(pid)}}
+    if(cm==='delete'){if(confirm(`PERMANENTLY delete "${p.title}"?\n\nAll data removed. Cannot be undone.`)){try{await permanentDeleteProject(pid);await fetchAll();renderPage();toast('Deleted','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
+  };
+  // Close on click outside
+  setTimeout(()=>{document.addEventListener('click',function close(e){if(!wrap.contains(e.target)){wrap.remove();document.removeEventListener('click',close)}},{once:false})},0);
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
     c.addEventListener('click',e=>{
       if(e.target.closest('[data-move]')){e.stopPropagation();openStageMenu(parseInt(c.dataset.pid));return;}
+      if(e.target.closest('[data-card-menu]')){e.stopPropagation();openCardMenu(parseInt(c.dataset.pid),e.target.closest('[data-card-menu]'));return;}
       if(c.classList.contains('dragging'))return;
       const pid=parseInt(c.dataset.pid);
       if(PIPELINE_STATE.bulkMode){
         e.stopPropagation();e.preventDefault();
-        if(PIPELINE_STATE.selected.has(pid))PIPELINE_STATE.selected.delete(pid);
-        else PIPELINE_STATE.selected.add(pid);
-        renderPipeline();
+        if(PIPELINE_STATE.selected.has(pid)){PIPELINE_STATE.selected.delete(pid);c.classList.remove('selected')}
+        else{PIPELINE_STATE.selected.add(pid);c.classList.add('selected')}
+        // Update bulk bar count without full re-render (preserves scroll)
+        const countEl=document.querySelector('.bulk-action-count');
+        if(countEl)countEl.textContent=PIPELINE_STATE.selected.size+' selected';
+        const bar=document.querySelector('.bulk-action-bar');
+        if(bar)bar.style.display=PIPELINE_STATE.selected.size?'':'none';
         return;
       }
       openProjectDetail(pid);
     });
-    if((isAdmin()||isEditor())&&!PIPELINE_STATE.bulkMode){
+    if((isAdmin()||isVideoHead()||isEditor())&&!PIPELINE_STATE.bulkMode){
       c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/pid',c.dataset.pid)});
       c.addEventListener('dragend',()=>c.classList.remove('dragging'));
     }
@@ -1493,6 +1486,34 @@ async function bulkDuplicateProjects(){
   PIPELINE_STATE.selected.clear();
   await fetchAll();
   toast(`Duplicated ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
+  renderPipeline();
+}
+async function bulkArchiveProjects(){
+  const ids=Array.from(PIPELINE_STATE.selected);
+  if(!ids.length)return;
+  const titles=ids.map(id=>{const p=getProject(id);return p?p.title:'#'+id}).join('\n  • ');
+  if(!confirm(`Archive ${ids.length} project${ids.length>1?'s':''}?\n\n  • ${titles}\n\nThey'll be hidden from the pipeline but recoverable from Archived Projects.`))return;
+  try{
+    const {error}=await sb.from('video_projects').update({is_archived:true,updated_at:new Date().toISOString()}).in('id',ids);
+    if(error)throw error;
+    PIPELINE_STATE.selected.clear();
+    PIPELINE_STATE.bulkMode=false;
+    await fetchAll();
+    toast(`Archived ${ids.length} project${ids.length>1?'s':''}`,'success');
+    renderPipeline();
+  }catch(err){toast('Bulk archive failed: '+(err.message||''),'error')}
+}
+async function bulkDeleteProjects(){
+  const ids=Array.from(PIPELINE_STATE.selected);
+  if(!ids.length)return;
+  const titles=ids.map(id=>{const p=getProject(id);return p?p.title:'#'+id}).join('\n  • ');
+  if(!confirm(`PERMANENTLY delete ${ids.length} project${ids.length>1?'s':''}?\n\n  • ${titles}\n\nALL data removed: stage history, comments, links, time logs. Cannot be undone.`))return;
+  let ok=0,fail=0;
+  for(const pid of ids){try{await permanentDeleteProject(pid);ok++}catch(_){fail++}}
+  PIPELINE_STATE.selected.clear();
+  PIPELINE_STATE.bulkMode=false;
+  await fetchAll();
+  toast(`Deleted ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
   renderPipeline();
 }
 // Auto-archive: scan projects at terminal stages (posted/add_to_drive/sent_to_client) whose
@@ -1549,14 +1570,40 @@ async function restoreProject(pid){
 async function openArchivedView(){
   let arch=[];
   try{const {data}=await sb.from('video_projects').select('*').eq('is_archived',true).order('updated_at',{ascending:false});arch=data||[]}catch(_){toast('Could not load archived projects','error');return}
-  const rows=arch.length?arch.map(p=>{const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);return `<tr><td>${esc(p.title||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td class="muted">${esc(ed?.name||'—')}</td><td class="muted">${p.updated_at?fmtDate(p.updated_at):'—'}</td><td>${isAdmin()?`<button class="btn btn-secondary btn-sm" data-restore="${p.id}">Restore</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:30px">No archived projects</td></tr>';
-  const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">Archived Projects</div><div class="modal-sub">${arch.length} archived · click Restore to bring back to the pipeline</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body"><table class="tbl"><thead><tr><th>Title</th><th>Client</th><th>Editor</th><th>Archived</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><div class="modal-footer"><button class="btn btn-primary" data-close>Close</button></div></div></div>`;
-  $('#modalRoot').innerHTML=html;
-  $('#modalRoot').onclick=async e=>{
-    if(e.target.closest('[data-close]'))closeModal();
-    const r=e.target.closest('[data-restore]');
-    if(r){const pid=parseInt(r.dataset.restore);if(confirm('Restore this project to the pipeline?'))await restoreProject(pid)}
-  };
+  const selected=new Set();
+  function render(){
+    const allChecked=arch.length&&selected.size===arch.length;
+    const rows=arch.length?arch.map(p=>{const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);const chk=selected.has(p.id)?'checked':'';return `<tr><td><input type="checkbox" class="arch-chk" data-id="${p.id}" ${chk} style="width:16px;height:16px;cursor:pointer"></td><td>${esc(p.title||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td class="muted">${esc(ed?.name||'—')}</td><td class="muted">${p.updated_at?fmtDate(p.updated_at):'—'}</td><td style="white-space:nowrap;display:flex;gap:6px">${isAdmin()?`<button class="btn btn-secondary btn-sm" data-restore="${p.id}">Restore</button><button class="btn btn-ghost btn-sm" data-permdelete="${p.id}" style="color:var(--red)">Delete</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:30px">No archived projects</td></tr>';
+    const bulkBar=selected.size?`<div style="display:flex;gap:10px;align-items:center;margin-top:14px;padding:12px 16px;background:var(--surface-2);border:1px solid var(--accent);border-radius:10px"><span style="font-size:13px;font-weight:700;color:var(--accent)">${selected.size} selected</span><button class="btn btn-secondary btn-sm" data-action="bulk-restore-arch">Restore Selected</button><button class="btn btn-ghost btn-sm" data-action="bulk-delete-arch" style="color:var(--red)">Delete Selected</button></div>`:'';
+    const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">Archived Projects</div><div class="modal-sub">${arch.length} archived</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body"><table class="tbl"><thead><tr><th style="width:30px"><input type="checkbox" id="archSelectAll" ${allChecked?'checked':''} style="width:16px;height:16px;cursor:pointer"></th><th>Title</th><th>Client</th><th>Editor</th><th>Archived</th><th></th></tr></thead><tbody>${rows}</tbody></table>${bulkBar}</div><div class="modal-footer"><button class="btn btn-primary" data-close>Close</button></div></div></div>`;
+    $('#modalRoot').innerHTML=html;
+    $('#modalRoot').onclick=async e=>{
+      if(e.target.closest('[data-close]')){closeModal();return}
+      // Select all checkbox
+      if(e.target.id==='archSelectAll'){if(e.target.checked)arch.forEach(p=>selected.add(p.id));else selected.clear();render();return}
+      // Individual checkbox
+      const chk=e.target.closest('.arch-chk');
+      if(chk){const id=parseInt(chk.dataset.id);if(selected.has(id))selected.delete(id);else selected.add(id);render();return}
+      // Single restore
+      const r=e.target.closest('[data-restore]');
+      if(r){const pid=parseInt(r.dataset.restore);if(confirm('Restore this project to the pipeline?')){await restoreProject(pid);return}}
+      // Single permanent delete
+      const d=e.target.closest('[data-permdelete]');
+      if(d){const pid=parseInt(d.dataset.permdelete);const p=arch.find(x=>x.id===pid);if(confirm(`PERMANENTLY delete "${p?.title||'#'+pid}"?\n\nThis removes ALL data: stage history, comments, links, time logs. Cannot be undone.`)){await permanentDeleteProject(pid);arch=arch.filter(x=>x.id!==pid);selected.delete(pid);render()}}
+      // Bulk restore
+      if(e.target.closest('[data-action="bulk-restore-arch"]')){const ids=Array.from(selected);if(!confirm(`Restore ${ids.length} project${ids.length>1?'s':''} to the pipeline?`))return;try{const {error}=await sb.from('video_projects').update({is_archived:false,updated_at:new Date().toISOString()}).in('id',ids);if(error)throw error;toast(`Restored ${ids.length} project${ids.length>1?'s':''}`,'success');await fetchAll();arch=arch.filter(x=>!ids.includes(x.id));selected.clear();render()}catch(err){toast('Bulk restore failed: '+(err.message||''),'error')}}
+      // Bulk permanent delete
+      if(e.target.closest('[data-action="bulk-delete-arch"]')){const ids=Array.from(selected);const titles=ids.map(id=>{const p=arch.find(x=>x.id===id);return p?p.title:'#'+id}).join('\n  • ');if(!confirm(`PERMANENTLY delete ${ids.length} project${ids.length>1?'s':''}?\n\n  • ${titles}\n\nALL data removed: stage history, comments, links, time logs. Cannot be undone.`))return;let ok=0,fail=0;for(const pid of ids){try{await permanentDeleteProject(pid);ok++}catch(_){fail++}}toast(`Deleted ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');await fetchAll();arch=arch.filter(x=>!ids.includes(x.id));selected.clear();render()}
+    };
+  }
+  render();
+}
+async function permanentDeleteProject(pid){
+  // Delete tasks referencing this project first (NO ACTION FK would block the project delete)
+  await sb.from('tasks').delete().eq('video_project_id',pid);
+  // Now delete the project — stage_history, comments, links, time_logs cascade automatically
+  const {error}=await sb.from('video_projects').delete().eq('id',pid);
+  if(error)throw error;
 }
 window.openArchivedView=openArchivedView;
 
@@ -1633,7 +1680,7 @@ function openProjectForm(existing=null){
     <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||''}"></div></div>
     <div class="form-row"><div><label class="field-label">Month <span style="color:var(--red,#ef4444)">*</span> ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month" required><option value="" disabled ${!parseInt(existing?.target_month)?'selected':''}>— Select month —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
     <div><label class="field-label">Description / Notes</label><textarea class="field-textarea" name="description" rows="3">${esc(existing?.description||'')}</textarea></div>
-  </div></form><div class="modal-footer">${ie&&currentUser.role==='admin'?`<button class="btn btn-ghost btn-danger" data-del="${existing.id}">Delete</button>`:''}<button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save="${ie?existing.id:''}">${ie?'Save':'Create'}</button></div></div></div>`;
+  </div></form><div class="modal-footer">${ie&&(currentUser.role==='admin'||currentUser.role==='video_head')?`<button class="btn btn-ghost btn-danger" data-del="${existing.id}">Delete</button>`:''}<button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save="${ie?existing.id:''}">${ie?'Save':'Create'}</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
   $('#modalRoot').onclick=async e=>{
     if(e.target.closest('[data-close]'))closeModal();
@@ -1727,7 +1774,7 @@ async function openProjectDetail(id){
         <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" data-post-comment="${id}">Post Comment</button></div>
       </div>
     </div>
-  </div><div class="modal-footer">${isAdmin()?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-ghost" data-archive="${id}" style="color:var(--red,#ef4444)">🗄 Archive</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
+  </div><div class="modal-footer">${(isAdmin()||isVideoHead())?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-ghost" data-archive="${id}" style="color:var(--red,#ef4444)">🗄 Archive</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
   wireImageAttach('cmt-'+id,'#newComment');
   $('#modalRoot').onclick=async e=>{
@@ -2554,7 +2601,7 @@ function openStageMenu(pid){
   if(typeof getProject!=='function')return;
   var p=getProject(pid);if(!p)return;
   var old=document.getElementById('m-stage-sheet');if(old)old.remove();
-  var allowed=function(toKey){if(isAdmin())return true;if(isEditor())return toKey===p.current_stage||editorCanMove(p.current_stage,toKey);return false};
+  var allowed=function(toKey){if(isAdmin()||isVideoHead())return true;if(isEditor())return toKey===p.current_stage||editorCanMove(p.current_stage,toKey);return false};
   var opts=STAGES.filter(function(s){return allowed(s.key)}).map(function(s){
     var cur=p.current_stage===s.key?' cur':'';
     return '<button class="m-stage-opt'+cur+'" data-stage="'+s.key+'"><span class="sd s-'+s.key+'" style="background:var(--accent)"></span>'+esc(s.label)+(cur?' &nbsp;·&nbsp; current':'')+'</button>';
