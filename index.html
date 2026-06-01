@@ -471,7 +471,7 @@ a:hover{text-decoration:underline}
 .card-move{display:none}
 .card-menu-btn{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-3);font-size:16px;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1;z-index:2;transition:all .12s}
 .card-menu-btn:hover{background:var(--surface-3);color:var(--text)}
-.card-menu-dropdown{position:absolute;top:100%;right:0;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 12px 36px var(--shadow-modal);z-index:50;min-width:160px;padding:6px;display:flex;flex-direction:column;gap:2px}
+.card-menu-dropdown{position:fixed;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 12px 36px var(--shadow-modal);z-index:300;min-width:160px;padding:6px;display:flex;flex-direction:column;gap:2px}
 .card-menu-dropdown button{background:none;border:none;color:var(--text);font-size:12px;font-weight:500;padding:8px 12px;border-radius:7px;cursor:pointer;text-align:left;transition:background .12s;display:flex;align-items:center;gap:8px}
 .card-menu-dropdown button:hover{background:var(--surface-2)}
 .card-menu-dropdown button.danger{color:var(--red)}
@@ -1413,25 +1413,38 @@ function openCardMenu(pid,btn){
   // Close any existing menu
   const old=document.querySelector('.card-menu-dropdown');if(old)old.remove();
   const p=getProject(pid);if(!p)return;
+  // Create dropdown on body (not inside card) to avoid overflow clipping
   const wrap=document.createElement('div');
   wrap.className='card-menu-dropdown';
   wrap.innerHTML=`<button data-cm="edit">✏ Edit</button><button data-cm="move">↕ Move stage</button><button data-cm="dup">⎘ Duplicate</button><button data-cm="archive">🗄 Archive</button><button data-cm="delete" class="danger">🗑 Delete</button>`;
-  // Position relative to button's parent card
-  btn.closest('.card').appendChild(wrap);
+  document.body.appendChild(wrap);
+  // Position near the ⋮ button
+  const rect=btn.getBoundingClientRect();
+  wrap.style.position='fixed';
+  wrap.style.zIndex='300';
+  // Place below-right of button, flip up if near bottom
+  const spaceBelow=window.innerHeight-rect.bottom;
+  if(spaceBelow<200){wrap.style.bottom=(window.innerHeight-rect.top)+'px'}
+  else{wrap.style.top=rect.bottom+4+'px'}
+  // Flip left if near right edge
+  const spaceRight=window.innerWidth-rect.right;
+  if(spaceRight<180){wrap.style.right=(window.innerWidth-rect.right)+'px'}
+  else{wrap.style.left=rect.left+'px'}
   // Wire actions
   wrap.onclick=async e=>{
     e.stopPropagation();
     const act=e.target.closest('[data-cm]');if(!act)return;
     const cm=act.dataset.cm;
-    wrap.remove();
+    wrap.remove();document.removeEventListener('click',closeMenu);
     if(cm==='edit')openProjectForm(p);
     if(cm==='move')openStageMenu(pid);
     if(cm==='dup'){if(confirm('Duplicate this project?')){try{await duplicateProject(pid);await fetchAll();renderPage();toast('Duplicated','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
     if(cm==='archive'){if(confirm(`Archive "${p.title}"?`)){await archiveProject(pid)}}
     if(cm==='delete'){if(confirm(`PERMANENTLY delete "${p.title}"?\n\nAll data removed. Cannot be undone.`)){try{await permanentDeleteProject(pid);await fetchAll();renderPage();toast('Deleted','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
   };
-  // Close on click outside
-  setTimeout(()=>{document.addEventListener('click',function close(e){if(!wrap.contains(e.target)){wrap.remove();document.removeEventListener('click',close)}},{once:false})},0);
+  // Close on click outside — delayed to avoid immediate trigger
+  function closeMenu(e){if(!wrap.contains(e.target)&&e.target!==btn){wrap.remove();document.removeEventListener('click',closeMenu)}}
+  requestAnimationFrame(()=>{document.addEventListener('click',closeMenu)});
 }
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
