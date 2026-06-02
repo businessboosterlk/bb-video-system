@@ -690,14 +690,8 @@ function isEditor(){return currentUser&&currentUser.role==='editor'}
 // Single source of truth for whether an editor can move a card from->to a given stage.
 // Admins/video_heads bypass this; only called when the user is an editor.
 function editorCanMove(fromStage,toStage){
-  const EDITOR_ZONE=['video_shot','cutting_color_grading','rendering','editing'];
-  // Within their work zone — any combination is fine
-  if(EDITOR_ZONE.includes(fromStage)&&EDITOR_ZONE.includes(toStage))return true;
-  // Editing -> Video Head Review (the "I'm done, please review" signal)
-  if(fromStage==='editing'&&toStage==='video_head_review')return true;
-  // Bounce-back recovery: from Changes or Client Changes back into editing
-  if((fromStage==='changes'||fromStage==='client_changes')&&toStage==='editing')return true;
-  return false;
+  // Editors can move to any stage (they still only see their own assigned work)
+  return true;
 }
 function isSmm(){return currentUser&&currentUser.role==='smm'}
 function isVideoHead(){return currentUser&&currentUser.role==='video_head'}
