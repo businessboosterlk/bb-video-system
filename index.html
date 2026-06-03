@@ -1405,16 +1405,16 @@ function renderPipeline(){
 function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
   const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
-  // Editors get draggable if their current stage allows ANY allowed destination
-  const editorCanDragFromHere=isEditor()&&['video_shot','cutting_color_grading','rendering','editing','changes','client_changes'].includes(p.current_stage);
-  const dr=((isAdmin()||isVideoHead()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
-  const mv=((isAdmin()||isVideoHead()||editorCanDragFromHere)&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
+  // Editors can drag from any stage (editorCanMove always returns true)
+  const canDrag=isAdmin()||isVideoHead()||isEditor();
+  const dr=(canDrag&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
+  const mv=(canDrag&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
   const pr=p.priority||'medium';
   const sel=PIPELINE_STATE.selected.has(p.id);
   const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
   const selClass=sel?'selected':'';
   const smm=clientSmm(p.client_id);
-  const menuBtn=(isAdmin()||isVideoHead())?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
+  const menuBtn=canDrag?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
   return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${mv}</div>`;
 }
