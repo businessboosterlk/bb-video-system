@@ -645,6 +645,7 @@ const SHOOT_STAGES = [
   { key: 'Date Confirmed', label: 'Date Confirmed', alt: 'date_confirmed' },
   { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
+const COMPLETED_STAGES=['add_to_drive','sent_to_client','posted'];
 const PAGES_FULL = [
   { key: 'dashboard',     label: 'Dashboard',      section: 'WORKSPACE' },
   { key: 'pipeline',      label: 'Pipeline',       section: 'WORKSPACE' },
@@ -1100,7 +1101,7 @@ function renderMyDashboard(){
   const lastMonthEnd=new Date(thisMonthStart);
   const weekStart=startOfWeek();
   // Counts
-  const active=mine.filter(p=>p.current_stage!=='posted');
+  const active=mine.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
   const doneThisMonth=mine.filter(p=>p.completed_at&&new Date(p.completed_at)>=thisMonthStart);
   const doneLastMonth=mine.filter(p=>p.completed_at&&new Date(p.completed_at)>=lastMonthStart&&new Date(p.completed_at)<lastMonthEnd);
   const doneThisWeek=mine.filter(p=>p.completed_at&&new Date(p.completed_at)>=weekStart);
@@ -1170,22 +1171,23 @@ function renderMyDashboard(){
 // === PAGE: DASHBOARD ===
 function renderDashboard(){
   const ps=DATA.projects;
-  const active=ps.filter(p=>p.current_stage!=='posted').length;
-  const overdue=ps.filter(p=>p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted').length;
+  const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
+  const completed=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)).length;
+  const overdue=ps.filter(p=>p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage)).length;
   const weekStart=startOfWeek();
-  const doneThisWeek=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=weekStart).length;
+  const doneThisWeek=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)&&p.updated_at&&new Date(p.updated_at)>=weekStart).length;
   const inEditing=ps.filter(p=>p.current_stage==='editing').length;
   const sentToClient=ps.filter(p=>p.current_stage==='sent_to_client').length;
   const inReview=ps.filter(p=>['team_review','coo_check'].includes(p.current_stage)).length;
   // 5 pillars based on real data
-  const stuckCount=ps.filter(p=>{if(p.current_stage==='posted')return false;const upd=new Date(p.updated_at||p.created_at);return(Date.now()-upd.getTime())>3*86400000}).length;
+  const stuckCount=ps.filter(p=>{if(COMPLETED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(Date.now()-upd.getTime())>3*86400000}).length;
   const pillarPipeline=stuckCount===0?'green':(stuckCount<=2?'amber':'red');
   const pillarQuality=inReview>=0?'green':'amber';
   const pillarTeam=overdue===0?'green':(overdue<=2?'amber':'red');
   const stale=ps.filter(p=>p.current_stage==='sent_to_client'&&p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())>5*86400000).length;
   const pillarComm=stale===0?'green':(stale<=1?'amber':'red');
   const editorLoad={};
-  DATA.teamMembers.forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&p.current_stage!=='posted').length});
+  DATA.teamMembers.forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length});
   const loads=Object.values(editorLoad);
   const maxLoad=Math.max(...loads,0),minLoad=Math.min(...loads,0);
   const pillarCap=(maxLoad-minLoad)<=2?'green':((maxLoad-minLoad)<=4?'amber':'red');
@@ -1193,10 +1195,10 @@ function renderDashboard(){
   const stageDist=STAGES.map(s=>({label:s.label,count:ps.filter(p=>p.current_stage===s.key).length}));
   const maxStage=Math.max(...stageDist.map(s=>s.count),1);
   // Upcoming deadlines
-  const upcoming=ps.filter(p=>p.deadline&&p.current_stage!=='posted').sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
+  const upcoming=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
   // Workload bars
   const editors=DATA.teamMembers.filter(m=>m.role==='editor'||m.role==='video_editor'||(m.role||'').toLowerCase().includes('editor'));
-  const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&p.current_stage!=='posted').length}));
+  const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length}));
   editorBars.sort((a,b)=>b.count-a.count);
   const maxEd=Math.max(...editorBars.map(e=>e.count),1);
   // Recent activity
@@ -1205,12 +1207,12 @@ function renderDashboard(){
   // === NEEDS ATTENTION — video head command center ===
   const now=Date.now();
   const todayStr=new Date().toISOString().slice(0,10);
-  const overdueList=ps.filter(p=>p.deadline&&p.current_stage!=='posted'&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
-  const dueTodayList=ps.filter(p=>p.deadline&&p.current_stage!=='posted'&&p.deadline.slice(0,10)===todayStr);
+  const overdueList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const dueTodayList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&p.deadline.slice(0,10)===todayStr);
   const dueSoonList=ps.filter(p=>{if(!p.deadline||p.current_stage==='posted')return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
   const stuckList=ps.filter(p=>{if(p.current_stage==='posted')return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
   const clientWaitList=ps.filter(p=>p.current_stage==='sent_to_client'&&p.updated_at&&(now-new Date(p.updated_at).getTime())>5*86400000).sort((a,b)=>new Date(a.updated_at)-new Date(b.updated_at));
-  const unassignedList=ps.filter(p=>!p.assigned_editor_id&&p.current_stage!=='posted');
+  const unassignedList=ps.filter(p=>!p.assigned_editor_id&&!COMPLETED_STAGES.includes(p.current_stage));
   const attnTotal=overdueList.length+dueTodayList.length+stuckList.length+clientWaitList.length+unassignedList.length;
   function attnRow(p,tagText,tagCls){const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);return `<div class="attn-row clickable" data-pid="${p.id}"><div class="attn-row-main"><div class="attn-row-title">${esc(p.title)}</div><div class="attn-row-sub">${esc(cl?.name||'No client')} · ${STAGES.find(s=>s.key===p.current_stage)?.label||''} · ${ed?esc(ed.name):'<span style="color:var(--red)">Unassigned</span>'}</div></div><div class="attn-tag ${tagCls}">${tagText}</div></div>`}
   // Editor overload detection
@@ -1233,8 +1235,8 @@ function renderDashboard(){
       ${editorOverload.length?`<div class="attn-overload">⚡ Workload imbalance: ${editorOverload.map(e=>`<strong>${esc(e.name)}</strong> (${e.count})`).join(', ')} carrying heavy load — consider redistributing</div>`:''}
     </div>`:`<div class="attn-panel all-clear"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All clear — nothing needs attention right now</div></div>`}
     <div class="stat-grid">
-      ${statCard('Active Projects',active,ps.length+' total')}
-      ${statCard('Overdue',overdue,overdue>0?'past deadline':'all on track',overdue>0?'red':'green')}
+      ${statCard('Active Projects',active,'in pipeline')}
+      ${statCard('Completed',completed,'add to drive / sent / posted',completed>0?'green':'')}
       ${statCard('Done This Week',doneThisWeek,'completed since Monday')}
       ${statCard('In Editing',inEditing,'currently being cut')}
       ${statCard('Sent to Client',sentToClient,sentToClient>0?'awaiting feedback':'—')}
@@ -1404,7 +1406,7 @@ function renderPipeline(){
 }
 function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
-  const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
+  const ov=p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
   // Editors can drag from any stage (editorCanMove always returns true)
   const canDrag=isAdmin()||isVideoHead()||isEditor();
   const dr=(canDrag&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
@@ -1769,7 +1771,7 @@ async function openProjectDetail(id){
   const rawLinks=allLinks.filter(l=>l.tag==='raw_footage');
   const finalLinks=allLinks.filter(l=>l.tag==='final_cut');
   const otherLinks=allLinks.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
-  const ov=p.deadline&&isOverdue(p.deadline)&&p.current_stage!=='posted';
+  const ov=p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
   const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(p.title)}</div><div class="modal-sub">${esc(cl?.name||'No client')} · ${st?.label||p.current_stage}</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
     <div class="detail-section"><div class="detail-section-title">Overview</div><div class="detail-meta-grid">
       <div class="detail-meta-item"><div class="detail-meta-label">Added</div><div class="detail-meta-value">${p.created_at?fmtDate(p.created_at):'—'}<div class="timestamp-tag" style="margin-top:3px">${p.created_at?timeAgo(p.created_at):''}</div></div></div>
@@ -2151,7 +2153,7 @@ function renderClients(){
   for(let i=0;i<12;i++){const d=new Date();d.setMonth(d.getMonth()-i);const v=d.toISOString().slice(0,7);const lbl=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});monthOpts.push({v,lbl})}
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
-    const active=proj.filter(p=>p.current_stage!=='posted').length;
+    const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
     const postedThisMonth=proj.filter(p=>p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=monthStart&&new Date(p.completed_at)<monthEnd).length;
     const target=videoTarget(c);
     const lastAct=proj.map(p=>p.updated_at||p.created_at).sort().pop();
@@ -2359,7 +2361,7 @@ async function saveQuarterlyTargets(clientId,inputs){
 function openClientDetail(cid){
   const c=DATA.clients.find(x=>x.id===cid);if(!c)return;
   const proj=DATA.projects.filter(p=>p.client_id===cid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  const active=proj.filter(p=>p.current_stage!=='posted');
+  const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
   const done=proj.filter(p=>p.current_stage==='posted');
   // Q2 plan needs to count archived "published" videos too (auto-archive moves them out of DATA.projects)
   const archivedForClient=(DATA.archivedProjects||[]).filter(p=>Number(p.client_id)===Number(cid));
@@ -2404,14 +2406,14 @@ function renderTeam(){
   $('#pageSub').textContent=`${members.length} team member${members.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team</div><div class="page-sub">Click any member to see full history and current work</div></div></div>
     <div class="team-grid">
-      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>p.current_stage!=='posted').length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(m.role||'team')}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
+      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(m.role||'team')}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
     </div>`;
   $('#pageContent').onclick=e=>{const c=e.target.closest('[data-mid]');if(c)openMemberDetail(parseInt(c.dataset.mid))};
 }
 async function openMemberDetail(mid){
   const m=getMember(mid);if(!m)return;
   const ps=DATA.projects.filter(p=>p.assigned_editor_id===mid);
-  const active=ps.filter(p=>p.current_stage!=='posted');
+  const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
   const monthStart=startOfMonth();
   const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
   // Avg time: from stage_history
@@ -2441,7 +2443,7 @@ async function renderAnalytics(){
   const ps=DATA.projects;
   const completed=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
   const completedLastMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=lastMonthStart&&new Date(p.completed_at)<lastMonthEnd);
-  const active=ps.filter(p=>p.current_stage!=='posted').length;
+  const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
   const turn=completed.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
   const avgTurn=turn.length?(turn.reduce((s,t)=>s+t,0)/turn.length).toFixed(1):'—';
   const turnLast=completedLastMonth.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
@@ -2451,11 +2453,11 @@ async function renderAnalytics(){
   // Per editor
   const editorStats={};
   DATA.teamMembers.forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,doneLastMonth:0,sumDays:0,countDays:0}});
-  ps.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(p.current_stage!=='posted')s.active++;if(p.completed_at){const d=new Date(p.completed_at);if(d>=monthStart){s.doneMonth++;s.sumDays+=(d-new Date(p.created_at))/86400000;s.countDays++}else if(d>=lastMonthStart&&d<lastMonthEnd){s.doneLastMonth++}}});
+  ps.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(!COMPLETED_STAGES.includes(p.current_stage))s.active++;if(p.completed_at){const d=new Date(p.completed_at);if(d>=monthStart){s.doneMonth++;s.sumDays+=(d-new Date(p.created_at))/86400000;s.countDays++}else if(d>=lastMonthStart&&d<lastMonthEnd){s.doneLastMonth++}}});
   // Per client
   const clientStats={};
   DATA.clients.forEach(c=>{clientStats[c.id]={name:c.name,active:0,doneMonth:0,target:c.videos_per_month||c.monthly_videos||c.video_target||null}});
-  ps.forEach(p=>{if(!p.client_id||!clientStats[p.client_id])return;if(p.current_stage!=='posted')clientStats[p.client_id].active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart)clientStats[p.client_id].doneMonth++});
+  ps.forEach(p=>{if(!p.client_id||!clientStats[p.client_id])return;if(!COMPLETED_STAGES.includes(p.current_stage))clientStats[p.client_id].active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart)clientStats[p.client_id].doneMonth++});
   // Stage time analysis — from video_stage_history
   let stageAvgs={};
   try{
@@ -2464,7 +2466,7 @@ async function renderAnalytics(){
   }catch(_){}
   // Pipeline bottleneck — which stage has most stuck projects (oldest)
   const stuckByStage={};
-  ps.filter(p=>p.current_stage!=='posted').forEach(p=>{
+  ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).forEach(p=>{
     const stage=p.current_stage;
     if(!stuckByStage[stage])stuckByStage[stage]={count:0,oldest:null,label:STAGES.find(s=>s.key===stage)?.label||stage};
     stuckByStage[stage].count++;
