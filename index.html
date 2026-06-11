@@ -2649,5 +2649,192 @@ function openStageMenu(pid){
 }
 window.openStageMenu=openStageMenu;
 </script>
+
+<script>
+// BB VIDEO SYSTEM AGENTS — AI Background Agents v1.0
+// Appended to end of file — DO NOT EDIT EXISTING HTML
+(function() {
+  'use strict';
+
+  var SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
+  var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
+  var ALERT_URL = SUPABASE_URL + '/functions/v1/bb-alert';
+  var POLL_MS = 5 * 60 * 1000;
+  var agentLog = [];
+  var panelOpen = false;
+
+  function isAlertTime() {
+    var now = new Date();
+    var slt = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    var day  = slt.getUTCDay();
+    var hour = slt.getUTCHours();
+    var min  = slt.getUTCMinutes();
+    if (day === 0) return false;
+    return (hour === 9 && min < 15) || (hour === 18 && min < 15);
+  }
+
+  function todayStr() { return new Date().toISOString().split('T')[0]; }
+  function daysFromNow(n) { var d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
+  function hoursAgo(n) { return new Date(Date.now() - n * 3600000).toISOString(); }
+
+  function sbFetch(table, params) {
+    var url = SUPABASE_URL + '/rest/v1/' + table + (params ? '?' + params : '');
+    return fetch(url, { headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY } }).then(function(r) { return r.json(); });
+  }
+
+  function sendAlert(message, page) {
+    ['smm', 'ceo'].forEach(function(role) {
+      fetch(ALERT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({ message: message, page: page || 'Video System', role: role })
+      }).catch(function(e) { console.warn('[BB Video Agent] Alert failed:', e); });
+    });
+  }
+
+  function logEntry(name, status, detail) {
+    agentLog.unshift({ time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), agent: name, status: status, detail: detail || '' });
+    if (agentLog.length > 60) agentLog.pop();
+    renderLog();
+    updateDashboardSection();
+  }
+
+  // Agent 1: Editing Stall
+  var a1Alert = 0;
+  function runEditingStallAgent() {
+    sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=eq.editing&is_archived=eq.false&updated_at=lt.' + hoursAgo(48)).then(function(data) {
+      if (!Array.isArray(data)) return;
+      if (data.length > 0) {
+        var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
+        logEntry('\uD83C\uDFAC Editing Stall', 'ALERT', data.length + ' video(s) stuck in Editing 48h+: ' + titles);
+        if (isAlertTime() && Date.now() - a1Alert > 3600000) {
+          sendAlert('\uD83C\uDFAC Editing Stall: ' + data.length + ' videos stuck in Editing 48h+ — ' + titles, 'Video Pipeline');
+          a1Alert = Date.now();
+        }
+      } else { logEntry('\uD83C\uDFAC Editing Stall', 'OK', 'No videos stalled in editing'); }
+    });
+  }
+
+  // Agent 2: Client Review Stall
+  var a2Alert = 0;
+  function runClientReviewAgent() {
+    sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=in.(client_review,sent_to_client)&is_archived=eq.false&updated_at=lt.' + hoursAgo(72)).then(function(data) {
+      if (!Array.isArray(data)) return;
+      if (data.length > 0) {
+        var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
+        logEntry('\uD83D\uDD04 Client Review', 'ALERT', data.length + ' video(s) awaiting client 72h+: ' + titles);
+        if (isAlertTime() && Date.now() - a2Alert > 3600000) {
+          sendAlert('\uD83D\uDD04 Client Review Stall: ' + data.length + ' videos waiting on client 72h+ — ' + titles, 'Video Pipeline');
+          a2Alert = Date.now();
+        }
+      } else { logEntry('\uD83D\uDD04 Client Review', 'OK', 'No videos stalled awaiting client'); }
+    });
+  }
+
+  // Agent 3: Changes Queue
+  var a3Alert = 0;
+  function runChangesAgent() {
+    sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=in.(changes,client_changes)&is_archived=eq.false&updated_at=lt.' + hoursAgo(48)).then(function(data) {
+      if (!Array.isArray(data)) return;
+      if (data.length > 0) {
+        var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
+        logEntry('\u26A0\uFE0F Changes Queue', 'ALERT', data.length + ' video(s) with changes unaddressed 48h+: ' + titles);
+        if (isAlertTime() && Date.now() - a3Alert > 3600000) {
+          sendAlert('\u26A0\uFE0F Changes Queue: ' + data.length + ' videos with changes unaddressed 48h+ — ' + titles, 'Video Pipeline');
+          a3Alert = Date.now();
+        }
+      } else { logEntry('\u26A0\uFE0F Changes Queue', 'OK', 'No change requests overdue'); }
+    });
+  }
+
+  // Agent 4: Deadline Alert
+  var a4Alert = 0;
+  function runDeadlineAgent() {
+    sbFetch('video_projects', 'select=id,title,deadline,current_stage&is_archived=eq.false&current_stage=neq.posted&deadline=gte.' + todayStr() + '&deadline=lte.' + daysFromNow(2) + '&deadline=not.is.null').then(function(data) {
+      if (!Array.isArray(data)) return;
+      if (data.length > 0) {
+        var items = data.slice(0,3).map(function(p){ return '"' + p.title + '" due ' + p.deadline; }).join(', ');
+        logEntry('\uD83D\uDCC5 Deadline Alert', 'ALERT', data.length + ' video(s) due in 2 days: ' + items);
+        if (isAlertTime() && Date.now() - a4Alert > 3600000) {
+          sendAlert('\uD83D\uDCC5 Deadline Alert: ' + data.length + ' videos due in 2 days — ' + items, 'Video Pipeline');
+          a4Alert = Date.now();
+        }
+      } else { logEntry('\uD83D\uDCC5 Deadline Alert', 'OK', 'No urgent deadlines in 2 days'); }
+    });
+  }
+
+  // Agent 5: Unassigned Videos
+  var a5Alert = 0;
+  function runUnassignedAgent() {
+    sbFetch('video_projects', 'select=id,title,current_stage&is_archived=eq.false&assigned_editor_id=is.null&current_stage=in.(editing,changes,client_changes,rendering,team_review)').then(function(data) {
+      if (!Array.isArray(data)) return;
+      if (data.length > 0) {
+        var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
+        logEntry('\uD83D\uDC64 Unassigned', 'ALERT', data.length + ' video(s) in production with no editor: ' + titles);
+        if (isAlertTime() && Date.now() - a5Alert > 3600000) {
+          sendAlert('\uD83D\uDC64 Unassigned Videos: ' + data.length + ' videos with no assigned editor — ' + titles, 'Video Pipeline');
+          a5Alert = Date.now();
+        }
+      } else { logEntry('\uD83D\uDC64 Unassigned', 'OK', 'All production videos have assigned editors'); }
+    });
+  }
+
+  function runAll() { runEditingStallAgent(); runClientReviewAgent(); runChangesAgent(); runDeadlineAgent(); runUnassignedAgent(); }
+
+  function injectDashboardSection() {
+    var target = document.getElementById('pageContent') || document.querySelector('.page-content') || document.querySelector('[class*="content"]') || document.querySelector('main');
+    if (!target || document.getElementById('bbv-agent-alerts-section')) return;
+    var section = document.createElement('div');
+    section.id = 'bbv-agent-alerts-section';
+    section.innerHTML = '<div id="bbv-alerts-header"><span id="bbv-alerts-title">\uD83E\uDD16 Agent Alerts</span><button id="bbv-alerts-run-btn">\u25B6 Run All</button></div><div id="bbv-alert-grid"><div style="color:#475569;font-size:12px;grid-column:1/-1;padding:8px 0;">Starting scan...</div></div>';
+    target.insertBefore(section, target.firstChild);
+    document.getElementById('bbv-alerts-run-btn').addEventListener('click', runAll);
+  }
+
+  function updateDashboardSection() {
+    var grid = document.getElementById('bbv-alert-grid');
+    if (!grid) return;
+    var seen = {}, cards = [];
+    agentLog.forEach(function(e) { if (!seen[e.agent]) { seen[e.agent] = true; cards.push(e); } });
+    if (!cards.length) return;
+    grid.innerHTML = cards.map(function(e) {
+      var c = e.status === 'ALERT' ? 'alert' : 'ok';
+      var detail = e.status === 'ALERT' ? e.detail.substring(0,55) + (e.detail.length > 55 ? '\u2026' : '') : '\u2713 All clear';
+      return '<div class="bbv-alert-card ' + c + '"><div class="bbv-alert-card-name">' + e.agent + '</div><div class="bbv-alert-card-detail ' + c + '">' + detail + '</div><div class="bbv-alert-card-time">' + e.time + '</div></div>';
+    }).join('');
+  }
+
+  function buildUI() {
+    var style = document.createElement('style');
+    style.textContent = '#bbv-fab{position:fixed;bottom:90px;right:20px;width:52px;height:52px;border-radius:50%;background:#FF6B00;color:#fff;font-size:22px;border:none;cursor:pointer;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;transition:transform .2s;}#bbv-fab:hover{transform:scale(1.1);}#bbv-panel{position:fixed;bottom:155px;right:20px;width:370px;max-height:500px;background:#0f0f1a;border:1px solid #FF6B00;border-radius:12px;z-index:9998;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.65);overflow:hidden;}#bbv-panel.open{display:flex;}#bbv-ph{background:#FF6B00;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}#bbv-ph-title{color:#fff;font-weight:700;font-size:13px;letter-spacing:.8px;}#bbv-run-btn{background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700;}#bbv-run-btn:hover{background:rgba(255,255,255,.35);}#bbv-log{flex:1;overflow-y:auto;padding:10px;}#bbv-footer{padding:7px 12px;border-top:1px solid #1e293b;font-size:10px;color:#475569;text-align:center;}.bbva-entry{padding:8px 10px;margin-bottom:6px;border-radius:8px;background:#0d0d1a;border-left:3px solid #334155;}.bbva-entry.ok{border-left-color:#22c55e;}.bbva-entry.alert{border-left-color:#ef4444;background:#180d0d;}.bbva-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}.bbva-name{font-size:12px;font-weight:600;color:#e2e8f0;flex:1;}.bbva-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;text-transform:uppercase;}.bbva-badge.ok{background:#14532d;color:#4ade80;}.bbva-badge.alert{background:#7f1d1d;color:#fca5a5;}.bbva-time{font-size:10px;color:#475569;}.bbva-detail{font-size:11px;color:#94a3b8;line-height:1.45;}#bbv-agent-alerts-section{margin:0 0 20px;padding:16px 18px;background:var(--surface-1,#0d0d1a);border:1px solid var(--border,#1e293b);border-radius:12px;}#bbv-alerts-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}#bbv-alerts-title{font-size:13px;font-weight:700;color:#FF6B00;letter-spacing:.8px;text-transform:uppercase;}#bbv-alerts-run-btn{background:#FF6B00;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;font-weight:700;}#bbv-alerts-run-btn:hover{background:#e05a00;}#bbv-alert-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}.bbv-alert-card{padding:10px 12px;border-radius:8px;background:var(--surface-2,#111122);border:1px solid #1e293b;}.bbv-alert-card.alert{border-color:#ef4444;background:#180d0d;}.bbv-alert-card.ok{border-color:#22c55e;}.bbv-alert-card-name{font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px;}.bbv-alert-card-detail{font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:4px;}.bbv-alert-card-detail.alert{color:#fca5a5;}.bbv-alert-card-detail.ok{color:#4ade80;}.bbv-alert-card-time{font-size:9px;color:#475569;}';
+    document.head.appendChild(style);
+    var fab = document.createElement('button');
+    fab.id = 'bbv-fab'; fab.title = 'BB Video Agents'; fab.innerHTML = '\uD83E\uDD16';
+    document.body.appendChild(fab);
+    var panel = document.createElement('div');
+    panel.id = 'bbv-panel';
+    panel.innerHTML = '<div id="bbv-ph"><span id="bbv-ph-title">\uD83E\uDD16 BB VIDEO AGENTS</span><button id="bbv-run-btn">\u25B6 Run All</button></div><div id="bbv-log"><div style="color:#475569;font-size:12px;padding:24px;text-align:center;">Click \u25B6 Run All to scan now.<br><span style="font-size:10px;color:#334155;">Auto-scans every 5 min \u2022 Alerts 9am & 6pm Mon-Sat</span></div></div><div id="bbv-footer">5 agents active \u2022 WhatsApp alerts 9am & 6pm Mon-Sat</div>';
+    document.body.appendChild(panel);
+    fab.addEventListener('click', function() { panelOpen = !panelOpen; panel.classList.toggle('open', panelOpen); });
+    document.getElementById('bbv-run-btn').addEventListener('click', runAll);
+    injectDashboardSection();
+  }
+
+  function renderLog() {
+    var el = document.getElementById('bbv-log');
+    if (!el || !agentLog.length) return;
+    el.innerHTML = agentLog.map(function(e) {
+      var c = e.status === 'ALERT' ? 'alert' : 'ok';
+      return '<div class="bbva-entry ' + c + '"><div class="bbva-row"><span class="bbva-name">' + e.agent + '</span><span class="bbva-badge ' + c + '">' + e.status + '</span><span class="bbva-time">' + e.time + '</span></div><div class="bbva-detail">' + e.detail + '</div></div>';
+    }).join('');
+  }
+
+  window.BB_VIDEO_AGENTS = { runAll: runAll, getLog: function() { return agentLog; }, isAlertTime: isAlertTime };
+
+  function init() { buildUI(); setTimeout(runAll, 3000); setInterval(runAll, POLL_MS); }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
+
+})();
+</script>
 </body>
 </html>
