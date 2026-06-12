@@ -621,7 +621,7 @@ const USERS = [
   { name: 'USHANE',  pin: '628474', role: 'video_head' },
   { name: 'RAJEEWA', pin: '1212', role: 'editor' },
   { name: 'RAMANI',  pin: '1717', role: 'editor' },
-  { name: 'SANDUNU', pin: '1818', role: 'editor' },
+  { name: 'SANDUNU', pin: '7364', role: 'editor' },
 ];
 const REFRESH_MS = 20000;
 const STAGES = [
@@ -2674,20 +2674,9 @@ window.openStageMenu=openStageMenu;
 
   var SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
   var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
-  var ALERT_URL = SUPABASE_URL + '/functions/v1/bb-alert';
   var POLL_MS = 5 * 60 * 1000;
   var agentLog = [];
   var panelOpen = false;
-
-  function isAlertTime() {
-    var now = new Date();
-    var slt = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-    var day  = slt.getUTCDay();
-    var hour = slt.getUTCHours();
-    var min  = slt.getUTCMinutes();
-    if (day === 0) return false;
-    return (hour === 9 && min < 15) || (hour === 18 && min < 15);
-  }
 
   function todayStr() { return new Date().toISOString().split('T')[0]; }
   function daysFromNow(n) { var d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
@@ -2698,17 +2687,6 @@ window.openStageMenu=openStageMenu;
     return fetch(url, { headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY } }).then(function(r) { return r.json(); });
   }
 
-  var _VID_NOISE = /failed to fetch|networkerror|network request failed|load failed|net::/i;
-
-  function sendAlert(message, page) {
-    if (_VID_NOISE.test(String(message))) return;
-    fetch(ALERT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
-      body: JSON.stringify({ message: message, page: page || 'Video System', role: 'ceo' })
-    }).catch(function() {});
-  }
-
   function logEntry(name, status, detail) {
     agentLog.unshift({ time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), agent: name, status: status, detail: detail || '' });
     if (agentLog.length > 60) agentLog.pop();
@@ -2717,81 +2695,56 @@ window.openStageMenu=openStageMenu;
   }
 
   // Agent 1: Editing Stall
-  var a1Alert = 0;
   function runEditingStallAgent() {
     sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=eq.editing&is_archived=eq.false&updated_at=lt.' + hoursAgo(48)).then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
         logEntry('\uD83C\uDFAC Editing Stall', 'ALERT', data.length + ' video(s) stuck in Editing 48h+: ' + titles);
-        if (isAlertTime() && Date.now() - a1Alert > 3600000) {
-          sendAlert('\uD83C\uDFAC Editing Stall: ' + data.length + ' videos stuck in Editing 48h+ — ' + titles, 'Video Pipeline');
-          a1Alert = Date.now();
-        }
       } else { logEntry('\uD83C\uDFAC Editing Stall', 'OK', 'No videos stalled in editing'); }
     });
   }
 
   // Agent 2: Client Review Stall
-  var a2Alert = 0;
   function runClientReviewAgent() {
     sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=in.(client_review,sent_to_client)&is_archived=eq.false&updated_at=lt.' + hoursAgo(72)).then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
         logEntry('\uD83D\uDD04 Client Review', 'ALERT', data.length + ' video(s) awaiting client 72h+: ' + titles);
-        if (isAlertTime() && Date.now() - a2Alert > 3600000) {
-          sendAlert('\uD83D\uDD04 Client Review Stall: ' + data.length + ' videos waiting on client 72h+ — ' + titles, 'Video Pipeline');
-          a2Alert = Date.now();
-        }
       } else { logEntry('\uD83D\uDD04 Client Review', 'OK', 'No videos stalled awaiting client'); }
     });
   }
 
   // Agent 3: Changes Queue
-  var a3Alert = 0;
   function runChangesAgent() {
     sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=in.(changes,client_changes)&is_archived=eq.false&updated_at=lt.' + hoursAgo(48)).then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
         logEntry('\u26A0\uFE0F Changes Queue', 'ALERT', data.length + ' video(s) with changes unaddressed 48h+: ' + titles);
-        if (isAlertTime() && Date.now() - a3Alert > 3600000) {
-          sendAlert('\u26A0\uFE0F Changes Queue: ' + data.length + ' videos with changes unaddressed 48h+ — ' + titles, 'Video Pipeline');
-          a3Alert = Date.now();
-        }
       } else { logEntry('\u26A0\uFE0F Changes Queue', 'OK', 'No change requests overdue'); }
     });
   }
 
   // Agent 4: Deadline Alert
-  var a4Alert = 0;
   function runDeadlineAgent() {
     sbFetch('video_projects', 'select=id,title,deadline,current_stage&is_archived=eq.false&current_stage=neq.posted&deadline=gte.' + todayStr() + '&deadline=lte.' + daysFromNow(2) + '&deadline=not.is.null').then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var items = data.slice(0,3).map(function(p){ return '"' + p.title + '" due ' + p.deadline; }).join(', ');
         logEntry('\uD83D\uDCC5 Deadline Alert', 'ALERT', data.length + ' video(s) due in 2 days: ' + items);
-        if (isAlertTime() && Date.now() - a4Alert > 3600000) {
-          sendAlert('\uD83D\uDCC5 Deadline Alert: ' + data.length + ' videos due in 2 days — ' + items, 'Video Pipeline');
-          a4Alert = Date.now();
-        }
       } else { logEntry('\uD83D\uDCC5 Deadline Alert', 'OK', 'No urgent deadlines in 2 days'); }
     });
   }
 
   // Agent 5: Unassigned Videos
-  var a5Alert = 0;
   function runUnassignedAgent() {
     sbFetch('video_projects', 'select=id,title,current_stage&is_archived=eq.false&assigned_editor_id=is.null&current_stage=in.(editing,changes,client_changes,rendering,team_review)').then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
         logEntry('\uD83D\uDC64 Unassigned', 'ALERT', data.length + ' video(s) in production with no editor: ' + titles);
-        if (isAlertTime() && Date.now() - a5Alert > 3600000) {
-          sendAlert('\uD83D\uDC64 Unassigned Videos: ' + data.length + ' videos with no assigned editor — ' + titles, 'Video Pipeline');
-          a5Alert = Date.now();
-        }
       } else { logEntry('\uD83D\uDC64 Unassigned', 'OK', 'All production videos have assigned editors'); }
     });
   }
@@ -2830,7 +2783,7 @@ window.openStageMenu=openStageMenu;
     document.body.appendChild(fab);
     var panel = document.createElement('div');
     panel.id = 'bbv-panel';
-    panel.innerHTML = '<div id="bbv-ph"><span id="bbv-ph-title">\uD83E\uDD16 BB VIDEO AGENTS</span><button id="bbv-run-btn">\u25B6 Run All</button></div><div id="bbv-log"><div style="color:#475569;font-size:12px;padding:24px;text-align:center;">Click \u25B6 Run All to scan now.<br><span style="font-size:10px;color:#334155;">Auto-scans every 5 min \u2022 Alerts 9am & 6pm Mon-Sat</span></div></div><div id="bbv-footer">5 agents active \u2022 WhatsApp alerts 9am & 6pm Mon-Sat</div>';
+    panel.innerHTML = '<div id="bbv-ph"><span id="bbv-ph-title">\uD83E\uDD16 BB VIDEO AGENTS</span><button id="bbv-run-btn">\u25B6 Run All</button></div><div id="bbv-log"><div style="color:#475569;font-size:12px;padding:24px;text-align:center;">Click \u25B6 Run All to scan now.<br><span style="font-size:10px;color:#334155;">Auto-scans every 5 min</span></div></div><div id="bbv-footer">5 agents active \u2022 Gmail alerts enabled</div>';
     document.body.appendChild(panel);
     fab.addEventListener('click', function() { panelOpen = !panelOpen; panel.classList.toggle('open', panelOpen); });
     document.getElementById('bbv-run-btn').addEventListener('click', runAll);
@@ -2846,7 +2799,7 @@ window.openStageMenu=openStageMenu;
     }).join('');
   }
 
-  window.BB_VIDEO_AGENTS = { runAll: runAll, getLog: function() { return agentLog; }, isAlertTime: isAlertTime };
+  window.BB_VIDEO_AGENTS = { runAll: runAll, getLog: function() { return agentLog; } };
 
   function init() { buildUI(); setTimeout(runAll, 3000); setInterval(runAll, POLL_MS); }
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
