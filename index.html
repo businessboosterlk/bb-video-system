@@ -976,7 +976,7 @@ function onLoginSuccess(u){
   $('#userName').textContent=u.name;$('#userRole').textContent=u.role.replace('_',' ');
   $('#userAvatar').textContent=initials(u.name);
   // Write login to team_login_logs so CC Team page can see it
-  const memberId = {USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
+  const memberId = {THULAIB:1,SHIARA:2,USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
   if(memberId){
     sb.from('team_login_logs').insert({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'}).catch(()=>{});
   }
@@ -2877,6 +2877,185 @@ async function markAllVideoAlertsRead(){
   function init() { buildUI(); setTimeout(runAll, 3000); setInterval(runAll, POLL_MS); }
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); } else { init(); }
 
+})();
+</script>
+
+<!-- ============================================================
+     BB AI AGENT — VIDEO SYSTEM
+     Floating chat assistant + background JS/Supabase error monitor
+     ============================================================ -->
+<style id="bb-agent-styles">
+#bb-agent-bubble{position:fixed;bottom:24px;right:24px;width:54px;height:54px;background:linear-gradient(135deg,#f97316,#ea580c);border-radius:50%;border:none;cursor:pointer;z-index:9990;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(249,115,22,0.45);transition:transform .2s,box-shadow .2s;outline:none}
+#bb-agent-bubble:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(249,115,22,0.6)}
+#bb-agent-bubble svg{width:26px;height:26px;fill:#fff;transition:opacity .2s}
+#bb-agent-error-badge{position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:18px;height:18px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px;border:2px solid #0a0a0f;font-family:'Poppins',sans-serif}
+#bb-agent-panel{position:fixed;bottom:90px;right:24px;width:344px;max-height:500px;background:#111318;border:1px solid rgba(249,115,22,0.22);border-radius:16px;z-index:9989;display:none;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(249,115,22,0.05);overflow:hidden;font-family:'Poppins',sans-serif;animation:bbPanelIn .22s ease}
+@keyframes bbPanelIn{from{opacity:0;transform:translateY(12px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+#bb-agent-panel.open{display:flex}
+#bb-agent-header{background:linear-gradient(135deg,rgba(249,115,22,0.13),rgba(249,115,22,0.04));border-bottom:1px solid rgba(249,115,22,0.13);padding:13px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+#bb-agent-avatar{width:36px;height:36px;background:linear-gradient(135deg,#f97316,#ea580c);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-0.5px}
+#bb-agent-hinfo{flex:1;min-width:0}
+#bb-agent-hinfo .bb-atitle{font-size:13px;font-weight:700;color:#fff}
+#bb-agent-hinfo .bb-astatus{font-size:10px;color:rgba(249,115,22,0.75);margin-top:1px;display:flex;align-items:center;gap:4px}
+#bb-agent-hinfo .bb-astatus::before{content:'';display:inline-block;width:6px;height:6px;background:#f97316;border-radius:50%;animation:bbBlink 2s infinite}
+@keyframes bbBlink{0%,100%{opacity:1}50%{opacity:0.3}}
+#bb-agent-close{background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.3);font-size:18px;padding:4px 6px;line-height:1;transition:color .2s;border-radius:4px}
+#bb-agent-close:hover{color:#fff;background:rgba(255,255,255,0.06)}
+#bb-agent-messages{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;min-height:0}
+#bb-agent-messages::-webkit-scrollbar{width:3px}
+#bb-agent-messages::-webkit-scrollbar-thumb{background:#1e2230;border-radius:2px}
+.bb-msg{max-width:88%;margin-bottom:9px;animation:bbMsgIn .2s ease}
+.bb-msg-bot{align-self:flex-start}
+.bb-msg-user{align-self:flex-end}
+.bb-msg-bot .bb-bubble{background:#1a1d23;border:1px solid rgba(255,255,255,0.07);border-radius:12px 12px 12px 3px;padding:9px 13px;font-size:12px;line-height:1.65;color:#e8eaf0}
+.bb-msg-user .bb-bubble{background:linear-gradient(135deg,rgba(249,115,22,0.18),rgba(249,115,22,0.08));border:1px solid rgba(249,115,22,0.28);border-radius:12px 12px 3px 12px;padding:9px 13px;font-size:12px;line-height:1.65;color:#fff}
+@keyframes bbMsgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.bb-typing-dot{display:inline-block;width:5px;height:5px;background:rgba(249,115,22,0.5);border-radius:50%;margin:0 2px;animation:bbDot 1.2s ease infinite}
+.bb-typing-dot:nth-child(2){animation-delay:.2s}
+.bb-typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes bbDot{0%,80%,100%{transform:scale(1);opacity:.5}40%{transform:scale(1.3);opacity:1}}
+.bb-err-msg{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:9px 12px;font-size:11px;color:#f87171;margin-bottom:9px;animation:bbMsgIn .2s ease}
+#bb-agent-suggestions{padding:8px 14px 6px;display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;border-top:1px solid rgba(255,255,255,0.04)}
+.bb-chip{background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.18);color:#f97316;font-size:10px;font-weight:600;padding:4px 10px;border-radius:20px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:'Poppins',sans-serif}
+.bb-chip:hover{background:rgba(249,115,22,0.16);transform:translateY(-1px)}
+#bb-agent-input-row{padding:8px 12px 12px;display:flex;gap:8px;flex-shrink:0;border-top:1px solid rgba(255,255,255,0.04)}
+#bb-agent-input{flex:1;background:#0b0c0f;border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:8px 12px;font-size:12px;color:#fff;outline:none;transition:border-color .2s;font-family:'Poppins',sans-serif}
+#bb-agent-input:focus{border-color:rgba(249,115,22,0.4)}
+#bb-agent-input::placeholder{color:#3d4260}
+#bb-agent-send-btn{background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:8px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s,box-shadow .15s}
+#bb-agent-send-btn:hover{transform:scale(1.07);box-shadow:0 2px 12px rgba(249,115,22,0.4)}
+#bb-agent-send-btn svg{width:15px;height:15px;fill:#fff}
+</style>
+
+<button id="bb-agent-bubble" onclick="bbAgentToggle()" title="BB AI Assistant">
+  <div id="bb-agent-error-badge">0</div>
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M9 9a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1m6 0a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1z"/></svg>
+</button>
+
+<div id="bb-agent-panel">
+  <div id="bb-agent-header">
+    <div id="bb-agent-avatar">BB</div>
+    <div id="bb-agent-hinfo">
+      <div class="bb-atitle">BB Video Assistant</div>
+      <div class="bb-astatus">Error Monitor Active</div>
+    </div>
+    <button id="bb-agent-close" onclick="bbAgentToggle()">✕</button>
+  </div>
+  <div id="bb-agent-messages"></div>
+  <div id="bb-agent-suggestions">
+    <span class="bb-chip" onclick="bbChip('pipeline stages')">Pipeline Stages</span>
+    <span class="bb-chip" onclick="bbChip('my tasks')">My Tasks</span>
+    <span class="bb-chip" onclick="bbChip('shoot pipeline')">Shoot Pipeline</span>
+    <span class="bb-chip" onclick="bbChip('show errors')">Show Errors</span>
+    <span class="bb-chip" onclick="bbChip('help')">Help</span>
+  </div>
+  <div id="bb-agent-input-row">
+    <input id="bb-agent-input" type="text" placeholder="Ask anything about the video system..."
+      onkeydown="if(event.key==='Enter')bbAgentSend()">
+    <button id="bb-agent-send-btn" onclick="bbAgentSend()">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var MAX_ERR=50,_errLog=[],_errCount=0,_open=false;
+  var KB=[
+    {keys:['hello','hi','hey','help me','what can you do','sup'],ans:'Hey! 👋 I\'m your <strong>BB Video Assistant</strong>. I know this system inside out and watch for errors in the background.\n\nAsk me anything — or tap a chip below!'},
+    {keys:['help','what can','capabilities','overview'],ans:'<strong>I can help with:</strong>\n\n• <strong>Pipeline stages</strong> — all 13 stages explained\n• <strong>Shoot pipeline</strong> — 7 shoot stages\n• <strong>My tasks</strong> — how task assignment works\n• <strong>Time tracker</strong> — logging time per project\n• <strong>Drive links</strong> — attaching drive links to projects\n• <strong>Clients</strong> — client management\n• <strong>Auto-archive</strong> — when projects get archived\n• <strong>Login</strong> — PINs and roles\n• <strong>Error log</strong> — type "show errors"\n• <strong>Troubleshooting</strong> — when things go wrong'},
+    {keys:['pipeline','stages','pipeline stages','what are the stages','all stages','video stages'],ans:'<strong>🎬 Video Pipeline — 13 Stages:</strong>\n\n1. <strong>Video Shot</strong> — Raw footage received\n2. <strong>Cutting & Color</strong> — Initial cut + color grade\n3. <strong>Rendering</strong> — Export/render in progress\n4. <strong>Editing</strong> — Full edit underway\n5. <strong>Video Head Review</strong> — Ushane reviews\n6. <strong>Team Review</strong> — Team checks the edit\n7. <strong>Changes</strong> — Revision round\n8. <strong>Client Review</strong> — Sent to client\n9. <strong>Client Changes</strong> — Client wants edits\n10. <strong>COO Check</strong> — Shiara approves\n11. <strong>Sent to Client</strong> — Final delivered\n12. <strong>Add to Drive</strong> — Uploaded to Google Drive\n13. <strong>Posted</strong> — Live ✅\n\nDrag cards between columns to move them. Projects in the last 3 stages auto-archive after 72 hours.'},
+    {keys:['shoot','shoot pipeline','shoot stages','filming','shoot schedule'],ans:'<strong>🎥 Shoot Pipeline — 7 Stages:</strong>\n\n1. <strong>Videos Confirmed</strong> — Videos agreed with client\n2. <strong>Script Made</strong> — Script written\n3. <strong>Script Changes</strong> — Client wants script edits\n4. <strong>Final Script</strong> — Script approved ✅\n5. <strong>Get Shoot Date</strong> — Coordinating date\n6. <strong>Date Confirmed</strong> — Shoot date locked in 📅\n7. <strong>Shot</strong> — Shoot completed! 🎬\n\nNavigate to <strong>Shoot Pipeline</strong> in the sidebar. Filter by client using the dropdown.'},
+    {keys:['archive','auto archive','auto-archive','archived','when does it archive'],ans:'<strong>📦 Auto-Archive:</strong>\n\nProjects in these 3 final stages auto-archive after <strong>72 hours</strong>:\n• Add to Drive\n• Sent to Client\n• Posted\n\nArchived projects are hidden from the main pipeline but not deleted. Admins and video heads can view and restore them from the Archive section.'},
+    {keys:['tasks','my tasks','task','task book','task list'],ans:'<strong>✅ Tasks:</strong>\n\nThe <strong>Tasks</strong> page shows tasks assigned to the <strong>video</strong> team.\n\n• Editors see only their own tasks\n• Admins and video head see all video tasks\n• Tick the checkbox to mark a task done\n• Tasks can be linked to specific clients\n\nTasks are shared with BB Command Centre — admins see them from the main system.'},
+    {keys:['time','time tracker','log time','my time','time tracking'],ans:'<strong>⏱ Time Tracker:</strong>\n\nLogs time per editor per project.\n\n• The system auto-calculates time from stage transitions\n• You can also add manual time logs\n• Weekly summaries are shown per editor\n• Admins see all editors; editors see only their own time\n\nNavigate to <strong>Time Tracker</strong> in the sidebar.'},
+    {keys:['drive','drive links','google drive','links','file links'],ans:'<strong>📁 Drive Links:</strong>\n\nAttach Google Drive links to any video project.\n\n• Tags: <strong>Raw Footage</strong>, <strong>Final Cut</strong>, <strong>Other</strong>\n• Click a project → open the Drive Links tab\n• Or go to the <strong>Drive Links</strong> page for a full list\n\nFiltered by client — select a client to see their project links.'},
+    {keys:['client','clients','client list','client management'],ans:'<strong>👥 Clients:</strong>\n\nShows all active clients with their monthly video targets.\n\n• Monthly contracted videos vs completed count\n• Progress bar per client\n• Click a client to edit their monthly target\n• Admins and video head see all clients; editors see read-only view'},
+    {keys:['team','team members','editors','who is on the team'],ans:'<strong>👤 Team:</strong>\n\nShows all video team members:\n• <strong>USHANE</strong> — Video Head\n• <strong>RAJEEWA</strong> — Editor\n• <strong>RAMANI</strong> — Editor\n• <strong>SANDUNU</strong> — Editor\n• <strong>THULAIB</strong> — Admin (CEO)\n• <strong>SHIARA</strong> — Admin (COO)\n\nEach member card shows active projects and monthly completions.'},
+    {keys:['login','pin','password','credentials','who can login'],ans:'<strong>🔐 Login PINs:</strong>\n\n• THULAIB — 1031 (Admin)\n• SHIARA — 1006 (Admin)\n• USHANE — 628474 (Video Head)\n• RAJEEWA — 1212 (Editor)\n• RAMANI — 1717 (Editor)\n• SANDUNU — 7364 (Editor)\n\n<strong>Roles:</strong>\n• Admin + Video Head — see all projects, all pages, can edit anything\n• Editor — sees only their assigned projects'},
+    {keys:['analytics','stats','kpis','reports','turnaround'],ans:'<strong>📊 Analytics:</strong>\n\nShows video production metrics:\n• Posted count per month\n• Per-editor output breakdown\n• Per-client progress\n• Stage bottleneck analysis — which stage takes longest\n• Average turnaround time\n\nNavigate to <strong>Analytics</strong> in the sidebar.'},
+    {keys:['chat','team chat','messaging','chat system'],ans:'<strong>💬 Team Chat:</strong>\n\nIn-app messaging between the video team.\n\n• Filter by client using the dropdown\n• Send text messages and images\n• Hover over a message to delete it (🗑)\n• Deleted messages show "🗑 This message was deleted" — not fully removed\n• Project comments from the pipeline also appear in the chat feed'},
+    {keys:['agents','agent alerts','ai agents','background agents'],ans:'<strong>🤖 Agents Page:</strong>\n\nShows alerts from the BB background agent system.\n\nAgents scan for:\n• Pipeline stalls\n• Overdue projects\n• Missing assignments\n• Deadline warnings\n\nAlerts are stored in the <strong>agent_alerts</strong> table. Click an alert to mark it read. Agents run every 5 minutes automatically.'},
+    {keys:['not working','broken','error','bug','problem','loading','not loading','crash','something wrong'],ans:'<strong>🔧 Troubleshooting:</strong>\n\n1. <strong>Hard refresh</strong> — Cmd+Shift+R (clears cache)\n2. <strong>Check internet</strong> — Supabase needs a connection\n3. <strong>Read the toast</strong> — Red message at bottom explains what broke\n4. <strong>Show errors</strong> — Type it here to see what I caught\n5. <strong>Open console</strong> — Cmd+Option+J in Chrome\n\nStill broken? Screenshot the console and send to Thulaib.'},
+    {keys:['show errors','error log','errors','detected errors','bugs found'],ans:'__SHOW_ERRORS__'},
+    {keys:['clear errors','reset errors'],ans:'__CLEAR_ERRORS__'},
+    {keys:['dashboard','home','overview'],ans:'<strong>📊 Dashboard:</strong>\n\nShows the full team overview — admins and video head see this.\n\n• Pillar health indicators\n• Projects needing attention\n• Stage distribution across the pipeline\n• Upcoming deadlines\n• Ushane\'s daily pillars status\n\nEditors see <strong>My Dashboard</strong> — their personal queue, overdue items, and monthly stats.'},
+    {keys:['what is this','about','about the system','bb video'],ans:'<strong>BB Video System</strong>\n\nBusiness Booster\'s internal video production management tool.\n\nManages:\n• 13-stage video production pipeline\n• Shoot scheduling\n• Editor time tracking\n• Drive link management\n• Team tasks and chat\n• Client video targets\n\nPowered by Supabase, hosted on GitHub Pages. All data is live and shared across the team in real time.'}
+  ];
+  function matchKB(q){
+    var input=q.toLowerCase().replace(/[?!.,]/g,'').trim();
+    var best=null,bestScore=0;
+    for(var i=0;i<KB.length;i++){
+      var e=KB[i],score=0;
+      for(var j=0;j<e.keys.length;j++){
+        var kw=e.keys[j].toLowerCase();
+        if(input===kw){score=200;break}
+        if(input.indexOf(kw)!==-1)score=Math.max(score,kw.length*3);
+        if(kw.indexOf(input)!==-1&&input.length>3)score=Math.max(score,input.length*2);
+        var qw=input.split(/\s+/),kw2=kw.split(/\s+/);
+        for(var a=0;a<qw.length;a++){
+          if(qw[a].length<3)continue;
+          for(var b=0;b<kw2.length;b++){if(qw[a]===kw2[b])score=Math.max(score,10)}
+        }
+      }
+      if(score>bestScore){bestScore=score;best=e}
+    }
+    return bestScore>=9?best:null;
+  }
+  function buildAnswer(e){
+    if(!e)return fallback();
+    if(e.ans==='__SHOW_ERRORS__')return buildErrorReport();
+    if(e.ans==='__CLEAR_ERRORS__'){_errLog=[];_errCount=0;updateBadge();return'<span style="color:#4ade80">✅ Error log cleared.</span>'}
+    return e.ans.replace(/\n/g,'<br>');
+  }
+  function fallback(){return'I\'m not sure about that. Try asking about: <strong style="color:#f97316">pipeline stages</strong>, <strong style="color:#f97316">shoot pipeline</strong>, <strong style="color:#f97316">my tasks</strong>, <strong style="color:#f97316">auto-archive</strong>, or <strong style="color:#f97316">show errors</strong>.'}
+  function buildErrorReport(){
+    if(!_errLog.length)return'<span style="color:#4ade80">✅ No errors detected. System running clean!</span>';
+    var html='<strong style="color:#f87171">⚠️ '+_errLog.length+' error(s):</strong><br><br>';
+    _errLog.slice(-8).forEach(function(e){html+='<div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:7px 10px;margin-bottom:5px;font-size:11px"><span style="color:#f87171;font-weight:700">['+e.type+']</span> '+_esc(e.msg)+' <span style="color:#3d4260">('+e.time+')</span></div>'});
+    if(_errLog.length>8)html+='<div style="color:#3d4260;font-size:11px;margin-top:4px">...and '+(_errLog.length-8)+' more. Type "clear errors" to reset.</div>';
+    return html;
+  }
+  function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  function logErr(type,msg){
+    if(_errLog.length>=MAX_ERR)_errLog.shift();
+    _errLog.push({type:type,msg:String(msg).slice(0,200),time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})});
+    _errCount++;updateBadge();
+    if(_open){var el=document.getElementById('bb-agent-messages');if(el){var d=document.createElement('div');d.className='bb-err-msg';d.innerHTML='⚠️ <strong>'+type+':</strong> '+_esc(msg);el.appendChild(d);el.scrollTop=el.scrollHeight}}
+  }
+  function updateBadge(){var b=document.getElementById('bb-agent-error-badge');if(!b)return;if(_errCount>0){b.textContent=_errCount>9?'9+':String(_errCount);b.style.display='flex'}else b.style.display='none'}
+  var _NOISE=/failed to fetch|networkerror|network request failed|load failed|offline|net::/i;
+  var _origErr=window.onerror;
+  window.onerror=function(msg,src,line,col,err){if(_NOISE.test(String(msg)))return false;logErr('JS',msg+(src?' — '+src.split('/').pop()+':'+line:''));if(_origErr)return _origErr.apply(this,arguments);return false};
+  window.addEventListener('unhandledrejection',function(ev){var m=(ev.reason&&(ev.reason.message||String(ev.reason)))||'Unhandled rejection';if(!_NOISE.test(m))logErr('Promise',m.slice(0,180))});
+  var _oFetch=window.fetch;
+  window.fetch=function(){var args=arguments,url='';try{url=typeof args[0]==='string'?args[0]:(args[0]&&args[0].url)||''}catch(e){}var isSB=url.indexOf('supabase.co')!==-1;return _oFetch.apply(this,args).then(function(r){if(isSB&&!r.ok&&r.status>=400)logErr('Supabase '+r.status,url.split('/').slice(-2).join('/'));return r}).catch(function(e){if(!_NOISE.test(e.message||'')&&isSB)logErr('Supabase Network',e.message||'Fetch failed');throw e})};
+  window.bbAgentToggle=function(){
+    _open=!_open;var panel=document.getElementById('bb-agent-panel');if(!panel)return;
+    if(_open){
+      panel.classList.add('open');
+      var msgs=document.getElementById('bb-agent-messages');
+      if(msgs&&msgs.children.length===0){
+        _addMsg('Hey! 👋 I\'m your <strong>BB Video Assistant</strong>.<br><br>I know this system inside out and I\'m watching for errors in the background. Ask me anything — or tap a chip below!','bot');
+        if(_errCount>0)setTimeout(function(){_addMsg('⚠️ I\'ve caught <strong style="color:#f87171">'+_errCount+' error(s)</strong> since you loaded. Tap <strong style="color:#f97316">Show Errors</strong> to see them.','bot')},600);
+      }
+      var inp=document.getElementById('bb-agent-input');if(inp)setTimeout(function(){inp.focus()},150);
+    }else panel.classList.remove('open');
+  };
+  window.bbChip=function(text){var inp=document.getElementById('bb-agent-input');if(inp)inp.value=text;bbAgentSend()};
+  window.bbAgentSend=function(){
+    var inp=document.getElementById('bb-agent-input');if(!inp)return;
+    var q=inp.value.trim();if(!q)return;inp.value='';
+    _addMsg(q,'user');var typing=_addTyping();
+    setTimeout(function(){
+      try{if(typing&&typing.parentNode)typing.parentNode.removeChild(typing);var m=matchKB(q);_addMsg(buildAnswer(m),'bot')}
+      catch(e){try{if(typing&&typing.parentNode)typing.parentNode.removeChild(typing)}catch(x){}_addMsg('Something went wrong. Try asking again.','bot')}
+    },280+Math.floor(Math.random()*200));
+  };
+  function _addMsg(html,role){var list=document.getElementById('bb-agent-messages');if(!list)return;var w=document.createElement('div');w.className='bb-msg bb-msg-'+(role==='user'?'user':'bot');var b=document.createElement('div');b.className='bb-bubble';if(role==='user')b.textContent=html;else b.innerHTML=html;w.appendChild(b);list.appendChild(w);list.scrollTop=list.scrollHeight;return w}
+  function _addTyping(){var list=document.getElementById('bb-agent-messages');if(!list)return null;var w=document.createElement('div');w.className='bb-msg bb-msg-bot';w.innerHTML='<div class="bb-bubble"><span class="bb-typing-dot"></span><span class="bb-typing-dot"></span><span class="bb-typing-dot"></span></div>';list.appendChild(w);list.scrollTop=list.scrollHeight;return w}
+  console.log('[BB Video Agent] loaded — chat + error monitor active');
 })();
 </script>
 </body>
