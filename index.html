@@ -970,6 +970,11 @@ function onLoginSuccess(u){
   $('#loginScreen').hidden=true;$('#app').hidden=false;
   $('#userName').textContent=u.name;$('#userRole').textContent=u.role.replace('_',' ');
   $('#userAvatar').textContent=initials(u.name);
+  // Write login to team_login_logs so CC Team page can see it
+  const memberId = {USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
+  if(memberId){
+    fetch(SUPABASE_URL+'/rest/v1/team_login_logs',{method:'POST',headers:{'apikey':ANON_KEY,'Authorization':'Bearer '+ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'})}).catch(()=>{});
+  }
   bootApp();
 }
 function logout(){sessionStorage.removeItem('bb_video_user');if(refreshTimer)clearInterval(refreshTimer);currentUser=null;$('#app').hidden=true;$('#loginScreen').hidden=false;$('#loginPin').value=''}
@@ -1307,6 +1312,9 @@ async function savePillarState(s){
   _pillarCache=s;
   try{
     await sb.from('daily_pillar_state').upsert({user_name:'USHANE',pillar_date:pillarDateStr(),state:s,updated_at:new Date().toISOString()},{onConflict:'user_name,pillar_date'});
+    // Sync to CC pillars table so Command Centre Team page reads correct data
+    const doneIds=JSON.stringify(Object.keys(s).filter(k=>s[k]));
+    await sb.from('pillars').upsert({who:'USHANE',done_ids:doneIds,updated_at:new Date().toISOString()},{onConflict:'who'});
   }catch(_){}
 }
 async function toggleUshanePillar(k){const s={..._pillarCache};s[k]=!s[k];await savePillarState(s);renderDashboard()}
@@ -2682,14 +2690,15 @@ window.openStageMenu=openStageMenu;
     return fetch(url, { headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY } }).then(function(r) { return r.json(); });
   }
 
+  var _VID_NOISE = /failed to fetch|networkerror|network request failed|load failed|net::/i;
+
   function sendAlert(message, page) {
-    ['smm', 'ceo'].forEach(function(role) {
-      fetch(ALERT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
-        body: JSON.stringify({ message: message, page: page || 'Video System', role: role })
-      }).catch(function(e) { console.warn('[BB Video Agent] Alert failed:', e); });
-    });
+    if (_VID_NOISE.test(String(message))) return;
+    fetch(ALERT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+      body: JSON.stringify({ message: message, page: page || 'Video System', role: 'ceo' })
+    }).catch(function() {});
   }
 
   function logEntry(name, status, detail) {
