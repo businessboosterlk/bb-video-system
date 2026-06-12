@@ -973,7 +973,7 @@ function onLoginSuccess(u){
   // Write login to team_login_logs so CC Team page can see it
   const memberId = {USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
   if(memberId){
-    fetch(SUPABASE_URL+'/rest/v1/team_login_logs',{method:'POST',headers:{'apikey':ANON_KEY,'Authorization':'Bearer '+ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'})}).catch(()=>{});
+    fetch(SUPABASE_URL+'/rest/v1/team_login_logs',{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'})}).catch(()=>{});
   }
   bootApp();
 }
