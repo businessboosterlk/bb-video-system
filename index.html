@@ -138,6 +138,7 @@ a:hover{text-decoration:underline}
 .tag.red{background:var(--red-soft);color:var(--red)}
 .tag.blue{background:var(--blue-soft);color:var(--blue)}
 .tag.purple{background:var(--accent-soft);color:var(--accent)}
+.pipeline-board-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:10px;margin-bottom:-10px}
 .pipeline-board{display:flex;gap:14px;min-height:calc(100vh - 230px)}
 .stage-col{width:286px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 230px)}
 .stage-header{padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border)}
@@ -611,7 +612,7 @@ a:hover{text-decoration:underline}
 <script>
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_RkGimnQ1rzRrU4Io5qn9xg_Fgi4LxiO';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
 const USERS = [
   { name: 'THULAIB', pin: '1031', role: 'admin' },
   { name: 'SHIARA',  pin: '1006', role: 'admin' },
@@ -973,7 +974,7 @@ function onLoginSuccess(u){
   // Write login to team_login_logs so CC Team page can see it
   const memberId = {USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
   if(memberId){
-    fetch(SUPABASE_URL+'/rest/v1/team_login_logs',{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'})}).catch(()=>{});
+    sb.from('team_login_logs').insert({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'}).catch(()=>{});
   }
   bootApp();
 }
@@ -1091,7 +1092,7 @@ async function fetchAll(silent=false){
 function renderPage(){
   const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,drive_links:renderDriveLinks,clients:renderClients,team:renderTeam,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub};
   const fn=map[currentPage]||renderDashboard;
-  try{fn()}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">⚠</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
+  try{const r=fn();if(r&&typeof r.catch==='function')r.catch(err=>{console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">⚠</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'})}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">⚠</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
   try{renderNotifications()}catch(_){}
 }
 
@@ -1384,7 +1385,7 @@ function renderPipeline(){
       ${rows.length?`<table class="tbl"><thead><tr><th>Client</th><th>On drive</th><th>Still editing</th><th>Total</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td><strong style="color:var(--green)">${r.done}</strong></td><td>${r.prog}</td><td class="muted">${r.total}</td></tr>`).join('')}</tbody></table>`:'<div class="link-empty">No videos tagged for this month yet</div>'}
     </div>`;
   }
-  const boardHtml=`<div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div>`;
+  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
   // Bulk action floating bar
   const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar" style="${PIPELINE_STATE.selected.size?'':'display:none'}">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
@@ -1664,7 +1665,7 @@ async function duplicateProject(pid){
   return ins;
 }
 function attachDropListeners(){
-  if(!isAdmin()&&!isEditor())return;
+  if(!isAdmin()&&!isVideoHead()&&!isEditor())return;
   $$('.stage-cards').forEach(z=>{
     z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drop-target')});
     z.addEventListener('dragleave',()=>z.classList.remove('drop-target'));
@@ -1702,7 +1703,7 @@ async function moveProject(project,newStage){
 
 // === PROJECT FORM ===
 function openProjectForm(existing=null){
-  if(!isAdmin())return;
+  if(!isAdmin()&&!isVideoHead())return;
   const ie=!!existing;
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">${ie?'Edit Project':'New Project'}</div><button class="modal-close" data-close>&times;</button></div><form id="projectForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Title</label><input class="field-input" name="title" required value="${esc(existing?.title||'')}" autofocus></div>
