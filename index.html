@@ -222,6 +222,8 @@ a:hover{text-decoration:underline}
 .comment-body{font-size:13px;color:var(--text);white-space:pre-wrap;word-wrap:break-word}
 .comment-img{margin-top:8px;max-width:100%;max-height:280px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in}
 .comment-empty{text-align:center;color:var(--text-3);font-size:12px;padding:18px;font-style:italic}
+.chat-msg:hover .chat-del-btn{opacity:1!important}
+.chat-del-btn:hover{background:var(--red-soft)!important;color:var(--red)!important}
 .comment-form{display:flex;flex-direction:column;gap:8px}
 .comment-form-row{display:flex;gap:8px}
 .comment-form-row .field-textarea,.comment-form-row .field-input{flex:1}
@@ -2530,9 +2532,13 @@ function renderTeamChat(){
       <div class="panel-body">
         <div class="comment-list" style="max-height:55vh">${merged.length?merged.map(m=>{
           const isProj=m._kind==='comment';
+          const isDeleted=!isProj&&m.deleted_at;
           const proj=isProj?getProject(m.video_project_id):null;
           const tagHtml=isProj?`<span class="tag" style="font-size:9px;background:var(--accent-soft);color:var(--accent);margin-left:8px;cursor:pointer" data-jump-pid="${m.video_project_id}">↗ ${esc(proj?.title||'project')}</span>`:'';
-          return `<div class="comment" style="${isProj?'border-left:3px solid var(--accent)':''}"><div class="comment-head"><div class="comment-author">${esc(m.author||'')}${tagHtml}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${m.image_url?`<img class="comment-img" src="${esc(m.image_url)}" onerror="this.style.display='none'">`:''}</div>`;
+          const canDelete=!isProj&&!isDeleted&&(isAdmin()||isVideoHead()||(currentUser&&m.author===currentUser.name));
+          const delBtn=canDelete?`<button class="chat-del-btn" data-del-chat="${m.id}" title="Delete message" style="background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;opacity:0;transition:opacity .15s">🗑</button>`:'';
+          if(isDeleted)return `<div class="comment" style="opacity:0.45;font-style:italic"><div class="comment-head"><div class="comment-author" style="color:var(--text-3)">${esc(m.author||'')}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div><div class="comment-body" style="color:var(--text-3);font-size:12px">🗑 This message was deleted</div></div>`;
+          return `<div class="comment chat-msg" style="${isProj?'border-left:3px solid var(--accent)':''}"><div class="comment-head" style="display:flex;align-items:center;gap:4px"><div class="comment-author">${esc(m.author||'')}${tagHtml}</div><div class="comment-time" style="margin-left:auto">${timeAgo(m.created_at)}</div>${delBtn}</div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${m.image_url?`<img class="comment-img" src="${esc(m.image_url)}" onerror="this.style.display='none'">`:''}</div>`;
         }).join(''):'<div class="comment-empty">Nothing yet — start the conversation. Project comments will also appear here.</div>'}</div>
         <div class="comment-form">
           <textarea id="chatBody" class="field-textarea" placeholder="Type a message… (you can paste an image with Cmd+V)" rows="2"></textarea>
@@ -2546,6 +2552,7 @@ function renderTeamChat(){
   $('#pageContent').onclick=async e=>{
     const ci=e.target.closest('[data-clear-img]');if(ci){clearPendingImg(ci.dataset.clearImg);return}
     const jp=e.target.closest('[data-jump-pid]');if(jp){openProjectDetail(parseInt(jp.dataset.jumpPid));return}
+    const dc=e.target.closest('[data-del-chat]');if(dc){const mid=parseInt(dc.dataset.delChat);try{const{error}=await sb.from('video_chat_messages').update({deleted_at:new Date().toISOString()}).eq('id',mid);if(error)throw error;await fetchAll();renderTeamChat()}catch(err){toast('Delete failed: '+(err.message||''),'error')}return}
     if(e.target.closest('[data-send-chat]')){
       const body=$('#chatBody').value.trim();
       const img=PENDING_IMG['chat']||null;
