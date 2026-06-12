@@ -977,8 +977,8 @@ function onLoginSuccess(u){
   $('#userAvatar').textContent=initials(u.name);
   // Write login to team_login_logs so CC Team page can see it
   const memberId = {THULAIB:1,SHIARA:2,USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
-  if(memberId){
-    sb.from('team_login_logs').insert({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'}).catch(()=>{});
+  if(memberId&&sb){
+    try{sb.from('team_login_logs').insert({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'}).catch(()=>{});}catch(_){}
   }
   bootApp();
 }
