@@ -661,7 +661,7 @@ const PAGES_FULL = [
   { key: 'analytics',     label: 'Analytics',      section: 'TEAM' },
   { key: 'team_chat',     label: 'Team Chat',      section: 'TEAM' },
   { key: 'inspo',         label: 'Inspo Hub ↗',    section: 'EXTRA' },
-  { key: 'agents',        label: '🤖 Agents',      section: 'EXTRA' },
+  { key: 'agents',        label: '⚡ Agents',      section: 'EXTRA' },
 ];
 const PAGES_EDITOR = [
   { key: 'my_dashboard', label: 'My Dashboard', section: 'WORKSPACE' },
@@ -1089,6 +1089,7 @@ async function fetchAll(silent=false){
     // Load daily pillar state from Supabase (shared across all devices)
     await loadPillarState();
     renderPage();
+    if(!window._vsCheckinInit){window._vsCheckinInit=true;setTimeout(vsCheckinMaybeShow,800);}
   }catch(err){console.error(err);if(!silent)toast('Failed to load data: '+(err.message||''),'error')}
 }
 
@@ -2670,48 +2671,167 @@ function openStageMenu(pid){
 window.openStageMenu=openStageMenu;
 
 // ============ AGENTS PAGE ============
+// === AGENTS PAGE — card grid + detail drawer ===
+var _agentDrawerOpen=false;
+var _agentRawAlerts=[];
+var _agentRefreshSpin=false;
+
+var AGENT_META={
+  'editing-stall':   {icon:'🎬',label:'Editing Stall',   desc:'Videos stuck in editing >48h'},
+  'changes-queue':   {icon:'🔄',label:'Changes Queue',   desc:'Changes requests unaddressed >48h'},
+  'client-review':   {icon:'📤',label:'Client Review',   desc:'Sent to client, no response >5 days'},
+  'deadline-alert':  {icon:'⏰',label:'Deadline Alert',   desc:'Projects approaching or past deadline'},
+  'unassigned':      {icon:'👤',label:'Unassigned',       desc:'Projects with no editor assigned'},
+  'stuck-video':     {icon:'🐌',label:'Stuck Video',      desc:'Videos stuck in any stage >7 days'},
+  'client-health':   {icon:'💼',label:'Client Health',    desc:'Client delivery health check'},
+  'content-overdue': {icon:'📅',label:'Content Overdue',  desc:'Overdue content not yet delivered'},
+  'shoot-tracker':   {icon:'🎥',label:'Shoot Tracker',    desc:'Upcoming or missed shoot sessions'},
+  'finance':         {icon:'💰',label:'Finance',          desc:'Budget and billing alerts'},
+  'system':          {icon:'⚙️', label:'System',          desc:'System health and errors'},
+};
+
+function _agentMeta(key){return AGENT_META[key]||{icon:'⚡',label:key,desc:'Agent alerts'};}
+
 async function renderAgentsPage(){
   const pc=$('#pageContent');
-  pc.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-    <div><h2 style="margin:0;font-size:20px;font-weight:800;">🤖 Agents</h2><div style="font-size:12px;color:var(--text-2);margin-top:3px;">Live alerts from all BB agents</div></div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-sm btn-ghost" onclick="renderAgentsPage()">↻ Refresh</button>
-      <button class="btn btn-sm btn-ghost" onclick="markAllVideoAlertsRead()">Mark all read</button>
+  pc.innerHTML=`
+    <div class="page-head">
+      <div><div class="page-title">⚡ Agents</div><div class="page-sub">Live monitoring — background agents scan every 5 minutes</div></div>
+      <div id="agRefreshBtn" style="cursor:pointer;" onclick="agentsRefresh()" title="Refresh">
+        <svg id="agRefreshIcon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-2);transition:transform .4s"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </div>
     </div>
-  </div>
-  <div id="video-agents-list"><div style="color:var(--text-2);font-size:13px;padding:24px 0;text-align:center;">Loading...</div></div>`;
+    <div id="agCardGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-bottom:24px;">
+      <div style="grid-column:1/-1;color:var(--text-2);font-size:13px;padding:32px 0;text-align:center;">Loading agents…</div>
+    </div>
+    <div id="agDrawer" style="position:fixed;top:0;right:-420px;width:420px;height:100vh;background:var(--surface);border-left:1px solid var(--border-strong);z-index:800;display:flex;flex-direction:column;transition:right .28s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 40px rgba(0,0,0,.5);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div id="agDrawerTitle" style="font-size:15px;font-weight:700;color:var(--text)">Agent Detail</div>
+        <button onclick="agCloseDrawer()" style="background:none;border:none;cursor:pointer;color:var(--text-2);font-size:20px;padding:2px 6px;border-radius:4px;line-height:1;" title="Close">×</button>
+      </div>
+      <div id="agDrawerBody" style="flex:1;overflow-y:auto;padding:16px 20px;"></div>
+    </div>
+    <div id="agDrawerOverlay" style="display:none;position:fixed;inset:0;z-index:799;" onclick="agCloseDrawer()"></div>
+  `;
+  await agentsLoad();
+}
+
+async function agentsLoad(){
   try{
-    const resp=await fetch(`${SUPABASE_URL}/rest/v1/agent_alerts?or=(system.eq.video,system.eq.all)&order=created_at.desc&limit=50&select=*`,{
+    const resp=await fetch(`${SUPABASE_URL}/rest/v1/agent_alerts?or=(system.eq.video,system.eq.all)&order=created_at.desc&limit=200&select=*`,{
       headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
     });
-    const alerts=resp.ok?await resp.json():[];
-    const el=document.getElementById('video-agents-list');
-    if(!el)return;
-    if(!alerts||alerts.length===0){
-      el.innerHTML='<div style="color:var(--text-2);font-size:13px;padding:24px 0;text-align:center;">✅ No alerts — everything running smoothly.</div>';
-      return;
-    }
-    const sevColor={critical:'#ef4444',warning:'#f59e0b',info:'#3b82f6'};
-    const sevLabel={critical:'🔴 CRITICAL',warning:'🟡 WARNING',info:'🔵 INFO'};
-    const agentLabel={'finance':'Finance','stuck-video':'Stuck Video','client-health':'Client Health','content-overdue':'Content Overdue','shoot-tracker':'Shoot Tracker'};
-    el.innerHTML=alerts.map(a=>{
-      const d=new Date(a.created_at);
-      const fmt=d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-      const col=sevColor[a.severity]||'#888';
-      const unread=!a.read_at;
-      return `<div id="vid-alert-${a.id}" style="border-left:3px solid ${unread?col:'var(--border)'};padding:12px 16px;background:var(--surface-2,#1a1a2e);border-radius:8px;margin-bottom:10px;cursor:pointer;" onclick="markVideoAlertRead(${a.id})">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-          <span style="font-size:11px;font-weight:700;color:${col};text-transform:uppercase;">${sevLabel[a.severity]||a.severity}</span>
-          ${unread?`<span style="font-size:10px;font-weight:700;background:${col};color:#fff;padding:2px 6px;border-radius:4px;">NEW</span>`:''}
-          <span style="font-size:11px;color:var(--text-2);margin-left:auto;">${agentLabel[a.agent]||a.agent} · ${fmt}</span>
+    _agentRawAlerts=resp.ok?await resp.json():[];
+    agRenderGrid();
+  }catch(e){
+    const g=document.getElementById('agCardGrid');
+    if(g)g.innerHTML='<div style="grid-column:1/-1;color:var(--text-2);font-size:13px;padding:32px 0;text-align:center;">Could not load alerts.</div>';
+  }
+}
+
+function agRenderGrid(){
+  const g=document.getElementById('agCardGrid');
+  if(!g)return;
+  // Group alerts by agent
+  const groups={};
+  _agentRawAlerts.forEach(a=>{
+    const k=a.agent||'system';
+    if(!groups[k])groups[k]={alerts:[],unread:0,maxSev:'info'};
+    groups[k].alerts.push(a);
+    if(!a.read_at)groups[k].unread++;
+    const sevRank={critical:3,warning:2,info:1};
+    if((sevRank[a.severity]||0)>(sevRank[groups[k].maxSev]||0))groups[k].maxSev=a.severity;
+  });
+  // Always show known agents even if no alerts
+  Object.keys(AGENT_META).forEach(k=>{if(!groups[k])groups[k]={alerts:[],unread:0,maxSev:'ok'}});
+  const sevCfg={
+    critical:{border:'#ef4444',bg:'rgba(239,68,68,0.06)',glow:'rgba(239,68,68,0.25)',bar:'linear-gradient(90deg,#ef4444,#b91c1c)',badge:'#ef4444',label:'ALERT'},
+    warning: {border:'#f59e0b',bg:'rgba(245,158,11,0.06)',glow:'rgba(245,158,11,0.2)', bar:'linear-gradient(90deg,#f59e0b,#d97706)',badge:'#f59e0b',label:'WARNING'},
+    info:    {border:'#3b82f6',bg:'rgba(59,130,246,0.05)',glow:'rgba(59,130,246,0.15)',bar:'linear-gradient(90deg,#3b82f6,#1d4ed8)',badge:'#3b82f6',label:'INFO'},
+    ok:      {border:'#22c55e',bg:'rgba(34,197,94,0.04)', glow:'rgba(34,197,94,0.15)', bar:'linear-gradient(90deg,#22c55e,#15803d)',badge:'#22c55e',label:'CLEAR'},
+  };
+  const cards=Object.entries(groups).sort((a,b)=>{const r={critical:3,warning:2,info:1,ok:0};return (r[b[1].maxSev]||0)-(r[a[1].maxSev]||0);});
+  if(cards.length===0){g.innerHTML='<div style="grid-column:1/-1;color:var(--text-2);font-size:13px;padding:32px 0;text-align:center;">✅ No alerts — everything running smoothly.</div>';return;}
+  g.innerHTML=cards.map(([key,grp])=>{
+    const m=_agentMeta(key);
+    const cfg=sevCfg[grp.maxSev]||sevCfg.ok;
+    const issueCount=grp.alerts.filter(a=>a.severity==='critical'||a.severity==='warning').length;
+    return `<div class="ag-card" data-ag-key="${key}" style="border:1px solid ${cfg.border};background:${cfg.bg};border-radius:12px;cursor:pointer;position:relative;overflow:hidden;transition:transform .18s,box-shadow .18s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 28px ${cfg.glow}'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+      <div style="height:3px;background:${cfg.bar};"></div>
+      <div style="padding:14px 14px 12px;">
+        <div style="font-size:24px;margin-bottom:8px;">${m.icon}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px;">${m.label}</div>
+        <div style="font-size:10px;color:var(--text-2);line-height:1.4;margin-bottom:10px;">${m.desc}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:${cfg.badge};color:#fff;">${cfg.label}</span>
+          ${issueCount>0?`<span style="font-size:11px;font-weight:700;color:${cfg.border};">${issueCount} issue${issueCount>1?'s':''}</span>`:`<span style="font-size:10px;color:var(--text-3);">${grp.alerts.length} log${grp.alerts.length!==1?'s':''}</span>`}
         </div>
-        <div style="font-size:13px;white-space:pre-wrap;line-height:1.5;">${esc(a.message)}</div>
+        ${grp.unread>0?`<div style="position:absolute;top:10px;right:10px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;">${grp.unread}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  g.onclick=e=>{const c=e.target.closest('[data-ag-key]');if(c)agOpenDrawer(c.dataset.agKey);};
+}
+
+function agOpenDrawer(key){
+  const grp=_agentRawAlerts.filter(a=>a.agent===key);
+  const m=_agentMeta(key);
+  const drawer=document.getElementById('agDrawer');
+  const title=document.getElementById('agDrawerTitle');
+  const body=document.getElementById('agDrawerBody');
+  const overlay=document.getElementById('agDrawerOverlay');
+  if(!drawer)return;
+  title.textContent=m.icon+' '+m.label;
+  const sevColor={critical:'#ef4444',warning:'#f59e0b',info:'#3b82f6'};
+  if(!grp.length){body.innerHTML='<div style="color:var(--text-2);font-size:13px;padding:20px 0;text-align:center;">✅ No alerts recorded for this agent.</div>';
+  }else{
+    body.innerHTML=grp.map(a=>{
+      const col=sevColor[a.severity]||'#64748b';
+      const d=new Date(a.created_at);
+      const fmt=d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      const unread=!a.read_at;
+      return `<div id="ag-row-${a.id}" style="border-left:3px solid ${unread?col:'var(--border)'};padding:10px 12px;background:var(--surface-2);border-radius:0 8px 8px 0;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
+          <span style="font-size:10px;font-weight:700;color:${col};text-transform:uppercase;">${a.severity||'info'}</span>
+          ${unread?`<span style="font-size:9px;font-weight:700;background:${col};color:#fff;padding:1px 5px;border-radius:3px;">NEW</span>`:''}
+          <span style="font-size:10px;color:var(--text-3);margin-left:auto;">${fmt}</span>
+          <button onclick="agMarkRead(${a.id})" style="font-size:9px;background:none;border:1px solid var(--border);color:var(--text-2);border-radius:4px;padding:1px 6px;cursor:pointer;">Mark read</button>
+        </div>
+        <div style="font-size:12px;white-space:pre-wrap;line-height:1.5;color:var(--text);">${esc(a.message)}</div>
       </div>`;
     }).join('');
-  }catch(e){
-    const el=document.getElementById('video-agents-list');
-    if(el)el.innerHTML='<div style="color:var(--text-2);font-size:13px;">Could not load alerts.</div>';
   }
+  overlay.style.display='block';
+  setTimeout(()=>{drawer.style.right='0';},10);
+  _agentDrawerOpen=true;
+}
+
+function agCloseDrawer(){
+  const drawer=document.getElementById('agDrawer');
+  const overlay=document.getElementById('agDrawerOverlay');
+  if(drawer)drawer.style.right='-420px';
+  if(overlay)overlay.style.display='none';
+  _agentDrawerOpen=false;
+}
+
+async function agMarkRead(id){
+  try{
+    await fetch(`${SUPABASE_URL}/rest/v1/agent_alerts?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({read_at:new Date().toISOString()})
+    });
+    const row=document.getElementById('ag-row-'+id);
+    if(row){row.style.borderLeftColor='var(--border)';row.querySelectorAll('span').forEach(s=>{if(s.textContent==='NEW')s.remove();});}
+    const a=_agentRawAlerts.find(x=>x.id===id);if(a)a.read_at=new Date().toISOString();
+    agRenderGrid();
+  }catch(_){}
+}
+
+async function agentsRefresh(){
+  const icon=document.getElementById('agRefreshIcon');
+  if(icon){icon.style.transform='rotate(360deg)';setTimeout(()=>{icon.style.transform='';},450);}
+  await agentsLoad();
 }
 
 async function markVideoAlertRead(id){
@@ -2738,6 +2858,162 @@ async function markAllVideoAlertsRead(){
     document.querySelectorAll('[id^="vid-alert-"]').forEach(c=>c.style.borderLeftColor='var(--border)');
     document.querySelectorAll('[id^="vid-alert-"] span').forEach(s=>{if(s.textContent==='NEW')s.remove();});
   }catch(e){}
+}
+
+
+// === CTRL+K COMMAND BAR ===
+var _cmdOpen=false,_cmdIdx=0,_cmdResults=[];
+function cmdOpen(){
+  _cmdOpen=true;_cmdIdx=0;_cmdResults=[];
+  var el=document.getElementById('vsCmd');if(!el)return;
+  el.style.display='flex';
+  var inp=document.getElementById('vsCmdInput');if(inp){inp.value='';inp.focus();}
+  cmdFilter('');
+}
+function cmdClose(){
+  _cmdOpen=false;
+  var el=document.getElementById('vsCmd');if(el)el.style.display='none';
+}
+function cmdFilter(q){
+  q=q.toLowerCase();
+  var pages=(isEditor()?PAGES_EDITOR:PAGES_FULL).filter(p=>p.key!=='inspo');
+  var navItems=pages.map(p=>({type:'nav',label:p.label.replace(/[🤖⚡↗]/g,'').trim(),key:p.key,hint:'Go to page'}));
+  var actions=[
+    {type:'action',label:'Add Video Project',key:'add_project',icon:'🎬',hint:'Quick action'},
+    {type:'action',label:'Add Task',key:'add_task',icon:'✅',hint:'Quick action'},
+    {type:'action',label:'Add Drive Link',key:'add_drive',icon:'🔗',hint:'Quick action'},
+  ];
+  var clients=(DATA.clients||[]).map(c=>({type:'client',label:c.name,key:c.id,icon:'👥',hint:'View client'}));
+  var all=[...navItems,...actions,...clients];
+  if(q){all=all.filter(r=>r.label.toLowerCase().includes(q));}
+  _cmdResults=all.slice(0,12);_cmdIdx=0;cmdRenderResults();
+}
+function cmdRenderResults(){
+  var el=document.getElementById('vsCmdResults');if(!el)return;
+  if(!_cmdResults.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">No results</div>';return;}
+  el.innerHTML=_cmdResults.map((r,i)=>{
+    var icon=r.type==='nav'?'→':r.icon||'→';
+    var active=i===_cmdIdx?'background:rgba(168,85,247,0.12);':'';
+    return `<div class="vs-cmd-row" data-cmd-idx="${i}" style="${active}display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-radius:6px;transition:background .12s;">
+      <span style="font-size:16px;width:22px;text-align:center;">${icon}</span>
+      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;color:var(--text);">${esc(r.label)}</div><div style="font-size:10px;color:var(--text-3);">${r.hint}</div></div>
+      ${r.type==='nav'?'<span style="font-size:10px;color:var(--text-3);background:var(--surface-3);padding:2px 7px;border-radius:4px;">page</span>':''}
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.vs-cmd-row').forEach(row=>{
+    row.onmouseenter=()=>{_cmdIdx=parseInt(row.dataset.cmdIdx);cmdHighlight();};
+    row.onclick=()=>cmdSelect(_cmdIdx);
+  });
+}
+function cmdHighlight(){
+  document.querySelectorAll('.vs-cmd-row').forEach((r,i)=>{r.style.background=i===_cmdIdx?'rgba(168,85,247,0.12)':'';});
+}
+function cmdSelect(i){
+  var r=_cmdResults[i];if(!r)return;
+  cmdClose();
+  if(r.type==='nav'){navTo(r.key);}
+  else if(r.type==='action'){
+    if(r.key==='add_project')openProjectForm();
+    else if(r.key==='add_task')openTaskForm();
+    else if(r.key==='add_drive'){navTo('drive_links');}
+  }
+  else if(r.type==='client'){navTo('clients');setTimeout(()=>{var btn=document.querySelector('[data-client-id="'+r.key+'"]');if(btn)btn.click();},400);}
+}
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();_cmdOpen?cmdClose():cmdOpen();return;}
+  if(!_cmdOpen)return;
+  if(e.key==='Escape'){cmdClose();}
+  else if(e.key==='ArrowDown'){e.preventDefault();_cmdIdx=Math.min(_cmdIdx+1,_cmdResults.length-1);cmdHighlight();}
+  else if(e.key==='ArrowUp'){e.preventDefault();_cmdIdx=Math.max(_cmdIdx-1,0);cmdHighlight();}
+  else if(e.key==='Enter'){e.preventDefault();cmdSelect(_cmdIdx);}
+});
+
+// === DAILY TASK CHECK-IN ===
+function vsCheckinKey(){return 'vs-checkin-last-'+(currentUser?currentUser.name:'');}
+function vsCheckinMaybeShow(){
+  if(!currentUser)return;
+  var today=new Date().toISOString().slice(0,10);
+  if(localStorage.getItem(vsCheckinKey())===today)return;
+  var todayStr=today;
+  var myTasks=(DATA.tasks||[]).filter(function(t){
+    if(t.completed||t.status==='done'||t.status==='completed')return false;
+    var due=t.deadline||t.due_date;if(!due)return false;
+    if(due.slice(0,10)>todayStr)return false;
+    var assignedTo=(t.assign||'').toLowerCase();
+    var me=(currentUser.name||'').toLowerCase();
+    return assignedTo===me||assignedTo==='video';
+  });
+  if(!myTasks.length){localStorage.setItem(vsCheckinKey(),today);return;}
+  vsCheckinRender(myTasks);
+}
+function vsCheckinRender(tasks){
+  var today=new Date().toISOString().slice(0,10);
+  var byClient={};
+  tasks.forEach(function(t){
+    var cl=getClient(t.client_id);var key=(cl?cl.name:'No Client');
+    if(!byClient[key])byClient[key]=[];byClient[key].push(t);
+  });
+  var rowsHtml=Object.entries(byClient).map(function(e){
+    var cname=e[0],cts=e[1];
+    return '<div style="margin-bottom:14px;"><div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">'+esc(cname)+'</div>'+
+      cts.map(function(t){
+        var due=t.deadline||t.due_date;var ov=due&&due.slice(0,10)<today;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface-2);border-radius:7px;margin-bottom:5px;border:1px solid var(--border);">'+
+          '<input type="checkbox" data-ci-task="'+t.id+'" style="accent-color:#a855f7;width:14px;height:14px;flex-shrink:0;">'+
+          '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:500;color:var(--text);">'+esc(t.title||t.text||'')+'</div>'+
+          '<div style="font-size:10px;color:'+(ov?'#ef4444':'var(--text-3)')+';">'+fmtDate(due)+(ov?' · OVERDUE':'')+'</div></div></div>';
+      }).join('')+'</div>';
+  }).join('');
+  var badge=tasks.length;
+  var html='<div id="vsCheckinOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;display:flex;align-items:center;justify-content:center;">'+
+    '<div style="background:var(--surface);border:1px solid rgba(168,85,247,0.25);border-radius:16px;width:420px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 0 1px rgba(168,85,247,0.08);">'+
+      '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.13),rgba(168,85,247,0.04));border-bottom:1px solid rgba(168,85,247,0.13);padding:16px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;">'+
+        '<div style="width:38px;height:38px;background:linear-gradient(135deg,#a855f7,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">✅</div>'+
+        '<div><div style="font-size:14px;font-weight:700;color:#fff;">Daily Check-In</div><div style="font-size:11px;color:rgba(168,85,247,0.8);margin-top:2px;">'+badge+' overdue task'+(badge!==1?'s':'')+' need your attention</div></div>'+
+        '<button onclick="vsCheckinClose(false)" style="margin-left:auto;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.3);font-size:20px;padding:2px 6px;border-radius:4px;" title="Close">×</button>'+
+      '</div>'+
+      '<div style="flex:1;overflow-y:auto;padding:16px 20px;">'+rowsHtml+'</div>'+
+      '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">'+
+        '<button onclick="vsCheckinSnooze()" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);border-radius:8px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:500;">Snooze 2h</button>'+
+        '<button onclick="vsCheckinClose(true)" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600;">Done for now ✓</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+  var div=document.createElement('div');div.id='vsCheckinWrap';div.innerHTML=html;document.body.appendChild(div);
+  div.addEventListener('change',async function(e){
+    var cb=e.target.closest('[data-ci-task]');if(!cb)return;
+    var id=parseInt(cb.dataset.ciTask);
+    if(cb.checked){
+      try{
+        if(sb)await sb.from('tasks').update({completed:true,status:'done'}).eq('id',id);
+        var row=cb.closest('div[style*="surface-2"]');if(row){row.style.opacity='0.4';row.style.textDecoration='line-through';}
+      }catch(_){cb.checked=false;}
+    }
+  });
+}
+function vsCheckinClose(markDone){
+  if(markDone){var today=new Date().toISOString().slice(0,10);localStorage.setItem(vsCheckinKey(),today);}
+  var el=document.getElementById('vsCheckinWrap');if(el)el.remove();
+  vsUpdateCheckinBadge();
+}
+function vsCheckinSnooze(){
+  var snoozeUntil=Date.now()+2*3600000;localStorage.setItem(vsCheckinKey()+'_snooze',snoozeUntil.toString());
+  var el=document.getElementById('vsCheckinWrap');if(el)el.remove();
+}
+function vsUpdateCheckinBadge(){
+  var today=new Date().toISOString().slice(0,10);
+  var done=localStorage.getItem(vsCheckinKey())===today;
+  var btn=document.getElementById('vsCheckinBtn');if(!btn)return;
+  if(done){btn.style.display='none';return;}
+  var overdue=(DATA.tasks||[]).filter(function(t){
+    if(t.completed||t.status==='done'||t.status==='completed')return false;
+    var due=t.deadline||t.due_date;if(!due)return false;
+    if(due.slice(0,10)>today)return false;
+    var assignedTo=(t.assign||'').toLowerCase();var me=(currentUser?currentUser.name:'').toLowerCase();
+    return assignedTo===me||assignedTo==='video';
+  }).length;
+  btn.style.display=overdue>0?'flex':'none';
+  var badge=document.getElementById('vsCheckinBadge');if(badge)badge.textContent=overdue;
 }
 </script>
 
@@ -3058,6 +3334,82 @@ async function markAllVideoAlertsRead(){
   function _addMsg(html,role){var list=document.getElementById('bb-agent-messages');if(!list)return;var w=document.createElement('div');w.className='bb-msg bb-msg-'+(role==='user'?'user':'bot');var b=document.createElement('div');b.className='bb-bubble';if(role==='user')b.textContent=html;else b.innerHTML=html;w.appendChild(b);list.appendChild(w);list.scrollTop=list.scrollHeight;return w}
   function _addTyping(){var list=document.getElementById('bb-agent-messages');if(!list)return null;var w=document.createElement('div');w.className='bb-msg bb-msg-bot';w.innerHTML='<div class="bb-bubble"><span class="bb-typing-dot"></span><span class="bb-typing-dot"></span><span class="bb-typing-dot"></span></div>';list.appendChild(w);list.scrollTop=list.scrollHeight;return w}
   console.log('[BB Video Agent] loaded — chat + error monitor active');
+})();
+</script>
+
+<!-- ============================================================
+     CTRL+K COMMAND BAR + DAILY CHECK-IN TRIGGER
+     ============================================================ -->
+<style>
+#vsCmd{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:none;align-items:flex-start;justify-content:center;padding-top:12vh;}
+#vsCmdPanel{background:#141420;border:1px solid rgba(168,85,247,0.3);border-radius:14px;width:520px;max-width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.8),0 0 0 1px rgba(168,85,247,0.08);overflow:hidden;animation:vsCmdIn .18s ease;}
+@keyframes vsCmdIn{from{opacity:0;transform:translateY(-10px) scale(.97)}to{opacity:1;transform:none}}
+#vsCmdInputWrap{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+#vsCmdInputWrap svg{flex-shrink:0;color:rgba(168,85,247,0.7);}
+#vsCmdInput{flex:1;background:none;border:none;outline:none;font-size:15px;font-weight:500;color:#fff;font-family:'Poppins',sans-serif;}
+#vsCmdInput::placeholder{color:#3d4260;}
+#vsCmdResults{max-height:360px;overflow-y:auto;padding:6px;}
+#vsCmdResults::-webkit-scrollbar{width:4px;}
+#vsCmdResults::-webkit-scrollbar-thumb{background:rgba(168,85,247,0.2);border-radius:2px;}
+#vsCmdFooter{padding:8px 16px;border-top:1px solid rgba(255,255,255,0.05);display:flex;gap:14px;font-size:10px;color:#3d4260;}
+#vsCmdFooter span{display:flex;align-items:center;gap:4px;}
+#vsCmdFooter kbd{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:1px 5px;font-size:9px;font-family:inherit;}
+/* checkin trigger */
+#vsCheckinBtn{position:fixed;bottom:90px;right:160px;width:44px;height:44px;background:linear-gradient(135deg,#a855f7,#7c3aed);border-radius:50%;border:none;cursor:pointer;z-index:9985;display:none;align-items:center;justify-content:center;box-shadow:0 3px 14px rgba(168,85,247,0.4);transition:transform .2s,box-shadow .2s;}
+#vsCheckinBtn:hover{transform:scale(1.1);box-shadow:0 5px 20px rgba(168,85,247,0.55);}
+#vsCheckinBtn svg{width:20px;height:20px;fill:#fff;}
+#vsCheckinBadge{position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid #0a0a0f;}
+</style>
+
+<!-- Command Bar HTML -->
+<div id="vsCmd" onclick="if(event.target===this)cmdClose()">
+  <div id="vsCmdPanel">
+    <div id="vsCmdInputWrap">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="vsCmdInput" placeholder="Search pages, actions, clients…" oninput="cmdFilter(this.value)" autocomplete="off" spellcheck="false">
+      <kbd style="font-size:10px;color:#3d4260;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:2px 6px;flex-shrink:0;">ESC</kbd>
+    </div>
+    <div id="vsCmdResults"></div>
+    <div id="vsCmdFooter">
+      <span><kbd>↑↓</kbd> Navigate</span>
+      <span><kbd>↵</kbd> Select</span>
+      <span><kbd>Esc</kbd> Close</span>
+      <span style="margin-left:auto;color:rgba(168,85,247,0.5);">⌘K / Ctrl+K</span>
+    </div>
+  </div>
+</div>
+
+<!-- Check-in Trigger Button -->
+<button id="vsCheckinBtn" onclick="vsCheckinMaybeShow(true)" title="Daily Task Check-In">
+  <div id="vsCheckinBadge">0</div>
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+</button>
+
+<script>
+// Patch vsCheckinMaybeShow to accept force param and update badge
+(function(){
+  var _orig=window.vsCheckinMaybeShow;
+  window.vsCheckinMaybeShow=function(force){
+    if(!currentUser)return;
+    var today=new Date().toISOString().slice(0,10);
+    var snooze=parseInt(localStorage.getItem(vsCheckinKey()+'_snooze')||'0');
+    if(!force&&snooze&&Date.now()<snooze)return;
+    if(!force&&localStorage.getItem(vsCheckinKey())===today)return;
+    var myTasks=(DATA.tasks||[]).filter(function(t){
+      if(t.completed||t.status==='done'||t.status==='completed')return false;
+      var due=t.deadline||t.due_date;if(!due)return false;
+      if(due.slice(0,10)>today)return false;
+      var me=(currentUser.name||'').toLowerCase();
+      var a=(t.assign||'').toLowerCase();
+      return a===me||a==='video';
+    });
+    vsUpdateCheckinBadge();
+    if(!myTasks.length){if(!force)localStorage.setItem(vsCheckinKey(),today);return;}
+    vsCheckinRender(myTasks);
+  };
+  // Also update badge whenever DATA changes — hook into renderPage
+  var _origRP=window.renderPage;
+  if(_origRP){window.renderPage=function(){_origRP.apply(this,arguments);setTimeout(vsUpdateCheckinBadge,100);};}
 })();
 </script>
 </body>
