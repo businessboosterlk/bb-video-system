@@ -1088,7 +1088,25 @@ async function fetchAll(silent=false){
     }
     // Load daily pillar state from Supabase (shared across all devices)
     await loadPillarState();
-    renderPage();
+    if(silent){
+      // Silent auto-refresh: snapshot every scroll axis before re-render, restore after
+      var _pc=$('#pageContent');
+      var _st=_pc?_pc.scrollTop:0;
+      var _sl=_pc?_pc.scrollLeft:0;
+      var _bw=document.querySelector('.pipeline-board-wrap');
+      var _bl=_bw?_bw.scrollLeft:0;
+      var _colScrolls=Array.from(document.querySelectorAll('.stage-cards')).map(function(c){return c.scrollTop;});
+      renderPage();
+      requestAnimationFrame(function(){
+        var pc2=$('#pageContent');
+        if(pc2){pc2.scrollTop=_st;pc2.scrollLeft=_sl;}
+        var bw2=document.querySelector('.pipeline-board-wrap');
+        if(bw2)bw2.scrollLeft=_bl;
+        document.querySelectorAll('.stage-cards').forEach(function(c,i){if(_colScrolls[i])c.scrollTop=_colScrolls[i];});
+      });
+    }else{
+      renderPage();
+    }
     if(!window._vsCheckinInit){window._vsCheckinInit=true;setTimeout(vsCheckinMaybeShow,800);}
   }catch(err){console.error(err);if(!silent)toast('Failed to load data: '+(err.message||''),'error')}
 }
