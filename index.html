@@ -1126,6 +1126,8 @@ async function fetchAll(silent=false){
       var _bw=document.querySelector('.pipeline-board-wrap');
       var _bl=_bw?_bw.scrollLeft:0;
       var _colScrolls=Array.from(document.querySelectorAll('.stage-cards')).map(function(c){return c.scrollTop;});
+      // Preserve any message being typed in team chat so auto-refresh doesn't wipe it
+      var _chatDraft=$('#chatBody')?$('#chatBody').value:'';
       renderPage();
       requestAnimationFrame(function(){
         var pc2=$('#pageContent');
@@ -1133,6 +1135,8 @@ async function fetchAll(silent=false){
         var bw2=document.querySelector('.pipeline-board-wrap');
         if(bw2)bw2.scrollLeft=_bl;
         document.querySelectorAll('.stage-cards').forEach(function(c,i){if(_colScrolls[i])c.scrollTop=_colScrolls[i];});
+        // Restore typed message if still on team chat
+        if(_chatDraft){var cb2=$('#chatBody');if(cb2)cb2.value=_chatDraft;}
       });
     }else{
       renderPage();
@@ -2619,12 +2623,12 @@ function renderTeamChat(){
   $('#pageContent').onclick=async e=>{
     const ci=e.target.closest('[data-clear-img]');if(ci){clearPendingImg(ci.dataset.clearImg);return}
     const jp=e.target.closest('[data-jump-pid]');if(jp){openProjectDetail(parseInt(jp.dataset.jumpPid));return}
-    const dc=e.target.closest('[data-del-chat]');if(dc){const mid=parseInt(dc.dataset.delChat);try{const{error}=await sb.from('video_chat_messages').update({deleted_at:new Date().toISOString()}).eq('id',mid);if(error)throw error;await fetchAll();renderTeamChat()}catch(err){toast('Delete failed: '+(err.message||''),'error')}return}
+    const dc=e.target.closest('[data-del-chat]');if(dc){const mid=parseInt(dc.dataset.delChat);try{const{error}=await sb.from('video_chat_messages').update({deleted_at:new Date().toISOString()}).eq('id',mid);if(error)throw error;await fetchAll();}catch(err){toast('Delete failed: '+(err.message||''),'error')}return}
     if(e.target.closest('[data-send-chat]')){
       const body=$('#chatBody').value.trim();
       const img=PENDING_IMG['chat']||null;
       if(!body&&!img)return;
-      try{const {error}=await sb.from('video_chat_messages').insert({client_id:FILTERS.chatClient,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;$('#chatBody').value='';clearPendingImg('chat');await fetchAll();renderTeamChat()}catch(err){toast('Failed: '+(err.message||''),'error')}
+      try{const {error}=await sb.from('video_chat_messages').insert({client_id:FILTERS.chatClient,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;$('#chatBody').value='';clearPendingImg('chat');await fetchAll();}catch(err){toast('Failed: '+(err.message||''),'error')}
     }
   };
 }
@@ -3266,6 +3270,9 @@ function vsCheckinRender(tasks){
       try{
         if(sb)await sb.from('tasks').update({completed:true,status:'done'}).eq('id',id);
         var row=cb.closest('div[style*="surface-2"]');if(row){row.style.opacity='0.4';row.style.textDecoration='line-through';}
+        // Update in-memory so badge count is correct without waiting for next fetchAll
+        if(DATA.tasks){var t=DATA.tasks.find(function(t){return t.id===id;});if(t){t.completed=true;t.status='done';}}
+        vsUpdateCheckinBadge();
       }catch(_){cb.checked=false;}
     }
   });
