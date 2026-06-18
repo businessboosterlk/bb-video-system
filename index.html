@@ -1076,7 +1076,9 @@ function navTo(page){
 }
 
 // === DATA FETCH ===
+let _pendingOps=0;
 async function fetchAll(silent=false){
+  if(silent&&_pendingOps>0)return;
   try{
     const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
@@ -1742,9 +1744,12 @@ function attachDropListeners(){
   });
 }
 async function moveProject(project,newStage){
-  const old=project.current_stage;project.current_stage=newStage;
+  const old=project.current_stage;
+  project.current_stage=newStage;
   if(newStage==='posted')project.completed_at=new Date().toISOString();
+  _pendingOps++;
   renderPage();
+  let succeeded=false;
   try{
     const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
     if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.floor((ex-en)/1000)}).eq('id',o.id)}
@@ -1753,8 +1758,16 @@ async function moveProject(project,newStage){
     if(newStage==='posted')up.completed_at=new Date().toISOString();
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
+    succeeded=true;
     toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`,'success');
-  }catch(err){console.error(err);toast('Move failed','error');project.current_stage=old;renderPage()}
+  }catch(err){
+    console.error(err);toast('Move failed','error');
+    project.current_stage=old;
+    if(old!=='posted')project.completed_at=undefined;
+  }finally{
+    _pendingOps--;
+    await fetchAll(true);
+  }
 }
 
 // === PROJECT FORM ===
