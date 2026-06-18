@@ -1645,7 +1645,7 @@ async function archiveProject(pid){
     if(error)throw error;
     toast('Project archived','success');
     closeModal();
-    await fetchAll();renderPage();
+    await fetchAll();
   }catch(err){toast('Archive failed: '+(err.message||''),'error')}
 }
 async function restoreProject(pid){
