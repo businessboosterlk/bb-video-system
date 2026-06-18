@@ -1387,6 +1387,12 @@ function ushaneDailyPillarsHtml(){
 // === PAGE: PIPELINE ===
 const PIPELINE_STATE = { bulkMode: false, selected: new Set() };
 function renderPipeline(){
+  // Preserve scroll if we're re-rendering (board already in DOM) — NOT a fresh navigation
+  const _bw=document.querySelector('.pipeline-board-wrap');
+  const _boardLeft=_bw?_bw.scrollLeft:0;
+  const _colTops=Array.from(document.querySelectorAll('.stage-cards')).map(c=>c.scrollTop);
+  const _pcTop=$('#pageContent')?$('#pageContent').scrollTop:0;
+  const _wasOnPipeline=!!_bw;
   const f=FILTERS.pipeline;
   let ps=DATA.projects.slice();
   if(f.search){const q=f.search.toLowerCase();ps=ps.filter(p=>(p.title||'').toLowerCase().includes(q)||(getClient(p.client_id)?.name||'').toLowerCase().includes(q))}
@@ -1449,6 +1455,7 @@ function renderPipeline(){
     <button class="bulk-action-btn ghost" data-action="bulk-cancel">Cancel</button>
   </div>`:'';
   $('#pageContent').innerHTML=filtersHtml+monthSummaryHtml+boardHtml+bulkBarHtml;
+  if(_wasOnPipeline){requestAnimationFrame(function(){const bw2=document.querySelector('.pipeline-board-wrap');if(bw2)bw2.scrollLeft=_boardLeft;document.querySelectorAll('.stage-cards').forEach(function(c,i){if(_colTops[i])c.scrollTop=_colTops[i];});const pc2=$('#pageContent');if(pc2&&_pcTop)pc2.scrollTop=_pcTop;});}
   $('#fSearch').oninput=e=>{FILTERS.pipeline.search=e.target.value;renderPipeline()};
   $('#fClient').onchange=e=>{FILTERS.pipeline.client=e.target.value;renderPipeline()};
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
@@ -1511,9 +1518,9 @@ function openCardMenu(pid,btn){
     wrap.remove();document.removeEventListener('click',closeMenu);
     if(cm==='edit')openProjectForm(p);
     if(cm==='move')openStageMenu(pid);
-    if(cm==='dup'){if(confirm('Duplicate this project?')){try{await duplicateProject(pid);await fetchAll();renderPage();toast('Duplicated','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
+    if(cm==='dup'){if(confirm('Duplicate this project?')){try{await duplicateProject(pid);await fetchAll();toast('Duplicated','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
     if(cm==='archive'){if(confirm(`Archive "${p.title}"?`)){await archiveProject(pid)}}
-    if(cm==='delete'){if(confirm(`PERMANENTLY delete "${p.title}"?\n\nAll data removed. Cannot be undone.`)){try{await permanentDeleteProject(pid);await fetchAll();renderPage();toast('Deleted','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
+    if(cm==='delete'){if(confirm(`PERMANENTLY delete "${p.title}"?\n\nAll data removed. Cannot be undone.`)){try{await permanentDeleteProject(pid);await fetchAll();toast('Deleted','success')}catch(err){toast('Failed: '+(err.message||''),'error')}}}
   };
   // Close on click outside — delayed to avoid immediate trigger
   function closeMenu(e){if(!wrap.contains(e.target)&&e.target!==btn){wrap.remove();document.removeEventListener('click',closeMenu)}}
@@ -1558,7 +1565,6 @@ async function bulkMoveProjects(newStage){
   PIPELINE_STATE.selected.clear();
   await fetchAll();
   toast(`Moved ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
-  renderPipeline();
 }
 async function bulkDuplicateProjects(){
   const ids=Array.from(PIPELINE_STATE.selected);
@@ -1571,7 +1577,6 @@ async function bulkDuplicateProjects(){
   PIPELINE_STATE.selected.clear();
   await fetchAll();
   toast(`Duplicated ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
-  renderPipeline();
 }
 async function bulkArchiveProjects(){
   const ids=Array.from(PIPELINE_STATE.selected);
@@ -1585,7 +1590,6 @@ async function bulkArchiveProjects(){
     PIPELINE_STATE.bulkMode=false;
     await fetchAll();
     toast(`Archived ${ids.length} project${ids.length>1?'s':''}`,'success');
-    renderPipeline();
   }catch(err){toast('Bulk archive failed: '+(err.message||''),'error')}
 }
 async function bulkDeleteProjects(){
@@ -1599,7 +1603,6 @@ async function bulkDeleteProjects(){
   PIPELINE_STATE.bulkMode=false;
   await fetchAll();
   toast(`Deleted ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
-  renderPipeline();
 }
 // Auto-archive: scan projects at terminal stages (posted/add_to_drive/sent_to_client) whose
 // last stage entry is >72h old, batch-archive them. Uses video_stage_history to find when
@@ -1865,7 +1868,7 @@ async function openProjectDetail(id){
   $('#modalRoot').onclick=async e=>{
     if(e.target.closest('[data-close]'))closeModal();
     const ed=e.target.closest('[data-edit]');if(ed){closeModal();openProjectForm(getProject(parseInt(ed.dataset.edit)))}
-    const dp=e.target.closest('[data-dup]');if(dp){const pid=parseInt(dp.dataset.dup);if(confirm('Duplicate this project? Times reset to zero, fresh project starts at "Video Shot".')){try{await duplicateProject(pid);closeModal();await fetchAll();renderPage();toast('Project duplicated','success')}catch(err){toast('Duplicate failed: '+(err.message||''),'error')}}}
+    const dp=e.target.closest('[data-dup]');if(dp){const pid=parseInt(dp.dataset.dup);if(confirm('Duplicate this project? Times reset to zero, fresh project starts at "Video Shot".')){try{await duplicateProject(pid);closeModal();await fetchAll();toast('Project duplicated','success')}catch(err){toast('Duplicate failed: '+(err.message||''),'error')}}}
     const ar=e.target.closest('[data-archive]');if(ar){const pid=parseInt(ar.dataset.archive);const p=getProject(pid);if(confirm(`Archive "${p?.title||'this project'}"?\n\nIt will be hidden from the pipeline but recoverable from Archived Projects.`)){await archiveProject(pid)}}
     const pc=e.target.closest('[data-post-comment]');if(pc)await postComment(parseInt(pc.dataset.postComment));
     const al=e.target.closest('[data-add-link]');if(al)openAddLinkForm(id,al.dataset.addLink);
