@@ -1373,8 +1373,8 @@ async function savePillarState(s){
     await sb.from('pillars').upsert({who:'USHANE',done_ids:doneIds,updated_at:new Date().toISOString()},{onConflict:'who'});
   }catch(_){}
 }
-async function toggleUshanePillar(k){const s={..._pillarCache};s[k]=!s[k];await savePillarState(s);renderDashboard()}
-async function resetUshanePillars(){await savePillarState({});renderDashboard()}
+async function toggleUshanePillar(k){const s={..._pillarCache};s[k]=!s[k];_pillarCache=s;_pendingOps++;try{await savePillarState(s);}finally{_pendingOps--;}renderDashboard()}
+async function resetUshanePillars(){_pillarCache={};_pendingOps++;try{await savePillarState({});}finally{_pendingOps--;}renderDashboard()}
 function ushaneDailyPillarsHtml(){
   const s=_pillarCache;
   const done=USHANE_PILLARS.filter(p=>s[p.key]).length;
