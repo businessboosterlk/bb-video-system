@@ -1368,19 +1368,22 @@ let _pillarCache={};
 function pillarDateStr(){return new Date().toISOString().slice(0,10)}
 async function loadPillarState(){
   try{
-    const {data}=await sb.from('daily_pillar_state').select('state').eq('user_name','USHANE').eq('pillar_date',pillarDateStr()).maybeSingle();
+    const {data,error}=await sb.from('daily_pillar_state').select('state').eq('user_name','USHANE').eq('pillar_date',pillarDateStr()).maybeSingle();
+    if(error&&window.bbReportDbError)window.bbReportDbError('daily_pillar_state','load',error);
     _pillarCache=data?.state||{};
-  }catch(_){_pillarCache={}}
+  }catch(e){_pillarCache={};if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','load',e);}
   return _pillarCache;
 }
 async function savePillarState(s){
   _pillarCache=s;
   try{
-    await sb.from('daily_pillar_state').upsert({user_name:'USHANE',pillar_date:pillarDateStr(),state:s,updated_at:new Date().toISOString()},{onConflict:'user_name,pillar_date'});
+    const {error:e1}=await sb.from('daily_pillar_state').upsert({user_name:'USHANE',pillar_date:pillarDateStr(),state:s,updated_at:new Date().toISOString()},{onConflict:'user_name,pillar_date'});
+    if(e1){if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','save',e1);toast('Pillar save failed — see admin','error');}
     // Sync to CC pillars table so Command Centre Team page reads correct data
     const doneIds=JSON.stringify(Object.keys(s).filter(k=>s[k]));
-    await sb.from('pillars').upsert({who:'USHANE',done_ids:doneIds,updated_at:new Date().toISOString()},{onConflict:'who'});
-  }catch(_){}
+    const {error:e2}=await sb.from('pillars').upsert({who:'USHANE',done_ids:doneIds,updated_at:new Date().toISOString()},{onConflict:'who'});
+    if(e2&&window.bbReportDbError)window.bbReportDbError('pillars','save',e2);
+  }catch(e){if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','save',e);}
 }
 async function toggleUshanePillar(k){const s={..._pillarCache};s[k]=!s[k];_pillarCache=s;_pendingOps++;try{await savePillarState(s);}finally{_pendingOps--;}renderDashboard()}
 async function resetUshanePillars(){_pillarCache={};_pendingOps++;try{await savePillarState({});}finally{_pendingOps--;}renderDashboard()}
@@ -3725,6 +3728,180 @@ function vsUpdateCheckinBadge(){
   // Also update badge whenever DATA changes — hook into renderPage
   var _origRP=window.renderPage;
   if(_origRP){window.renderPage=function(){_origRP.apply(this,arguments);setTimeout(vsUpdateCheckinBadge,100);};}
+})();
+</script>
+
+<!-- ===================== BB SENTINEL — system watchdog ===================== -->
+<script>
+(function(){
+  'use strict';
+  var APP='video-system';
+  var SB_URL='https://yyviiwnqgphyklcoijyd.supabase.co';
+  var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
+  // Tables the app reads. core:true => never legitimately empty, so 0 rows = permissions red flag.
+  var TABLES=[
+    {name:'clients',core:true},
+    {name:'team_members',core:true},
+    {name:'video_projects',core:false},
+    {name:'tasks',core:false},
+    {name:'video_chat_messages',core:false},
+    {name:'video_project_links',core:false},
+    {name:'video_stage_history',core:false},
+    {name:'video_project_comments',core:false},
+    {name:'video_inspo',core:false},
+    {name:'smm_shoots',core:false},
+    {name:'client_monthly_targets',core:false},
+    {name:'daily_pillar_state',core:false},
+    {name:'pillars',core:false},
+    {name:'weekly_plan_cells',core:false},
+    {name:'agent_alerts',core:false}
+  ];
+
+  var _seen={};        // dedupe key -> last-logged timestamp (ms)
+  var _issues=[];      // current-session issues for the banner
+  var DEDUPE_MS=10*60*1000;
+
+  function who(){try{return (window.currentUser&&window.currentUser.name)||'anon';}catch(e){return 'anon';}}
+  function isAdminViewer(){try{var r=(window.currentUser&&window.currentUser.role||'').toLowerCase();return r==='admin'||r==='video_head';}catch(e){return false;}}
+
+  // Write an issue to the central bug log (deduped + rate-limited so we never spam the DB)
+  function report(issue){
+    try{
+      var key=(issue.category||'')+'|'+(issue.table_name||'')+'|'+(issue.message||'').slice(0,120);
+      var now=Date.now();
+      if(_seen[key]&&(now-_seen[key])<DEDUPE_MS)return;   // already logged recently
+      _seen[key]=now;
+      _issues.push(issue);
+      // console first — always visible to a developer
+      console.error('[BB Sentinel]',issue.category,issue.table_name||'',issue.message,issue.detail||'');
+      // persist to system_bug_log via raw REST (independent of the app's sb client)
+      fetch(SB_URL+'/rest/v1/system_bug_log',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({
+          app:APP,
+          severity:issue.severity||'error',
+          category:issue.category||null,
+          table_name:issue.table_name||null,
+          message:(issue.message||'').slice(0,500),
+          detail:(issue.detail||'').slice(0,2000),
+          user_name:who(),
+          url:location.href.slice(0,300),
+          user_agent:(navigator.userAgent||'').slice(0,300)
+        })
+      }).catch(function(){});
+      renderBanner();
+    }catch(e){/* sentinel must never throw */}
+  }
+  // expose so app code can surface its own caught errors instead of swallowing them
+  window.bbReportDbError=function(table,op,err){
+    if(!err)return;
+    var msg=(err.message||err.msg||(typeof err==='string'?err:JSON.stringify(err))||'unknown');
+    var code=err.code?(' ['+err.code+']'):'';
+    report({severity:'error',category:'db_write',table_name:table,message:op+' failed'+code,detail:msg});
+  };
+  window.bbSentinelReport=report;
+
+  // ---- Banner (admins only — staff just get a clean app; admins see the alert) ----
+  function renderBanner(){
+    if(!isAdminViewer())return;
+    if(!_issues.length)return;
+    var el=document.getElementById('bbSentinelBanner');
+    if(!el){
+      el=document.createElement('div');
+      el.id='bbSentinelBanner';
+      el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(90deg,#7f1d1d,#b91c1c);color:#fff;font:600 12.5px/1.4 Inter,system-ui,sans-serif;padding:9px 16px;box-shadow:0 2px 14px rgba(0,0,0,.4);display:flex;align-items:center;gap:12px;';
+      document.body.appendChild(el);
+    }
+    var top=_issues.slice(-3).map(function(i){return (i.table_name?i.table_name+': ':'')+i.message;}).join('  ·  ');
+    el.innerHTML='<span style="font-size:15px">⚠️</span>'+
+      '<span style="flex:1">System issue detected ('+_issues.length+'): '+top+'</span>'+
+      '<button id="bbSentinelView" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:6px;padding:4px 10px;font:700 11px Inter;cursor:pointer">Details</button>'+
+      '<button id="bbSentinelHide" style="background:none;border:none;color:#fff;opacity:.7;font-size:17px;cursor:pointer;line-height:1">×</button>';
+    document.getElementById('bbSentinelHide').onclick=function(){el.remove();};
+    document.getElementById('bbSentinelView').onclick=showDetails;
+  }
+  function showDetails(){
+    var rows=_issues.map(function(i){
+      return '<div style="padding:10px 12px;border:1px solid var(--border,#2a2a3a);border-radius:8px;margin-bottom:8px;background:var(--surface-2,#1a1a26)">'+
+        '<div style="font-weight:700;color:#f87171;font-size:12px;text-transform:uppercase;letter-spacing:.04em">'+(i.category||'issue')+(i.table_name?' · '+i.table_name:'')+'</div>'+
+        '<div style="margin-top:3px;font-size:13px;color:var(--text,#e8e8f0)">'+(i.message||'')+'</div>'+
+        (i.detail?'<div style="margin-top:3px;font-size:11px;color:var(--text-3,#8888a0);word-break:break-word">'+i.detail+'</div>':'')+
+      '</div>';
+    }).join('');
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML='<div style="background:var(--surface,#12121a);border:1px solid var(--border-strong,#3a3a4e);border-radius:14px;max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column">'+
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border,#2a2a3a);display:flex;align-items:center;justify-content:space-between">'+
+        '<div style="font:800 15px Poppins,Inter;color:var(--text,#fff)">🛡️ Sentinel — '+_issues.length+' issue(s)</div>'+
+        '<button id="bbSentClose" style="background:none;border:none;color:var(--text-2,#a0a0b8);font-size:22px;cursor:pointer">×</button>'+
+      '</div>'+
+      '<div style="padding:16px 20px;overflow-y:auto">'+rows+
+        '<div style="margin-top:6px;font-size:11px;color:var(--text-3,#8888a0)">All issues are logged to <code>system_bug_log</code> in Supabase. Share this with your developer.</div>'+
+      '</div></div>';
+    ov.onclick=function(e){if(e.target===ov)ov.remove();};
+    document.body.appendChild(ov);
+    document.getElementById('bbSentClose').onclick=function(){ov.remove();};
+  }
+
+  // ---- Boot health check: ping every table the app needs ----
+  function headCount(table){
+    // returns Promise<{ok, count, status, error}>
+    return fetch(SB_URL+'/rest/v1/'+table+'?select=id&limit=1',{
+      method:'GET',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'count=exact','Range':'0-0'}
+    }).then(function(r){
+      var cr=r.headers.get('content-range'); // e.g. "0-0/20" or "*/0"
+      var total=null;
+      if(cr&&cr.indexOf('/')>-1){var t=cr.split('/')[1];total=(t==='*')?null:parseInt(t,10);}
+      return r.text().then(function(body){
+        return {ok:r.ok,status:r.status,count:total,body:body};
+      });
+    }).catch(function(e){return {ok:false,status:0,count:null,body:String(e&&e.message||e)};});
+  }
+
+  function checkHealth(){
+    TABLES.forEach(function(t){
+      headCount(t.name).then(function(res){
+        if(!res.ok){
+          // 404 = table missing; 401/403 = permission; else generic
+          var cat=res.status===404?'table_missing':(res.status===401||res.status===403?'db_permission':'network');
+          report({severity:'error',category:cat,table_name:t.name,message:'read failed (HTTP '+res.status+')',detail:(res.body||'').slice(0,300)});
+          return;
+        }
+        if(t.core && res.count===0){
+          // Core tables are never legitimately empty — 0 rows = almost certainly an RLS/permission block
+          report({severity:'warning',category:'empty_core',table_name:t.name,message:'returned 0 rows — likely a permissions (RLS) block',detail:'Core table should never be empty. Check Row Level Security policy for the anon role.'});
+        }
+      });
+    });
+  }
+  window.bbSentinelCheck=checkHealth;
+
+  // ---- Global error capture: nothing fails silently anymore ----
+  window.addEventListener('error',function(e){
+    if(!e)return;
+    var msg=e.message||'script error';
+    var detail=(e.filename?e.filename+':'+e.lineno+':'+e.colno:'')+(e.error&&e.error.stack?'\n'+e.error.stack:'');
+    report({severity:'error',category:'js_error',message:msg.slice(0,200),detail:detail.slice(0,800)});
+  });
+  window.addEventListener('unhandledrejection',function(e){
+    var r=e&&e.reason; if(!r)return;
+    var msg=(r.message||r.msg||(typeof r==='string'?r:JSON.stringify(r))||'unhandled promise rejection');
+    // Supabase errors carry a .code — surface it
+    var code=r.code?(' ['+r.code+']'):'';
+    report({severity:'error',category:'promise_rejection',message:('unhandled: '+msg+code).slice(0,200),detail:(r.stack||'').slice(0,800)});
+  });
+
+  // ---- Run after the app has booted (wait for a logged-in user) ----
+  var _tries=0;
+  function waitAndRun(){
+    _tries++;
+    if(window.currentUser){ setTimeout(checkHealth,500); return; }
+    if(_tries<40) setTimeout(waitAndRun,500);   // up to ~20s
+  }
+  if(document.readyState==='complete') waitAndRun();
+  else window.addEventListener('load',waitAndRun);
 })();
 </script>
 </body>
