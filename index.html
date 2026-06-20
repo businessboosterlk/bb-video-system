@@ -3761,8 +3761,9 @@ function vsUpdateCheckinBadge(){
   var _issues=[];      // current-session issues for the banner
   var DEDUPE_MS=10*60*1000;
 
-  function who(){try{return (window.currentUser&&window.currentUser.name)||'anon';}catch(e){return 'anon';}}
-  function isAdminViewer(){try{var r=(window.currentUser&&window.currentUser.role||'').toLowerCase();return r==='admin'||r==='video_head';}catch(e){return false;}}
+  function cu(){try{return (typeof currentUser!=='undefined')?currentUser:null;}catch(e){return null;}}
+  function who(){var u=cu();return (u&&u.name)||'anon';}
+  function isAdminViewer(){var u=cu();var r=(u&&u.role||'').toLowerCase();return r==='admin'||r==='video_head';}
 
   // Write an issue to the central bug log (deduped + rate-limited so we never spam the DB)
   function report(issue){
@@ -3897,7 +3898,7 @@ function vsUpdateCheckinBadge(){
   var _tries=0;
   function waitAndRun(){
     _tries++;
-    if(window.currentUser){ setTimeout(checkHealth,500); return; }
+    if(cu()){ setTimeout(checkHealth,500); return; }
     if(_tries<40) setTimeout(waitAndRun,500);   // up to ~20s
   }
   if(document.readyState==='complete') waitAndRun();
