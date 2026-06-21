@@ -3353,7 +3353,7 @@ function vsUpdateCheckinBadge(){
 
   function sbFetch(table, params) {
     var url = SUPABASE_URL + '/rest/v1/' + table + (params ? '?' + params : '');
-    return fetch(url, { headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY } }).then(function(r) { return r.json(); });
+    return fetch(url, { headers: { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY } }).then(function(r) { return r.json(); }).catch(function() { return null; });
   }
 
   function logEntry(name, status, detail) {
