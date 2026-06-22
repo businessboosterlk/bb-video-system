@@ -663,13 +663,14 @@ const STAGES = [
   { key: 'video_head_review', label: 'Video Head Review' },
   { key: 'team_review', label: 'Team Review' },
   { key: 'changes', label: 'Changes' },
+  { key: 'coo_check', label: 'COO Check' },
   { key: 'client_review', label: 'Client Review' },
   { key: 'client_changes', label: 'Client Changes' },
-  { key: 'coo_check', label: 'COO Check' },
-  { key: 'sent_to_client', label: 'Sent to Client' },
   { key: 'add_to_drive', label: 'Add to Drive' },
-  { key: 'posted', label: 'Posted' },
 ];
+// Retired stages kept for label lookups on historical/archived data (no longer shown on the board)
+const RETIRED_STAGE_LABELS={ sent_to_client:'Sent to Client', posted:'Posted' };
+function stageLabel(key){return (STAGES.find(s=>s.key===key)||{}).label || RETIRED_STAGE_LABELS[key] || key || '';}
 const SHOOT_STAGES = [
   { key: 'Videos Confirmed', label: 'Videos Confirmed', alt: 'videos_confirmed' },
   { key: 'Script Made', label: 'Script Made', alt: 'script_made' },
@@ -679,7 +680,7 @@ const SHOOT_STAGES = [
   { key: 'Date Confirmed', label: 'Date Confirmed', alt: 'date_confirmed' },
   { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
-const COMPLETED_STAGES=['add_to_drive','sent_to_client','posted'];
+const COMPLETED_STAGES=['add_to_drive'];
 const PAGES_FULL = [
   { key: 'dashboard',     label: 'Dashboard',      section: 'WORKSPACE' },
   { key: 'pipeline',      label: 'Pipeline',       section: 'WORKSPACE' },
@@ -742,7 +743,7 @@ function clientVideoCount(clientId){
   const now=new Date();
   const curMonth=now.getMonth()+1; // 1-indexed
   const curYear=now.getFullYear();
-  const PUBLISHED=['posted','add_to_drive','sent_to_client'];
+  const PUBLISHED=['add_to_drive'];
   // Count from active + archived projects matching this month
   const all=(DATA.projects||[]).concat(DATA.archivedProjects||[]);
   const posted=all.filter(p=>p.client_id===clientId&&PUBLISHED.includes(p.current_stage)&&parseInt(p.target_month)===curMonth&&parseInt(p.target_year||curYear)===curYear).length;
@@ -803,7 +804,7 @@ function videoTarget(client){
 // Returns count of projects posted this month for a client
 function videosPostedThisMonth(clientId){
   const mStart=startOfMonth();
-  return (DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=mStart).length;
+  return (DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='add_to_drive'&&p.completed_at&&new Date(p.completed_at)>=mStart).length;
 }
 // Returns total seconds spent in given stages for a project (from video_stage_history)
 function stageDurationSecs(projectId,stageKeys){
@@ -1246,14 +1247,14 @@ function renderDashboard(){
   const weekStart=startOfWeek();
   const doneThisWeek=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)&&p.updated_at&&new Date(p.updated_at)>=weekStart).length;
   const inEditing=ps.filter(p=>p.current_stage==='editing').length;
-  const sentToClient=ps.filter(p=>p.current_stage==='sent_to_client').length;
+  const sentToClient=ps.filter(p=>p.current_stage==='client_review').length;
   const inReview=ps.filter(p=>['team_review','coo_check'].includes(p.current_stage)).length;
   // 5 pillars based on real data
   const stuckCount=ps.filter(p=>{if(COMPLETED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(Date.now()-upd.getTime())>3*86400000}).length;
   const pillarPipeline=stuckCount===0?'green':(stuckCount<=2?'amber':'red');
   const pillarQuality=inReview>=0?'green':'amber';
   const pillarTeam=overdue===0?'green':(overdue<=2?'amber':'red');
-  const stale=ps.filter(p=>p.current_stage==='sent_to_client'&&p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())>5*86400000).length;
+  const stale=ps.filter(p=>p.current_stage==='client_review'&&p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())>5*86400000).length;
   const pillarComm=stale===0?'green':(stale<=1?'amber':'red');
   const editorLoad={};
   DATA.teamMembers.forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length});
@@ -1278,9 +1279,9 @@ function renderDashboard(){
   const todayStr=new Date().toISOString().slice(0,10);
   const overdueList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
   const dueTodayList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&p.deadline.slice(0,10)===todayStr);
-  const dueSoonList=ps.filter(p=>{if(!p.deadline||p.current_stage==='posted')return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
-  const stuckList=ps.filter(p=>{if(p.current_stage==='posted')return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
-  const clientWaitList=ps.filter(p=>p.current_stage==='sent_to_client'&&p.updated_at&&(now-new Date(p.updated_at).getTime())>5*86400000).sort((a,b)=>new Date(a.updated_at)-new Date(b.updated_at));
+  const dueSoonList=ps.filter(p=>{if(!p.deadline||COMPLETED_STAGES.includes(p.current_stage))return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const stuckList=ps.filter(p=>{if(COMPLETED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
+  const clientWaitList=ps.filter(p=>p.current_stage==='client_review'&&p.updated_at&&(now-new Date(p.updated_at).getTime())>5*86400000).sort((a,b)=>new Date(a.updated_at)-new Date(b.updated_at));
   const unassignedList=ps.filter(p=>!p.assigned_editor_id&&!COMPLETED_STAGES.includes(p.current_stage));
   const attnTotal=overdueList.length+dueTodayList.length+stuckList.length+clientWaitList.length+unassignedList.length;
   function attnRow(p,tagText,tagCls){const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);return `<div class="attn-row clickable" data-pid="${p.id}"><div class="attn-row-main"><div class="attn-row-title">${esc(p.title)}</div><div class="attn-row-sub">${esc(cl?.name||'No client')} · ${STAGES.find(s=>s.key===p.current_stage)?.label||''} · ${ed?esc(ed.name):'<span style="color:var(--red)">Unassigned</span>'}</div></div><div class="attn-tag ${tagCls}">${tagText}</div></div>`}
@@ -1308,7 +1309,7 @@ function renderDashboard(){
       ${statCard('Completed',completed,'add to drive / sent / posted',completed>0?'green':'')}
       ${statCard('Done This Week',doneThisWeek,'completed since Monday')}
       ${statCard('In Editing',inEditing,'currently being cut')}
-      ${statCard('Sent to Client',sentToClient,sentToClient>0?'awaiting feedback':'—')}
+      ${statCard('Client Review',sentToClient,sentToClient>0?'awaiting feedback':'—')}
     </div>
     ${isAdmin()?ushaneDailyPillarsHtml():''}
     <div class="pillars">
@@ -1436,7 +1437,7 @@ function renderPipeline(){
   </div>`;
   let monthSummaryHtml='';
   if(f.month){
-    const DONE=['add_to_drive','posted'];
+    const DONE=['add_to_drive'];
     const mi=parseInt(f.month);
     const byClient={};const yearsSeen=new Set();
     ps.forEach(p=>{
@@ -1623,7 +1624,7 @@ async function bulkDeleteProjects(){
 // last stage entry is >72h old, batch-archive them. Uses video_stage_history to find when
 // they entered their current stage. Skips if already archived or if entry time unknown.
 async function autoArchiveStale(){
-  const TERMINAL=['posted','add_to_drive','sent_to_client'];
+  const TERMINAL=['add_to_drive'];
   const THRESH_MS=72*3600*1000;
   const now=Date.now();
   if(!DATA.projects||!DATA.stageHistory)return;
@@ -1759,7 +1760,7 @@ function attachDropListeners(){
 async function moveProject(project,newStage){
   const old=project.current_stage;
   project.current_stage=newStage;
-  if(newStage==='posted')project.completed_at=new Date().toISOString();
+  if(newStage==='add_to_drive')project.completed_at=new Date().toISOString();
   _pendingOps++;
   renderPage();
   let succeeded=false;
@@ -1768,7 +1769,7 @@ async function moveProject(project,newStage){
     if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.floor((ex-en)/1000)}).eq('id',o.id)}
     await sb.from('video_stage_history').insert({video_project_id:project.id,stage:newStage,moved_by:currentUser.name});
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
-    if(newStage==='posted')up.completed_at=new Date().toISOString();
+    if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
     succeeded=true;
@@ -1776,7 +1777,7 @@ async function moveProject(project,newStage){
   }catch(err){
     console.error(err);toast('Move failed','error');
     project.current_stage=old;
-    if(old!=='posted')project.completed_at=undefined;
+    if(old!=='add_to_drive')project.completed_at=undefined;
   }finally{
     _pendingOps--;
     await fetchAll(true);
@@ -2245,7 +2246,7 @@ function renderClients(){
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
     const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
-    const postedThisMonth=proj.filter(p=>p.current_stage==='posted'&&p.completed_at&&new Date(p.completed_at)>=monthStart&&new Date(p.completed_at)<monthEnd).length;
+    const postedThisMonth=proj.filter(p=>p.current_stage==='add_to_drive'&&p.completed_at&&new Date(p.completed_at)>=monthStart&&new Date(p.completed_at)<monthEnd).length;
     const target=videoTarget(c);
     const lastAct=proj.map(p=>p.updated_at||p.created_at).sort().pop();
     return {client:c,active,postedThisMonth,target,total:proj.length,lastAct};
@@ -2290,7 +2291,7 @@ function getClientMonthlyContract(clientId,year,month,defaultMonthly){
 }
 function computeMonthStats(clientProjects,year,month,contracted,nextMonthContracted){
   const inMonth=clientProjects.filter(p=>Number(p.target_year)===Number(year)&&Number(p.target_month)===Number(month));
-  const PUBLISHED=['posted','add_to_drive','sent_to_client'];
+  const PUBLISHED=['add_to_drive'];
   const published=inMonth.filter(p=>PUBLISHED.includes(p.current_stage)).length;
   const inPipeline=inMonth.filter(p=>!PUBLISHED.includes(p.current_stage)).length;
   const remaining=Math.max(0,contracted-published);
@@ -2453,7 +2454,7 @@ function openClientDetail(cid){
   const c=DATA.clients.find(x=>x.id===cid);if(!c)return;
   const proj=DATA.projects.filter(p=>p.client_id===cid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
-  const done=proj.filter(p=>p.current_stage==='posted');
+  const done=proj.filter(p=>p.current_stage==='add_to_drive');
   // Q2 plan needs to count archived "published" videos too (auto-archive moves them out of DATA.projects)
   const archivedForClient=(DATA.archivedProjects||[]).filter(p=>Number(p.client_id)===Number(cid));
   const planHtml=quarterlyPlanSection(c,[...proj,...archivedForClient]);
@@ -3596,9 +3597,9 @@ function vsUpdateCheckinBadge(){
   var KB=[
     {keys:['hello','hi','hey','help me','what can you do','sup'],ans:'Hey! 👋 I\'m your <strong>BB Video Assistant</strong>. I know this system inside out and watch for errors in the background.\n\nAsk me anything — or tap a chip below!'},
     {keys:['help','what can','capabilities','overview'],ans:'<strong>I can help with:</strong>\n\n• <strong>Pipeline stages</strong> — all 13 stages explained\n• <strong>Shoot pipeline</strong> — 7 shoot stages\n• <strong>My tasks</strong> — how task assignment works\n• <strong>Time tracker</strong> — logging time per project\n• <strong>Drive links</strong> — attaching drive links to projects\n• <strong>Clients</strong> — client management\n• <strong>Auto-archive</strong> — when projects get archived\n• <strong>Login</strong> — PINs and roles\n• <strong>Error log</strong> — type "show errors"\n• <strong>Troubleshooting</strong> — when things go wrong'},
-    {keys:['pipeline','stages','pipeline stages','what are the stages','all stages','video stages'],ans:'<strong>🎬 Video Pipeline — 13 Stages:</strong>\n\n1. <strong>Video Shot</strong> — Raw footage received\n2. <strong>Cutting & Color</strong> — Initial cut + color grade\n3. <strong>Rendering</strong> — Export/render in progress\n4. <strong>Editing</strong> — Full edit underway\n5. <strong>Video Head Review</strong> — Ushane reviews\n6. <strong>Team Review</strong> — Team checks the edit\n7. <strong>Changes</strong> — Revision round\n8. <strong>Client Review</strong> — Sent to client\n9. <strong>Client Changes</strong> — Client wants edits\n10. <strong>COO Check</strong> — Shiara approves\n11. <strong>Sent to Client</strong> — Final delivered\n12. <strong>Add to Drive</strong> — Uploaded to Google Drive\n13. <strong>Posted</strong> — Live ✅\n\nDrag cards between columns to move them. Projects in the last 3 stages auto-archive after 72 hours.'},
+    {keys:['pipeline','stages','pipeline stages','what are the stages','all stages','video stages'],ans:'<strong>🎬 Video Pipeline — 11 Stages:</strong>\n\n1. <strong>Video Shot</strong> — Raw footage received\n2. <strong>Cutting & Color</strong> — Initial cut + color grade\n3. <strong>Rendering</strong> — Export/render in progress\n4. <strong>Editing</strong> — Full edit underway\n5. <strong>Video Head Review</strong> — Ushane reviews\n6. <strong>Team Review</strong> — Team checks the edit\n7. <strong>Changes</strong> — Revision round\n8. <strong>COO Check</strong> — Shiara approves\n9. <strong>Client Review</strong> — With the client for feedback\n10. <strong>Client Changes</strong> — Client wants edits\n11. <strong>Add to Drive</strong> — Final, uploaded to Google Drive ✅\n\nDrag cards between columns to move them. Projects in the final stage (Add to Drive) auto-archive after 72 hours.'},
     {keys:['shoot','shoot pipeline','shoot stages','filming','shoot schedule'],ans:'<strong>🎥 Shoot Pipeline — 7 Stages:</strong>\n\n1. <strong>Videos Confirmed</strong> — Videos agreed with client\n2. <strong>Script Made</strong> — Script written\n3. <strong>Script Changes</strong> — Client wants script edits\n4. <strong>Final Script</strong> — Script approved ✅\n5. <strong>Get Shoot Date</strong> — Coordinating date\n6. <strong>Date Confirmed</strong> — Shoot date locked in 📅\n7. <strong>Shot</strong> — Shoot completed! 🎬\n\nNavigate to <strong>Shoot Pipeline</strong> in the sidebar. Filter by client using the dropdown.'},
-    {keys:['archive','auto archive','auto-archive','archived','when does it archive'],ans:'<strong>📦 Auto-Archive:</strong>\n\nProjects in these 3 final stages auto-archive after <strong>72 hours</strong>:\n• Add to Drive\n• Sent to Client\n• Posted\n\nArchived projects are hidden from the main pipeline but not deleted. Admins and video heads can view and restore them from the Archive section.'},
+    {keys:['archive','auto archive','auto-archive','archived','when does it archive'],ans:'<strong>📦 Auto-Archive:</strong>\n\nProjects in the final stage auto-archive after <strong>72 hours</strong>:\n• Add to Drive\n\nArchived projects are hidden from the main pipeline but not deleted. Admins and video heads can view and restore them from the Archive section.'},
     {keys:['tasks','my tasks','task','task book','task list'],ans:'<strong>✅ Tasks:</strong>\n\nThe <strong>Tasks</strong> page shows tasks assigned to the <strong>video</strong> team.\n\n• Editors see only their own tasks\n• Admins and video head see all video tasks\n• Tick the checkbox to mark a task done\n• Tasks can be linked to specific clients\n\nTasks are shared with BB Command Centre — admins see them from the main system.'},
     {keys:['time','time tracker','log time','my time','time tracking'],ans:'<strong>⏱ Time Tracker:</strong>\n\nLogs time per editor per project.\n\n• The system auto-calculates time from stage transitions\n• You can also add manual time logs\n• Weekly summaries are shown per editor\n• Admins see all editors; editors see only their own time\n\nNavigate to <strong>Time Tracker</strong> in the sidebar.'},
     {keys:['drive','drive links','google drive','links','file links'],ans:'<strong>📁 Drive Links:</strong>\n\nAttach Google Drive links to any video project.\n\n• Tags: <strong>Raw Footage</strong>, <strong>Final Cut</strong>, <strong>Other</strong>\n• Click a project → open the Drive Links tab\n• Or go to the <strong>Drive Links</strong> page for a full list\n\nFiltered by client — select a client to see their project links.'},
