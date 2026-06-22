@@ -984,7 +984,13 @@ function toggleNotifPanel(events){
 }
 
 // === SUPABASE INIT ===
-function initSupabase(){if(!window.supabase){console.error('SDK not loaded');return}sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}
+async function initSupabase(){
+  if(!window.supabase){console.error('SDK not loaded');return}
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  // Silent app auth so login-only tables (clients/tasks) stay readable here
+  try{ await sb.auth.signInWithPassword({email:'nirvana@bb-leads.app',password:'pin2222secure'}); }
+  catch(e){ console.warn('[auth]',e); }
+}
 
 // === LOGIN ===
 function setupLogin(){
@@ -2727,7 +2733,7 @@ function openInspoDetail(iid){
 function applyTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('bb_theme',t)}catch(_){}}
 function initTheme(){let t='dark';try{t=localStorage.getItem('bb_theme')||'dark'}catch(_){}applyTheme(t)}
 function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')||'dark';applyTheme(cur==='dark'?'light':'dark')}
-window.addEventListener('DOMContentLoaded',()=>{initTheme();initSupabase();setupLogin();document.addEventListener('click',e=>{if(e.target.closest('#themeToggle'))toggleTheme()})});
+window.addEventListener('DOMContentLoaded',async ()=>{initTheme();await initSupabase();setupLogin();document.addEventListener('click',e=>{if(e.target.closest('#themeToggle'))toggleTheme()})});
 window.openProjectForm=openProjectForm;window.openProjectDetail=openProjectDetail;window.closeModal=closeModal;
 
 /* ============================================================
