@@ -1772,7 +1772,7 @@ async function moveProject(project,newStage){
   let succeeded=false;
   try{
     const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
-    if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.floor((ex-en)/1000)}).eq('id',o.id)}
+    if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-en)/1000))}).eq('id',o.id)}
     await sb.from('video_stage_history').insert({video_project_id:project.id,stage:newStage,moved_by:currentUser.name});
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
     if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
