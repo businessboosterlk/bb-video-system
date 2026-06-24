@@ -1312,7 +1312,7 @@ function renderDashboard(){
     </div>`:`<div class="attn-panel all-clear"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All clear — nothing needs attention right now</div></div>`}
     <div class="stat-grid">
       ${statCard('Active Projects',active,'in pipeline')}
-      ${statCard('Completed',completed,'add to drive / sent / posted',completed>0?'green':'')}
+      ${statCard('Completed',completed,'in Add to Drive',completed>0?'green':'')}
       ${statCard('Done This Week',doneThisWeek,'completed since Monday')}
       ${statCard('In Editing',inEditing,'currently being cut')}
       ${statCard('Client Review',sentToClient,sentToClient>0?'awaiting feedback':'—')}
@@ -3418,7 +3418,7 @@ function vsUpdateCheckinBadge(){
 
   // Agent 2: Client Review Stall
   function runClientReviewAgent() {
-    sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=in.(client_review,sent_to_client)&is_archived=eq.false&updated_at=lt.' + hoursAgo(72)).then(function(data) {
+    sbFetch('video_projects', 'select=id,title,current_stage,updated_at&current_stage=eq.client_review&is_archived=eq.false&updated_at=lt.' + hoursAgo(72)).then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
@@ -3440,7 +3440,7 @@ function vsUpdateCheckinBadge(){
 
   // Agent 4: Deadline Alert
   function runDeadlineAgent() {
-    sbFetch('video_projects', 'select=id,title,deadline,current_stage&is_archived=eq.false&current_stage=neq.posted&deadline=gte.' + todayStr() + '&deadline=lte.' + daysFromNow(2) + '&deadline=not.is.null').then(function(data) {
+    sbFetch('video_projects', 'select=id,title,deadline,current_stage&is_archived=eq.false&current_stage=neq.add_to_drive&deadline=gte.' + todayStr() + '&deadline=lte.' + daysFromNow(2) + '&deadline=not.is.null').then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var items = data.slice(0,3).map(function(p){ return '"' + p.title + '" due ' + p.deadline; }).join(', ');
@@ -4116,7 +4116,7 @@ function vsUpdateCheckinBadge(){
     });
 
     sbFetch('video_projects',
-      'is_archived=eq.false&current_stage=neq.posted&deadline=lte.' + threeDaysAhead + '&deadline=gte.' + today + '&select=id,title,deadline,current_stage,client_id'
+      'is_archived=eq.false&current_stage=neq.add_to_drive&deadline=lte.' + threeDaysAhead + '&deadline=gte.' + today + '&select=id,title,deadline,current_stage,client_id'
     ).then(function (rows) {
       window.BB_VIDEO_DETAIL['deadline-alert'] = {
         label: '\u23f0 Deadline in 3 Days',
@@ -4129,7 +4129,7 @@ function vsUpdateCheckinBadge(){
     });
 
     sbFetch('video_projects',
-      'is_archived=eq.false&assigned_editor_id=is.null&current_stage=neq.posted&select=id,title,current_stage,client_id&limit=30'
+      'is_archived=eq.false&assigned_editor_id=is.null&current_stage=neq.add_to_drive&select=id,title,current_stage,client_id&limit=30'
     ).then(function (rows) {
       window.BB_VIDEO_DETAIL['unassigned'] = {
         label: '\ud83d\udc64 Unassigned Videos',
