@@ -1124,14 +1124,48 @@ async function fetchAll(silent=false){
       const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
       DATA.projects=me?DATA.projects.filter(p=>p.assigned_editor_id===me.id):[];
     }
-    // Auto-archive: admin/video_head only. Anything at posted/add_to_drive/sent_to_client for >72h gets archived.
-    // We only check projects already in memory (no extra query). Run silently — toast only on error.
-    if(currentUser&&(currentUser.role==='admin'||currentUser.role==='video_head')){
-      try{await autoArchiveStale()}catch(err){console.warn('auto-archive failed',err)}
-    }
+    // Auto-archive DISABLED: it was archiving completed work unexpectedly and
+    // instantly re-archiving anything you restored. Archiving is now manual only
+    // (use the archive button on a card / project). autoArchiveStale() is kept
+    // in the code but no longer runs automatically.
+    // if(currentUser&&(currentUser.role==='admin'||currentUser.role==='video_head')){
+    //   try{await autoArchiveStale()}catch(err){console.warn('auto-archive failed',err)}
+    // }
     // Load daily pillar state from Supabase (shared across all devices)
     await loadPillarState();
     if(silent){
+      // FLICKER FIX: if nothing the user can see has changed, skip the re-render
+      // entirely. Also never re-render while a modal is open or a field is focused.
+      var _sig=_renderSignature();
+      var _modalOpen=!!document.querySelector('.modal-backdrop');
+      var _ae=document.activeElement;
+      var _typing=_ae&&(_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA'||_ae.tagName==='SELECT');
+      if(_sig===_lastRenderSig && (_modalOpen||_typing)){ /* nothing changed + user busy: do nothing */ }
+      else if(_sig===_lastRenderSig){ /* nothing changed: skip full re-render, no flicker */ }
+      else if(_modalOpen||_typing){ /* data changed but user is busy — defer; next tick will catch it */ }
+      else { _lastRenderSig=_sig; _silentRerender(); }
+    }else{
+      _lastRenderSig=_renderSignature();
+      renderPage();
+    }
+    if(!window._vsCheckinInit){window._vsCheckinInit=true;setTimeout(vsCheckinMaybeShow,800);}
+    return;
+  }catch(err){console.error(err);if(!silent)toast('Failed to load data: '+(err.message||''),'error')}
+}
+// Lightweight fingerprint of everything that affects what's on screen. If this
+// is unchanged between refreshes, re-rendering would only cause flicker.
+let _lastRenderSig='';
+function _renderSignature(){
+  try{
+    var parts=[currentPage];
+    (DATA.projects||[]).forEach(function(p){parts.push(p.id+':'+p.current_stage+':'+(p.updated_at||'')+':'+(p.assigned_editor_id||'')+':'+(p.priority||'')+':'+(p.deadline||'')+':'+(p.title||''));});
+    parts.push('chats'+((DATA.chats||[]).length));
+    parts.push('tasks'+((DATA.tasks||[]).length));
+    parts.push('cmts'+((DATA.projectComments||[]).length));
+    return parts.join('|');
+  }catch(e){return Math.random().toString();}
+}
+function _silentRerender(){
       // Silent auto-refresh: snapshot every scroll axis before re-render, restore after
       var _pc=$('#pageContent');
       var _st=_pc?_pc.scrollTop:0;
@@ -1151,11 +1185,6 @@ async function fetchAll(silent=false){
         // Restore typed message if still on team chat
         if(_chatDraft){var cb2=$('#chatBody');if(cb2)cb2.value=_chatDraft;}
       });
-    }else{
-      renderPage();
-    }
-    if(!window._vsCheckinInit){window._vsCheckinInit=true;setTimeout(vsCheckinMaybeShow,800);}
-  }catch(err){console.error(err);if(!silent)toast('Failed to load data: '+(err.message||''),'error')}
 }
 
 // === ROUTER ===
@@ -1408,6 +1437,21 @@ function ushaneDailyPillarsHtml(){
 
 // === PAGE: PIPELINE ===
 const PIPELINE_STATE = { bulkMode: false, selected: new Set() };
+// Filter cards in place by the search text — no DOM rebuild, no focus loss, no flicker.
+function applyPipelineSearch(){
+  const q=(FILTERS.pipeline.search||'').toLowerCase().trim();
+  document.querySelectorAll('.stage-col').forEach(function(col){
+    const cards=col.querySelectorAll('.stage-cards .card');
+    let visible=0;
+    cards.forEach(function(card){
+      const match=!q || card.textContent.toLowerCase().includes(q);
+      card.style.display=match?'':'none';
+      if(match)visible++;
+    });
+    const cnt=col.querySelector('.stage-count');
+    if(cnt)cnt.textContent=visible;
+  });
+}
 function renderPipeline(){
   // Preserve scroll if we're re-rendering (board already in DOM) — NOT a fresh navigation
   const _bw=document.querySelector('.pipeline-board-wrap');
@@ -1423,7 +1467,7 @@ function renderPipeline(){
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
   if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
   const editors=DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
-  const bulkBtn=isAdmin()?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
+  const bulkBtn=(isAdmin()||isVideoHead())?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">🗄</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
     if(e.target.closest('[data-action="refresh"]'))fetchAll();
@@ -1478,7 +1522,9 @@ function renderPipeline(){
   </div>`:'';
   $('#pageContent').innerHTML=filtersHtml+monthSummaryHtml+boardHtml+bulkBarHtml;
   if(_wasOnPipeline){requestAnimationFrame(function(){const bw2=document.querySelector('.pipeline-board-wrap');if(bw2)bw2.scrollLeft=_boardLeft;document.querySelectorAll('.stage-cards').forEach(function(c,i){if(_colTops[i])c.scrollTop=_colTops[i];});const pc2=$('#pageContent');if(pc2&&_pcTop)pc2.scrollTop=_pcTop;});}
-  $('#fSearch').oninput=e=>{FILTERS.pipeline.search=e.target.value;renderPipeline()};
+  // Search filters cards IN PLACE — no full re-render, so the input never loses
+  // focus and there's no flicker while typing.
+  $('#fSearch').oninput=e=>{FILTERS.pipeline.search=e.target.value;applyPipelineSearch();};
   $('#fClient').onchange=e=>{FILTERS.pipeline.client=e.target.value;renderPipeline()};
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
   $('#fPriority').onchange=e=>{FILTERS.pipeline.priority=e.target.value;renderPipeline()};
@@ -1683,7 +1729,7 @@ async function openArchivedView(){
   const selected=new Set();
   function render(){
     const allChecked=arch.length&&selected.size===arch.length;
-    const rows=arch.length?arch.map(p=>{const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);const chk=selected.has(p.id)?'checked':'';return `<tr><td><input type="checkbox" class="arch-chk" data-id="${p.id}" ${chk} style="width:16px;height:16px;cursor:pointer"></td><td>${esc(p.title||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td class="muted">${esc(ed?.name||'—')}</td><td class="muted">${p.updated_at?fmtDate(p.updated_at):'—'}</td><td style="white-space:nowrap;display:flex;gap:6px">${isAdmin()?`<button class="btn btn-secondary btn-sm" data-restore="${p.id}">Restore</button><button class="btn btn-ghost btn-sm" data-permdelete="${p.id}" style="color:var(--red)">Delete</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:30px">No archived projects</td></tr>';
+    const rows=arch.length?arch.map(p=>{const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);const chk=selected.has(p.id)?'checked':'';return `<tr><td><input type="checkbox" class="arch-chk" data-id="${p.id}" ${chk} style="width:16px;height:16px;cursor:pointer"></td><td>${esc(p.title||'')}</td><td class="muted">${esc(cl?.name||'—')}</td><td class="muted">${esc(ed?.name||'—')}</td><td class="muted">${p.updated_at?fmtDate(p.updated_at):'—'}</td><td style="white-space:nowrap;display:flex;gap:6px">${(isAdmin()||isVideoHead())?`<button class="btn btn-secondary btn-sm" data-restore="${p.id}">Restore</button>${isAdmin()?`<button class="btn btn-ghost btn-sm" data-permdelete="${p.id}" style="color:var(--red)">Delete</button>`:''}`:''}</td></tr>`}).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:30px">No archived projects</td></tr>';
     const bulkBar=selected.size?`<div style="display:flex;gap:10px;align-items:center;margin-top:14px;padding:12px 16px;background:var(--surface-2);border:1px solid var(--accent);border-radius:10px"><span style="font-size:13px;font-weight:700;color:var(--accent)">${selected.size} selected</span><button class="btn btn-secondary btn-sm" data-action="bulk-restore-arch">Restore Selected</button><button class="btn btn-ghost btn-sm" data-action="bulk-delete-arch" style="color:var(--red)">Delete Selected</button></div>`:'';
     const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">Archived Projects</div><div class="modal-sub">${arch.length} archived</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body"><table class="tbl"><thead><tr><th style="width:30px"><input type="checkbox" id="archSelectAll" ${allChecked?'checked':''} style="width:16px;height:16px;cursor:pointer"></th><th>Title</th><th>Client</th><th>Editor</th><th>Archived</th><th></th></tr></thead><tbody>${rows}</tbody></table>${bulkBar}</div><div class="modal-footer"><button class="btn btn-primary" data-close>Close</button></div></div></div>`;
     $('#modalRoot').innerHTML=html;
