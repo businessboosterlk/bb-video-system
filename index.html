@@ -654,7 +654,7 @@ const USERS = [
   { name: 'RAMANI',  pin: '1717', role: 'editor' },
   { name: 'SANDUNU', pin: '7364', role: 'editor' },
 ];
-const REFRESH_MS = 20000;
+const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
   { key: 'video_shot', label: 'Video Shot' },
   { key: 'cutting_color_grading', label: 'Cutting & Color' },
@@ -1039,7 +1039,20 @@ function bootApp(){
   }
   fetchAll();
   if(refreshTimer)clearInterval(refreshTimer);
-  refreshTimer=setInterval(()=>{fetchAll(true)},REFRESH_MS);
+  // Bandwidth-safe refresh: only poll when the tab is actually visible.
+  // A backgrounded tab (left open all day) does ZERO fetches — that was the
+  // main thing burning the egress quota. Returning to the tab refreshes once.
+  refreshTimer=setInterval(()=>{ if(!document.hidden) fetchAll(true); },REFRESH_MS);
+  if(!window._bbVisListener){
+    window._bbVisListener=true;
+    let _lastVisRefresh=0;
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden && currentUser){
+        const now=Date.now();
+        if(now-_lastVisRefresh>15000){ _lastVisRefresh=now; fetchAll(true); }
+      }
+    });
+  }
 }
 
 // === SIDEBAR ===
