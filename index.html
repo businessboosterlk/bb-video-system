@@ -1015,12 +1015,26 @@ function onLoginSuccess(u){
   $('#loginScreen').hidden=true;$('#app').hidden=false;
   $('#userName').textContent=u.name;$('#userRole').textContent=u.role.replace('_',' ');
   $('#userAvatar').textContent=initials(u.name);
-  // Write login to team_login_logs so CC Team page can see it
-  const memberId = {THULAIB:1,SHIARA:2,USHANE:5,RAJEEWA:6,RAMANI:11,SANDUNU:null}[u.name];
-  if(memberId&&sb){
-    try{sb.from('team_login_logs').insert({team_member_id:memberId,member_name:u.name,logged_in_at:new Date().toISOString(),app:'video-system'}).catch(()=>{});}catch(_){}
-  }
+  // Write a once-per-day login row so CC Team page + the 12 PM digest see who is active
+  logVideoLogin(u);
   bootApp();
+}
+
+// Correct team_member_id map (SANDUNU was missing → null; now 13). Admins (Thulaib/Shiara)
+// aren't team_members, so they log with member_name + null id.
+const VIDEO_MEMBER_IDS = { USHANE:5, RAJEEWA:6, RAMANI:11, SANDUNU:13 };
+function logVideoLogin(u){
+  if(!u || !sb) return;
+  const today = new Date().toISOString().slice(0,10);
+  const key = 'bb_video_login_' + u.name + '_' + today;
+  if(localStorage.getItem(key)) return;           // already logged today → no duplicate rows
+  localStorage.setItem(key, '1');
+  const mid = VIDEO_MEMBER_IDS[u.name] || null;    // null id is fine — we match by member_name
+  try{
+    sb.from('team_login_logs')
+      .insert({ team_member_id: mid, member_name: u.name, logged_in_at: new Date().toISOString(), app: 'video-system' })
+      .then(({ error }) => { if(error){ localStorage.removeItem(key); console.warn('[login-log]', error.message); } });
+  }catch(e){ localStorage.removeItem(key); }
 }
 function logout(){sessionStorage.removeItem('bb_video_user');if(refreshTimer)clearInterval(refreshTimer);currentUser=null;$('#app').hidden=true;$('#loginScreen').hidden=false;$('#loginPin').value=''}
 
@@ -1050,6 +1064,7 @@ function bootApp(){
     let _lastVisRefresh=0;
     document.addEventListener('visibilitychange',()=>{
       if(!document.hidden && currentUser && !PIPELINE_STATE.bulkMode && !_bulkRunning){
+        logVideoLogin(currentUser);   // records a login if a new day started on a long-open tab
         const now=Date.now();
         if(now-_lastVisRefresh>15000){ _lastVisRefresh=now; fetchAll(true); }
       }
