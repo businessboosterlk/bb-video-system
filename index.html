@@ -1042,12 +1042,14 @@ function bootApp(){
   // Bandwidth-safe refresh: only poll when the tab is actually visible.
   // A backgrounded tab (left open all day) does ZERO fetches — that was the
   // main thing burning the egress quota. Returning to the tab refreshes once.
-  refreshTimer=setInterval(()=>{ if(!document.hidden) fetchAll(true); },REFRESH_MS);
+  // Never auto-refresh while the user is selecting or a bulk op is running —
+  // that's what made bulk select "bug out". Also skip hidden tabs (bandwidth).
+  refreshTimer=setInterval(()=>{ if(!document.hidden && !PIPELINE_STATE.bulkMode && !_bulkRunning) fetchAll(true); },REFRESH_MS);
   if(!window._bbVisListener){
     window._bbVisListener=true;
     let _lastVisRefresh=0;
     document.addEventListener('visibilitychange',()=>{
-      if(!document.hidden && currentUser){
+      if(!document.hidden && currentUser && !PIPELINE_STATE.bulkMode && !_bulkRunning){
         const now=Date.now();
         if(now-_lastVisRefresh>15000){ _lastVisRefresh=now; fetchAll(true); }
       }
@@ -1450,6 +1452,7 @@ function ushaneDailyPillarsHtml(){
 
 // === PAGE: PIPELINE ===
 const PIPELINE_STATE = { bulkMode: false, selected: new Set() };
+let _bulkRunning = false; // true while a bulk op is executing — pauses auto-refresh + per-item renders
 // Filter cards in place by the search text — no DOM rebuild, no focus loss, no flicker.
 function applyPipelineSearch(){
   const q=(FILTERS.pipeline.search||'').toLowerCase().trim();
@@ -1525,8 +1528,9 @@ function renderPipeline(){
   }
   const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
   // Bulk action floating bar
-  const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar" style="${PIPELINE_STATE.selected.size?'':'display:none'}">
+  const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
+    <button class="bulk-action-btn ghost" data-action="bulk-select-all">Select all</button>
     <select class="bulk-action-select" id="bulkMoveTo"><option value="">Move to stage…</option>${STAGES.map(s=>`<option value="${s.key}">${esc(s.label)}</option>`).join('')}</select>
     <button class="bulk-action-btn" data-action="bulk-duplicate">Duplicate</button>
     <button class="bulk-action-btn" data-action="bulk-archive" style="background:var(--red)">🗄 Archive</button>
@@ -1546,6 +1550,7 @@ function renderPipeline(){
     if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:''};renderPipeline();return}
     if(e.target.closest('[data-action="my-work"]')){const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());if(me){FILTERS.pipeline.editor=String(me.id);renderPipeline()}else{toast('No team member found for '+currentUser.name,'error')};return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
+    if(e.target.closest('[data-action="bulk-select-all"]')){bulkSelectAllVisible();return}
     if(e.target.closest('[data-action="bulk-duplicate"]')){await bulkDuplicateProjects();return}
     if(e.target.closest('[data-action="bulk-archive"]')){await bulkArchiveProjects();return}
     if(e.target.closest('[data-action="bulk-delete"]')){await bulkDeleteProjects();return}
@@ -1566,7 +1571,7 @@ function cardHtml(p){
   const bulkClass=PIPELINE_STATE.bulkMode?'selectable':'';
   const selClass=sel?'selected':'';
   const smm=clientSmm(p.client_id);
-  const menuBtn=canDrag?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
+  const menuBtn=(canDrag&&!PIPELINE_STATE.bulkMode)?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
   return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${mv}</div>`;
 }
@@ -1621,8 +1626,6 @@ function attachCardListeners(){
         // Update bulk bar count without full re-render (preserves scroll)
         const countEl=document.querySelector('.bulk-action-count');
         if(countEl)countEl.textContent=PIPELINE_STATE.selected.size+' selected';
-        const bar=document.querySelector('.bulk-action-bar');
-        if(bar)bar.style.display=PIPELINE_STATE.selected.size?'':'none';
         return;
       }
       openProjectDetail(pid);
@@ -1633,57 +1636,84 @@ function attachCardListeners(){
     }
   });
 }
+// Select-all toggle: selects every card currently visible (after filters/search),
+// or deselects them all if they're already selected.
+function bulkSelectAllVisible(){
+  if(!PIPELINE_STATE.bulkMode)return;
+  const cards=Array.from(document.querySelectorAll('.card[data-pid]')).filter(c=>c.style.display!=='none');
+  if(!cards.length)return;
+  const ids=cards.map(c=>parseInt(c.dataset.pid));
+  const allSelected=ids.every(id=>PIPELINE_STATE.selected.has(id));
+  cards.forEach(c=>{
+    const id=parseInt(c.dataset.pid);
+    if(allSelected){PIPELINE_STATE.selected.delete(id);c.classList.remove('selected');}
+    else{PIPELINE_STATE.selected.add(id);c.classList.add('selected');}
+  });
+  const countEl=document.querySelector('.bulk-action-count');
+  if(countEl)countEl.textContent=PIPELINE_STATE.selected.size+' selected';
+}
+// All bulk ops share one guarded runner so they can never overlap, can never be
+// disrupted by the background refresh (_bulkRunning pauses it), and always
+// re-render exactly once at the end.
+async function _runBulk(label, ids, perItem){
+  if(_bulkRunning){toast('A bulk action is already running…','error');return;}
+  if(!ids.length)return;
+  _bulkRunning=true;
+  let ok=0,fail=0;
+  if(toast)toast(`${label} ${ids.length} project${ids.length>1?'s':''}…`);
+  try{
+    for(const pid of ids){
+      try{ const r=await perItem(pid); if(r==='skip'){ok++;} else {ok++;} }
+      catch(_){ fail++; }
+    }
+  }finally{
+    _bulkRunning=false;
+    PIPELINE_STATE.selected.clear();
+    await fetchAll(); // single authoritative refresh + render
+    toast(`${label} ${ok} project${ok!==1?'s':''}${fail?` · ${fail} failed`:''}`, fail?'error':'success');
+  }
+}
 async function bulkMoveProjects(newStage){
   const ids=Array.from(PIPELINE_STATE.selected);
-  if(!ids.length)return;
-  toast(`Moving ${ids.length} project${ids.length>1?'s':''}…`);
-  let ok=0,fail=0;
-  for(const pid of ids){
+  if(!ids.length||_bulkRunning)return;
+  const lbl=STAGES.find(s=>s.key===newStage)?.label||newStage;
+  await _runBulk(`Moved to ${lbl} —`, ids, async (pid)=>{
     const p=getProject(pid);
-    if(!p||p.current_stage===newStage){ok++;continue}
-    try{await moveProject(p,newStage);ok++}catch(_){fail++}
-  }
-  PIPELINE_STATE.selected.clear();
-  await fetchAll();
-  toast(`Moved ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
+    if(!p||p.current_stage===newStage)return 'skip';
+    await moveProject(p,newStage);
+  });
 }
 async function bulkDuplicateProjects(){
   const ids=Array.from(PIPELINE_STATE.selected);
-  if(!ids.length)return;
-  toast(`Duplicating ${ids.length} project${ids.length>1?'s':''}…`);
-  let ok=0,fail=0;
-  for(const pid of ids){
-    try{await duplicateProject(pid);ok++}catch(_){fail++}
-  }
-  PIPELINE_STATE.selected.clear();
-  await fetchAll();
-  toast(`Duplicated ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
+  if(!ids.length||_bulkRunning)return;
+  await _runBulk('Duplicated', ids, async (pid)=>{ await duplicateProject(pid); });
 }
 async function bulkArchiveProjects(){
   const ids=Array.from(PIPELINE_STATE.selected);
-  if(!ids.length)return;
+  if(!ids.length||_bulkRunning)return;
   const titles=ids.map(id=>{const p=getProject(id);return p?p.title:'#'+id}).join('\n  • ');
   if(!confirm(`Archive ${ids.length} project${ids.length>1?'s':''}?\n\n  • ${titles}\n\nThey'll be hidden from the pipeline but recoverable from Archived Projects.`))return;
+  // Archive is a single batched UPDATE — fast and atomic.
+  if(_bulkRunning)return;
+  _bulkRunning=true;
   try{
     const {error}=await sb.from('video_projects').update({is_archived:true,updated_at:new Date().toISOString()}).in('id',ids);
     if(error)throw error;
     PIPELINE_STATE.selected.clear();
-    PIPELINE_STATE.bulkMode=false;
     await fetchAll();
     toast(`Archived ${ids.length} project${ids.length>1?'s':''}`,'success');
-  }catch(err){toast('Bulk archive failed: '+(err.message||''),'error')}
+  }catch(err){
+    if(window.bbReportDbError)window.bbReportDbError('video_projects','bulk-archive',err);
+    await fetchAll();
+    toast('Bulk archive failed: '+(err.message||''),'error');
+  }finally{ _bulkRunning=false; }
 }
 async function bulkDeleteProjects(){
   const ids=Array.from(PIPELINE_STATE.selected);
-  if(!ids.length)return;
+  if(!ids.length||_bulkRunning)return;
   const titles=ids.map(id=>{const p=getProject(id);return p?p.title:'#'+id}).join('\n  • ');
   if(!confirm(`PERMANENTLY delete ${ids.length} project${ids.length>1?'s':''}?\n\n  • ${titles}\n\nALL data removed: stage history, comments, links, time logs. Cannot be undone.`))return;
-  let ok=0,fail=0;
-  for(const pid of ids){try{await permanentDeleteProject(pid);ok++}catch(_){fail++}}
-  PIPELINE_STATE.selected.clear();
-  PIPELINE_STATE.bulkMode=false;
-  await fetchAll();
-  toast(`Deleted ${ok} project${ok>1?'s':''}${fail?` · ${fail} failed`:''}`,fail?'error':'success');
+  await _runBulk('Deleted', ids, async (pid)=>{ await permanentDeleteProject(pid); });
 }
 // Auto-archive: scan projects at terminal stages (posted/add_to_drive/sent_to_client) whose
 // last stage entry is >72h old, batch-archive them. Uses video_stage_history to find when
@@ -1827,7 +1857,7 @@ async function moveProject(project,newStage){
   project.current_stage=newStage;
   if(newStage==='add_to_drive')project.completed_at=new Date().toISOString();
   _pendingOps++;
-  renderPage();
+  if(!_bulkRunning)renderPage();
   let succeeded=false;
   try{
     const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
@@ -1838,14 +1868,16 @@ async function moveProject(project,newStage){
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
     succeeded=true;
-    toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`,'success');
+    if(!_bulkRunning)toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`,'success');
   }catch(err){
-    console.error(err);toast('Move failed','error');
+    console.error(err);
     project.current_stage=old;
     if(old!=='add_to_drive')project.completed_at=undefined;
+    if(!_bulkRunning)toast('Move failed','error');
+    if(_bulkRunning)throw err; // let the bulk runner count the failure
   }finally{
     _pendingOps--;
-    await fetchAll(true);
+    if(!_bulkRunning)await fetchAll(true);
   }
 }
 
