@@ -2395,6 +2395,13 @@ function renderClients(){
 // Computes contract / published / pipeline / remaining / shoot target with next-month buffer.
 // Uses target_month + target_year on video_projects to decide which month a video belongs to.
 // "Published" = current_stage in (posted, add_to_drive, sent_to_client) — anything past editing/review.
+// Which quarter/year the client video-plan shows. Defaults to the CURRENT quarter,
+// computed from today — so on Jul 1 it automatically shows Q3 (Jul/Aug/Sep). The
+// user can switch quarters/years with the buttons in the modal.
+let _qpQuarter = Math.ceil((new Date().getMonth()+1)/3);
+let _qpYear = new Date().getFullYear();
+function qpSetQuarter(cid,q){ _qpQuarter=q; openClientDetail(cid); }
+function qpSetYear(cid,delta){ _qpYear+=delta; openClientDetail(cid); }
 function getClientMonthlyContract(clientId,year,month,defaultMonthly){
   const override=(DATA.clientTargets||[]).find(t=>Number(t.client_id)===Number(clientId)&&Number(t.year)===Number(year)&&Number(t.month)===Number(month));
   if(override&&override.contracted_count!=null)return {value:override.contracted_count,source:'override'};
@@ -2416,10 +2423,9 @@ function computeMonthStats(clientProjects,year,month,contracted,nextMonthContrac
   return {contracted,published,inPipeline,remaining,carryFromPipeline,needNewShoots,buffer,shootTargetWithBuffer,tagged:inMonth.length};
 }
 function quarterlyPlanSection(client,clientProjects){
-  const now=new Date();
-  // Q2 fixed for now per user's notebook: April / May / June of current year
-  const year=now.getFullYear();
-  const months=[{m:4,name:'April'},{m:5,name:'May'},{m:6,name:'June'}];
+  const year=_qpYear;
+  const startM=(_qpQuarter-1)*3+1; // Q1->1, Q2->4, Q3->7, Q4->10
+  const months=[0,1,2].map(o=>({m:startM+o,name:MONTHS[startM+o-1]}));
   const defaultMonthly=client.monthly_videos;
   // Pass 1: resolve contracted count per month
   const contracts=months.map(({m,name})=>{
@@ -2482,7 +2488,14 @@ function quarterlyPlanSection(client,clientProjects){
         </div>
       </div>`).join('')}</div>
   </div>`;
-  return `<div class="detail-section qp-section"><div class="detail-section-title">Q2 Video Plan — ${year}</div>
+  const _tabStyle=(active)=>`padding:5px 11px;border-radius:7px;border:1px solid ${active?'var(--accent)':'var(--border)'};background:${active?'var(--accent)':'var(--surface-2)'};color:${active?'#fff':'var(--text-2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s`;
+  const qTabs=[1,2,3,4].map(q=>`<button style="${_tabStyle(q===_qpQuarter)}" onclick="qpSetQuarter(${client.id},${q})">Q${q}</button>`).join('');
+  const yrNav=`<button style="${_tabStyle(false)}" onclick="qpSetYear(${client.id},-1)" title="Previous year">‹ ${year-1}</button><button style="${_tabStyle(false)}" onclick="qpSetYear(${client.id},1)" title="Next year">${year+1} ›</button>`;
+  return `<div class="detail-section qp-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="detail-section-title" style="margin:0">Video Plan — <span style="color:var(--accent)">Q${_qpQuarter} ${year}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${qTabs}<span style="width:8px"></span>${yrNav}</div>
+    </div>
     <div class="qp-grid">${grid}</div>
     ${shootStrip}
     <div class="qp-chart-wrap">${chart}</div>
@@ -2539,7 +2552,7 @@ function monthChartSvg(monthData){
   return `<svg viewBox="0 0 ${w} ${h}" class="qp-chart" preserveAspectRatio="xMidYMid meet">${bars}</svg>${legend}`;
 }
 async function saveQuarterlyTargets(clientId,inputs){
-  const year=new Date().getFullYear();
+  const year=_qpYear;
   const c=DATA.clients.find(x=>x.id===clientId);
   const def=c?.monthly_videos;
   const upserts=[];
@@ -3939,7 +3952,9 @@ function vsUpdateCheckinBadge(){
           user_agent:(navigator.userAgent||'').slice(0,300)
         })
       }).catch(function(){});
-      renderBanner();
+      // Transient connectivity issues (offline/blip) log quietly — they're NOT bugs,
+      // so they must never raise the red banner and alarm staff.
+      if(!issue.quiet)renderBanner();
     }catch(e){/* sentinel must never throw */}
   }
   // expose so app code can surface its own caught errors instead of swallowing them
@@ -4011,18 +4026,27 @@ function vsUpdateCheckinBadge(){
 
   function checkHealth(){
     TABLES.forEach(function(t){
-      headCount(t.name).then(function(res){
-        if(!res.ok){
-          // 404 = table missing; 401/403 = permission; else generic
-          var cat=res.status===404?'table_missing':(res.status===401||res.status===403?'db_permission':'network');
-          report({severity:'error',category:cat,table_name:t.name,message:'read failed (HTTP '+res.status+')',detail:(res.body||'').slice(0,300)});
-          return;
-        }
-        if(t.core && res.count===0){
-          // Core tables are never legitimately empty — 0 rows = almost certainly an RLS/permission block
-          report({severity:'warning',category:'empty_core',table_name:t.name,message:'returned 0 rows — likely a permissions (RLS) block',detail:'Core table should never be empty. Check Row Level Security policy for the anon role.'});
-        }
-      });
+      function attempt(retriesLeft){
+        headCount(t.name).then(function(res){
+          if(!res.ok){
+            // HTTP 0 = the request never reached the server (offline / network blip / aborted).
+            // Retry once; if it still fails it's a connectivity issue, NOT a bug — log quietly, no banner.
+            if(res.status===0){
+              if(retriesLeft>0){ setTimeout(function(){attempt(retriesLeft-1);}, 5000); return; }
+              report({severity:'info',category:'network',table_name:t.name,message:'read failed (network/offline)',detail:'Transient — the browser could not reach the server. Not a server bug.',quiet:true});
+              return;
+            }
+            // Real server responses ARE bugs worth surfacing.
+            var cat=res.status===404?'table_missing':(res.status===401||res.status===403?'db_permission':'server_error');
+            report({severity:'error',category:cat,table_name:t.name,message:'read failed (HTTP '+res.status+')',detail:(res.body||'').slice(0,300)});
+            return;
+          }
+          if(t.core && res.count===0){
+            report({severity:'warning',category:'empty_core',table_name:t.name,message:'returned 0 rows — likely a permissions (RLS) block',detail:'Core table should never be empty. Check Row Level Security policy for the anon role.'});
+          }
+        });
+      }
+      attempt(1);
     });
   }
   window.bbSentinelCheck=checkHealth;
@@ -4037,9 +4061,10 @@ function vsUpdateCheckinBadge(){
   window.addEventListener('unhandledrejection',function(e){
     var r=e&&e.reason; if(!r)return;
     var msg=(r.message||r.msg||(typeof r==='string'?r:JSON.stringify(r))||'unhandled promise rejection');
-    // Supabase errors carry a .code — surface it
     var code=r.code?(' ['+r.code+']'):'';
-    report({severity:'error',category:'promise_rejection',message:('unhandled: '+msg+code).slice(0,200),detail:(r.stack||'').slice(0,800)});
+    // "Failed to fetch" / network errors are transient connectivity, not bugs — log quietly, no banner.
+    var isNetwork=/failed to fetch|networkerror|load failed|network request failed/i.test(msg);
+    report({severity:isNetwork?'info':'error',category:isNetwork?'network':'promise_rejection',message:('unhandled: '+msg+code).slice(0,200),detail:(r.stack||'').slice(0,800),quiet:isNetwork});
   });
 
   // ---- Run after the app has booted (wait for a logged-in user) ----
