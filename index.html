@@ -743,7 +743,7 @@ function clientVideoCount(clientId){
   const now=new Date();
   const curMonth=now.getMonth()+1; // 1-indexed
   const curYear=now.getFullYear();
-  const PUBLISHED=['add_to_drive'];
+  const PUBLISHED=['add_to_drive','posted']; // readiness counts add_to_drive + legacy posted
   // Count from active + archived projects matching this month
   const all=(DATA.projects||[]).concat(DATA.archivedProjects||[]);
   const posted=all.filter(p=>p.client_id===clientId&&PUBLISHED.includes(p.current_stage)&&parseInt(p.target_month)===curMonth&&parseInt(p.target_year||curYear)===curYear).length;
@@ -1348,7 +1348,9 @@ function renderDashboard(){
   const stuckList=ps.filter(p=>{if(COMPLETED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
   const clientWaitList=ps.filter(p=>p.current_stage==='client_review'&&p.updated_at&&(now-new Date(p.updated_at).getTime())>5*86400000).sort((a,b)=>new Date(a.updated_at)-new Date(b.updated_at));
   const unassignedList=ps.filter(p=>!p.assigned_editor_id&&!COMPLETED_STAGES.includes(p.current_stage));
-  const attnTotal=overdueList.length+dueTodayList.length+stuckList.length+clientWaitList.length+unassignedList.length;
+  // Untagged: missing the month/year that makes a video count toward client readiness — open to back-fill.
+  const untaggedList=ps.filter(p=>!p.target_month||!p.target_year);
+  const attnTotal=overdueList.length+dueTodayList.length+stuckList.length+clientWaitList.length+unassignedList.length+untaggedList.length;
   function attnRow(p,tagText,tagCls){const cl=getClient(p.client_id);const ed=getMember(p.assigned_editor_id);return `<div class="attn-row clickable" data-pid="${p.id}"><div class="attn-row-main"><div class="attn-row-title">${esc(p.title)}</div><div class="attn-row-sub">${esc(cl?.name||'No client')} · ${STAGES.find(s=>s.key===p.current_stage)?.label||''} · ${ed?esc(ed.name):'<span style="color:var(--red)">Unassigned</span>'}</div></div><div class="attn-tag ${tagCls}">${tagText}</div></div>`}
   // Editor overload detection
   const editorOverload=editorBars.filter(e=>e.count>=6);
@@ -1366,6 +1368,7 @@ function renderDashboard(){
         ${stuckList.length?`<div class="attn-block red"><div class="attn-block-label">🐌 Stuck >7 days (${stuckList.length})</div>${stuckList.slice(0,5).map(p=>attnRow(p,timeAgo(p.updated_at||p.created_at),'red')).join('')}${stuckList.length>5?`<div class="attn-more">+${stuckList.length-5} more</div>`:''}</div>`:''}
         ${clientWaitList.length?`<div class="attn-block amber"><div class="attn-block-label">📤 Client silent >5d (${clientWaitList.length})</div>${clientWaitList.slice(0,4).map(p=>attnRow(p,timeAgo(p.updated_at),'amber')).join('')}</div>`:''}
         ${unassignedList.length?`<div class="attn-block red"><div class="attn-block-label">👤 No editor assigned (${unassignedList.length})</div>${unassignedList.slice(0,4).map(p=>attnRow(p,'ASSIGN','red')).join('')}</div>`:''}
+        ${untaggedList.length?`<div class="attn-block amber"><div class="attn-block-label">🏷 No month tagged (${untaggedList.length}) — won't count toward readiness</div>${untaggedList.slice(0,5).map(p=>attnRow(p,'SET MONTH','amber')).join('')}${untaggedList.length>5?`<div class="attn-more">+${untaggedList.length-5} more</div>`:''}</div>`:''}
       </div>
       ${editorOverload.length?`<div class="attn-overload">⚡ Workload imbalance: ${editorOverload.map(e=>`<strong>${esc(e.name)}</strong> (${e.count})`).join(', ')} carrying heavy load — consider redistributing</div>`:''}
     </div>`:`<div class="attn-panel all-clear"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All clear — nothing needs attention right now</div></div>`}
@@ -1918,12 +1921,15 @@ function openProjectForm(existing=null){
 async function saveProject(id){
   const f=$('#projectForm');const fd=new FormData(f);
   const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,assigned_editor_id:fd.get('assigned_editor_id')?parseInt(fd.get('assigned_editor_id')):null,priority:fd.get('priority'),type:fd.get('type'),current_stage:fd.get('current_stage'),deadline:fd.get('deadline')||null,formula:fd.get('formula').trim()||null,description:fd.get('description').trim()||null};
-  const tm=fd.get('target_month')?parseInt(fd.get('target_month')):null;
-  d.target_month=tm;
-  if(tm){const ex=id?getProject(id):null;d.target_year=(ex&&ex.target_year)?ex.target_year:new Date().getFullYear();}
-  else{d.target_year=null;}
   if(!d.title){toast('Title required','error');return}
-  if(!tm){toast('Month is required — please pick which month this video is for','error');return}
+  // Month/year must ALWAYS be set so the video counts toward client readiness.
+  // If left blank, default to the current month/year instead of blocking.
+  let tm=fd.get('target_month')?parseInt(fd.get('target_month')):null;
+  let ty;
+  if(tm){const ex=id?getProject(id):null;ty=(ex&&ex.target_year)?ex.target_year:new Date().getFullYear();}
+  else{ tm=new Date().getMonth()+1; ty=new Date().getFullYear(); if(!id)toast('No month picked — defaulted to '+MONTHS[tm-1]+' '+ty,'info'); }
+  d.target_month=tm;
+  d.target_year=ty;
   try{
     if(id){const o=getProject(id);if(o&&o.current_stage!==d.current_stage)await moveProject(o,d.current_stage);d.updated_at=new Date().toISOString();const {error}=await sb.from('video_projects').update(d).eq('id',id);if(error)throw error;toast('Project updated','success')}
     else{d.created_by=currentUser.name;const {data:ins,error}=await sb.from('video_projects').insert(d).select().single();if(error)throw error;await sb.from('video_stage_history').insert({video_project_id:ins.id,stage:ins.current_stage,moved_by:currentUser.name});toast('Project created','success')}
@@ -2410,7 +2416,7 @@ function getClientMonthlyContract(clientId,year,month,defaultMonthly){
 }
 function computeMonthStats(clientProjects,year,month,contracted,nextMonthContracted){
   const inMonth=clientProjects.filter(p=>Number(p.target_year)===Number(year)&&Number(p.target_month)===Number(month));
-  const PUBLISHED=['add_to_drive'];
+  const PUBLISHED=['add_to_drive','posted']; // readiness counts add_to_drive + legacy posted
   const published=inMonth.filter(p=>PUBLISHED.includes(p.current_stage)).length;
   const inPipeline=inMonth.filter(p=>!PUBLISHED.includes(p.current_stage)).length;
   const remaining=Math.max(0,contracted-published);
