@@ -1544,7 +1544,9 @@ function renderPipeline(){
       ${rows.length?`<table class="tbl"><thead><tr><th>Client</th><th>On drive</th><th>Still editing</th><th>Total</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td><strong style="color:var(--green)">${r.done}</strong></td><td>${r.prog}</td><td class="muted">${r.total}</td></tr>`).join('')}</tbody></table>`:'<div class="link-empty">No videos tagged for this month yet</div>'}
     </div>`;
   }
-  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
+  // Within each column, most-recently-updated first — so a just-moved card jumps to the TOP of its new stage.
+  const _recency=p=>new Date(p.updated_at||p.created_at||0).getTime();
+  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key).sort((a,b)=>_recency(b)-_recency(a));return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
   // Bulk action floating bar
   const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
@@ -1872,7 +1874,9 @@ function attachDropListeners(){
 }
 async function moveProject(project,newStage){
   const old=project.current_stage;
+  const oldUpdated=project.updated_at;
   project.current_stage=newStage;
+  project.updated_at=new Date().toISOString(); // float the card to the top of its new column immediately
   if(newStage==='add_to_drive')project.completed_at=new Date().toISOString();
   _pendingOps++;
   if(!_bulkRunning)renderPage();
@@ -1890,6 +1894,7 @@ async function moveProject(project,newStage){
   }catch(err){
     console.error(err);
     project.current_stage=old;
+    project.updated_at=oldUpdated;
     if(old!=='add_to_drive')project.completed_at=undefined;
     if(!_bulkRunning)toast('Move failed','error');
     if(_bulkRunning)throw err; // let the bulk runner count the failure
