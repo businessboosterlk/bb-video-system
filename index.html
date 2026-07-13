@@ -1488,6 +1488,9 @@ function applyPipelineSearch(){
   });
 }
 function renderPipeline(){
+  // Close any floating card/stage menu — they live on document.body and would be
+  // orphaned when we replace #pageContent (e.g. a refresh fires while a menu is open).
+  document.querySelectorAll('.card-menu-dropdown,#m-stage-sheet').forEach(function(el){el.remove();});
   // Preserve scroll if we're re-rendering (board already in DOM) — NOT a fresh navigation
   const _bw=document.querySelector('.pipeline-board-wrap');
   const _boardLeft=_bw?_bw.scrollLeft:0;
@@ -1496,7 +1499,7 @@ function renderPipeline(){
   const _wasOnPipeline=!!_bw;
   const f=FILTERS.pipeline;
   let ps=DATA.projects.slice();
-  if(f.search){const q=f.search.toLowerCase();ps=ps.filter(p=>(p.title||'').toLowerCase().includes(q)||(getClient(p.client_id)?.name||'').toLowerCase().includes(q))}
+  if(f.search){const q=f.search.toLowerCase();ps=ps.filter(p=>{const hay=[(p.title||''),(getClient(p.client_id)?.name||''),(getMember(p.assigned_editor_id)?.name||''),(clientSmm(p.client_id)||'')].join(' ').toLowerCase();return hay.includes(q);})}
   if(f.client)ps=ps.filter(p=>p.client_id===parseInt(f.client));
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
@@ -1592,7 +1595,7 @@ function renderPipeline(){
   $('#fMonth').onchange=e=>{FILTERS.pipeline.month=e.target.value;renderPipeline()};
   { const _fs=$('#fSort'); if(_fs)_fs.onchange=e=>{FILTERS.pipeline.sort=e.target.value;renderPipeline()}; }
   $('#pageContent').onclick=async e=>{
-    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:''};renderPipeline();return}
+    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:'',sort:FILTERS.pipeline.sort||'recent'};renderPipeline();return}
     if(e.target.closest('[data-action="my-work"]')){const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());if(me){FILTERS.pipeline.editor=String(me.id);renderPipeline()}else{toast('No team member found for '+currentUser.name,'error')};return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
     if(e.target.closest('[data-action="bulk-select-all"]')){bulkSelectAllVisible();return}
@@ -1704,18 +1707,19 @@ async function _runBulk(label, ids, perItem){
   if(_bulkRunning){toast('A bulk action is already running…','error');return;}
   if(!ids.length)return;
   _bulkRunning=true;
-  let ok=0,fail=0;
+  let ok=0,skip=0,fail=0;
   if(toast)toast(`${label} ${ids.length} project${ids.length>1?'s':''}…`);
   try{
     for(const pid of ids){
-      try{ const r=await perItem(pid); if(r==='skip'){ok++;} else {ok++;} }
+      try{ const r=await perItem(pid); if(r==='skip')skip++; else ok++; }
       catch(_){ fail++; }
     }
   }finally{
     _bulkRunning=false;
     PIPELINE_STATE.selected.clear();
     await fetchAll(); // single authoritative refresh + render
-    toast(`${label} ${ok} project${ok!==1?'s':''}${fail?` · ${fail} failed`:''}`, fail?'error':'success');
+    const extra=(skip?` · ${skip} already there`:'')+(fail?` · ${fail} failed`:'');
+    toast(`${label} ${ok} project${ok!==1?'s':''}${extra}`, fail?'error':'success');
   }
 }
 async function bulkMoveProjects(newStage){
