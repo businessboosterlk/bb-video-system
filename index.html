@@ -654,6 +654,7 @@ const USERS = [
   { name: 'RAJEEWA', pin: '1212', role: 'editor' },
   { name: 'RAMANI',  pin: '1717', role: 'editor' },
   { name: 'SANDUNU', pin: '7364', role: 'editor' },
+  { name: 'NIDWIN',  pin: '5050', role: 'editor' },
 ];
 const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
@@ -1023,7 +1024,7 @@ function onLoginSuccess(u){
 
 // Correct team_member_id map (SANDUNU was missing → null; now 13). Admins (Thulaib/Shiara)
 // aren't team_members, so they log with member_name + null id.
-const VIDEO_MEMBER_IDS = { USHANE:5, RAJEEWA:6, RAMANI:11, SANDUNU:13 };
+const VIDEO_MEMBER_IDS = { USHANE:5, RAJEEWA:6, RAMANI:11, SANDUNU:13, NIDWIN:15 };
 function logVideoLogin(u){
   if(!u || !sb) return;
   const today = new Date().toISOString().slice(0,10);
@@ -3769,8 +3770,8 @@ function vsUpdateCheckinBadge(){
     {keys:['time','time tracker','log time','my time','time tracking'],ans:'<strong>⏱ Time Tracker:</strong>\n\nLogs time per editor per project.\n\n• The system auto-calculates time from stage transitions\n• You can also add manual time logs\n• Weekly summaries are shown per editor\n• Admins see all editors; editors see only their own time\n\nNavigate to <strong>Time Tracker</strong> in the sidebar.'},
     {keys:['drive','drive links','google drive','links','file links'],ans:'<strong>📁 Drive Links:</strong>\n\nAttach Google Drive links to any video project.\n\n• Tags: <strong>Raw Footage</strong>, <strong>Final Cut</strong>, <strong>Other</strong>\n• Click a project → open the Drive Links tab\n• Or go to the <strong>Drive Links</strong> page for a full list\n\nFiltered by client — select a client to see their project links.'},
     {keys:['client','clients','client list','client management'],ans:'<strong>👥 Clients:</strong>\n\nShows all active clients with their monthly video targets.\n\n• Monthly contracted videos vs completed count\n• Progress bar per client\n• Click a client to edit their monthly target\n• Admins and video head see all clients; editors see read-only view'},
-    {keys:['team','team members','editors','who is on the team'],ans:'<strong>👤 Team:</strong>\n\nShows all video team members:\n• <strong>USHANE</strong> — Video Head\n• <strong>RAJEEWA</strong> — Editor\n• <strong>RAMANI</strong> — Editor\n• <strong>SANDUNU</strong> — Editor\n• <strong>THULAIB</strong> — Admin (CEO)\n• <strong>SHIARA</strong> — Admin (COO)\n\nEach member card shows active projects and monthly completions.'},
-    {keys:['login','pin','password','credentials','who can login'],ans:'<strong>🔐 Login PINs:</strong>\n\n• THULAIB — 1031 (Admin)\n• SHIARA — 1006 (Admin)\n• USHANE — 628474 (Video Head)\n• RAJEEWA — 1212 (Editor)\n• RAMANI — 1717 (Editor)\n• SANDUNU — 7364 (Editor)\n\n<strong>Roles:</strong>\n• Admin + Video Head — see all projects, all pages, can edit anything\n• Editor — sees only their assigned projects'},
+    {keys:['team','team members','editors','who is on the team'],ans:'<strong>👤 Team:</strong>\n\nShows all video team members:\n• <strong>USHANE</strong> — Video Head\n• <strong>RAJEEWA</strong> — Editor\n• <strong>RAMANI</strong> — Editor\n• <strong>SANDUNU</strong> — Editor\n• <strong>NIDWIN</strong> — Editor\n• <strong>THULAIB</strong> — Admin (CEO)\n• <strong>SHIARA</strong> — Admin (COO)\n\nEach member card shows active projects and monthly completions.'},
+    {keys:['login','pin','password','credentials','who can login'],ans:'<strong>🔐 Login PINs:</strong>\n\n• THULAIB — 1031 (Admin)\n• SHIARA — 1006 (Admin)\n• USHANE — 628474 (Video Head)\n• RAJEEWA — 1212 (Editor)\n• RAMANI — 1717 (Editor)\n• SANDUNU — 7364 (Editor)\n• NIDWIN — 5050 (Editor)\n\n<strong>Roles:</strong>\n• Admin + Video Head — see all projects, all pages, can edit anything\n• Editor — sees only their assigned projects'},
     {keys:['analytics','stats','kpis','reports','turnaround'],ans:'<strong>📊 Analytics:</strong>\n\nShows video production metrics:\n• Posted count per month\n• Per-editor output breakdown\n• Per-client progress\n• Stage bottleneck analysis — which stage takes longest\n• Average turnaround time\n\nNavigate to <strong>Analytics</strong> in the sidebar.'},
     {keys:['chat','team chat','messaging','chat system'],ans:'<strong>💬 Team Chat:</strong>\n\nIn-app messaging between the video team.\n\n• Filter by client using the dropdown\n• Send text messages and images\n• Hover over a message to delete it (🗑)\n• Deleted messages show "🗑 This message was deleted" — not fully removed\n• Project comments from the pipeline also appear in the chat feed'},
     {keys:['agents','agent alerts','ai agents','background agents'],ans:'<strong>🤖 Agents Page:</strong>\n\nShows alerts from the BB background agent system.\n\nAgents scan for:\n• Pipeline stalls\n• Overdue projects\n• Missing assignments\n• Deadline warnings\n\nAlerts are stored in the <strong>agent_alerts</strong> table. Click an alert to mark it read. Agents run every 5 minutes automatically.'},
