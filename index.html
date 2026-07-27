@@ -279,6 +279,21 @@ a:hover{text-decoration:underline}
 .notif-bell.has-unread .notif-bell-svg{filter:drop-shadow(0 0 4px rgba(155,93,229,.7));animation:notif-pulse 2.4s ease-in-out infinite}
 @keyframes notif-pulse{0%,100%{filter:drop-shadow(0 0 3px rgba(155,93,229,.55))}50%{filter:drop-shadow(0 0 9px rgba(155,93,229,.95))}}
 .qp-section{background:linear-gradient(180deg,var(--surface-2),transparent);border-radius:12px;padding:18px;margin-bottom:18px;border:1px solid var(--border)}
+/* Video Topics tracker */
+.vt-section{margin-top:18px;border-top:1px solid var(--border);padding-top:16px}
+.vt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.vt-col{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.vt-col-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin-bottom:4px;display:flex;justify-content:space-between;gap:6px}
+.vt-row{display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:5px 7px}
+.vt-status{border:none;border-radius:6px;font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit}
+.vt-topic{flex:1;font-size:12px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vt-del{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px;flex-shrink:0}
+.vt-del:hover{color:var(--red)}
+.vt-empty{font-size:11px;color:var(--text-3);font-style:italic;padding:6px 2px}
+.vt-add{display:flex;gap:5px;margin-top:4px}
+.vt-input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;color:var(--text);font-family:inherit}
+.vt-add-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+@media(max-width:720px){.vt-grid{grid-template-columns:1fr}}
 .qp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
 .qp-month{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
 .qp-month-name{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px}
@@ -586,6 +601,18 @@ a:hover{text-decoration:underline}
 .wp-total-row td:last-child{border-right:none}
 .wp-total-cell{text-align:center!important}
 .wp-grand-total-row td{background:var(--surface-2);border-top:1px solid var(--border);padding:10px 16px}
+/* Weekly plan master summary: In editing now + Shot bank */
+.wp-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+.wp-sum-col{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.wp-sum-bank{border-color:var(--green);background:linear-gradient(180deg,var(--green-soft) 0%,var(--surface) 55%)}
+.wp-sum-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:var(--text)}
+.wp-sum-total{font-size:22px;font-weight:900;color:var(--accent)}
+.wp-sum-bank .wp-sum-total{color:var(--green)}
+.wp-sum-sub{font-size:11px;color:var(--text-3);margin:2px 0 12px}
+.wp-sum-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:7px 0;border-top:1px dashed var(--border)}
+.wp-sum-row strong{font-size:14px;font-weight:800}
+.wp-sum-empty{font-size:12px;color:var(--text-3);font-style:italic;padding:8px 0}
+@media(max-width:720px){.wp-summary{grid-template-columns:1fr}}
 .wp-status-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-top:5px}
 .wp-status-done{background:rgba(34,197,94,0.15);color:#22c55e}
 .wp-status-delayed{background:rgba(239,68,68,0.12);color:#ef4444}
@@ -1125,7 +1152,7 @@ let _pendingOps=0;
 async function fetchAll(silent=false){
   if(silent&&_pendingOps>0)return;
   try{
-    const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr]=await Promise.all([
+    const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr,vtr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
       sb.from('clients').select('*'),
       sb.from('team_members').select('id, name, role'),
@@ -1137,6 +1164,7 @@ async function fetchAll(silent=false){
       sb.from('video_stage_history').select('*').order('entered_at',{ascending:true}),
       sb.from('video_project_comments').select('*').order('created_at',{ascending:true}),
       sb.from('client_monthly_targets').select('*'),
+      sb.from('video_topics').select('*').order('created_at',{ascending:true}),
     ]);
     DATA.projects=pr.data||[];
     DATA.clients=cr.data||[];
@@ -1149,6 +1177,7 @@ async function fetchAll(silent=false){
     DATA.stageHistory=shr.data||[];
     DATA.projectComments=pcr.data||[];
     DATA.clientTargets=cmtr.data||[];
+    DATA.videoTopics=vtr.data||[];
     // Load archived projects separately — Q2 plan needs them so counts don't break when archive happens
     try{const {data:arch}=await sb.from('video_projects').select('id,client_id,target_month,target_year,current_stage,is_archived').eq('is_archived',true);DATA.archivedProjects=arch||[]}catch(_){DATA.archivedProjects=[]}
     // Filter projects for editors
@@ -2443,6 +2472,48 @@ let _qpQuarter = Math.ceil((new Date().getMonth()+1)/3);
 let _qpYear = new Date().getFullYear();
 function qpSetQuarter(cid,q){ _qpQuarter=q; openClientDetail(cid); }
 function qpSetYear(cid,delta){ _qpYear+=delta; openClientDetail(cid); }
+
+// === VIDEO TOPICS handlers (planned → shot → edited) ===
+async function vtAdd(cid,month,year){
+  const inp=document.getElementById('vtInput-'+month);
+  const topic=inp?inp.value.trim():'';
+  if(!topic){if(inp)inp.focus();return;}
+  _pendingOps++;
+  try{
+    const row={client_id:cid,target_month:month,target_year:year,topic:topic,status:'planned',created_by:currentUser?.name||null,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()};
+    const {data,error}=await sb.from('video_topics').insert(row).select().single();
+    if(error)throw error;
+    DATA.videoTopics=(DATA.videoTopics||[]).concat(data);
+  }catch(err){toast('Add topic failed: '+(err.message||''),'error');if(window.bbReportDbError)window.bbReportDbError('video_topics','insert',err);}
+  finally{_pendingOps--;}
+  openClientDetail(cid);
+  setTimeout(()=>{const i=document.getElementById('vtInput-'+month);if(i)i.focus();},60);
+}
+async function vtCycle(id,cid){
+  const t=(DATA.videoTopics||[]).find(x=>x.id===id);if(!t)return;
+  const next={planned:'shot',shot:'edited',edited:'planned'}[t.status||'planned'];
+  const prev=t.status;
+  t.status=next; // optimistic
+  t.shot_date=(next==='shot'||next==='edited')?(t.shot_date||new Date().toISOString().slice(0,10)):null;
+  _pendingOps++;
+  try{
+    const {error}=await sb.from('video_topics').update({status:next,shot_date:t.shot_date,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()}).eq('id',id);
+    if(error)throw error;
+  }catch(err){t.status=prev;toast('Update failed: '+(err.message||''),'error');if(window.bbReportDbError)window.bbReportDbError('video_topics','update',err);}
+  finally{_pendingOps--;}
+  openClientDetail(cid);
+}
+async function vtDelete(id,cid){
+  if(!confirm('Delete this topic?'))return;
+  _pendingOps++;
+  try{
+    const {error}=await sb.from('video_topics').delete().eq('id',id);
+    if(error)throw error;
+    DATA.videoTopics=(DATA.videoTopics||[]).filter(x=>x.id!==id);
+  }catch(err){toast('Delete failed: '+(err.message||''),'error');if(window.bbReportDbError)window.bbReportDbError('video_topics','delete',err);}
+  finally{_pendingOps--;}
+  openClientDetail(cid);
+}
 function getClientMonthlyContract(clientId,year,month,defaultMonthly){
   const override=(DATA.clientTargets||[]).find(t=>Number(t.client_id)===Number(clientId)&&Number(t.year)===Number(year)&&Number(t.month)===Number(month));
   if(override&&override.contracted_count!=null)return {value:override.contracted_count,source:'override'};
@@ -2530,6 +2601,30 @@ function quarterlyPlanSection(client,clientProjects){
       </div>`).join('')}</div>
   </div>`;
   const _tabStyle=(active)=>`padding:5px 11px;border-radius:7px;border:1px solid ${active?'var(--accent)':'var(--border)'};background:${active?'var(--accent)':'var(--surface-2)'};color:${active?'#fff':'var(--text-2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s`;
+  // === VIDEO TOPICS (per client, per month) — planned → shot → edited ===
+  const allTopics=(DATA.videoTopics||[]).filter(t=>Number(t.client_id)===Number(client.id)&&Number(t.target_year)===Number(year));
+  const qMonths=months.map(x=>x.m);
+  const qTopics=allTopics.filter(t=>qMonths.includes(Number(t.target_month)));
+  const qShot=qTopics.filter(t=>t.status==='shot'||t.status==='edited').length;
+  const qEdited=qTopics.filter(t=>t.status==='edited').length;
+  const qPlanned=qTopics.filter(t=>t.status==='planned').length;
+  const _stCfg={planned:{lbl:'⬜ To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:'🎬 Shot',c:'var(--amber)',bg:'var(--amber-soft)'},edited:{lbl:'✅ Edited',c:'var(--green)',bg:'var(--green-soft)'}};
+  const topicCols=months.map(({m,name})=>{
+    const list=allTopics.filter(t=>Number(t.target_month)===m).sort((a,b)=>a.id-b.id);
+    const shotN=list.filter(t=>t.status!=='planned').length;
+    return `<div class="vt-col">
+      <div class="vt-col-head"><span>${name}</span><span class="muted">${shotN}/${list.length} shot</span></div>
+      ${list.map(t=>{const s=_stCfg[t.status]||_stCfg.planned;return `<div class="vt-row"><button class="vt-status" style="color:${s.c};background:${s.bg}" onclick="vtCycle(${t.id},${client.id})" title="Click to change status">${s.lbl}</button><span class="vt-topic" title="${esc(t.topic)}">${esc(t.topic)}</span><button class="vt-del" onclick="vtDelete(${t.id},${client.id})" title="Delete topic">&times;</button></div>`}).join('')||'<div class="vt-empty">No topics yet</div>'}
+      <div class="vt-add"><input class="vt-input" id="vtInput-${m}" placeholder="+ Add topic" onkeydown="if(event.key==='Enter'){event.preventDefault();vtAdd(${client.id},${m},${year});}"><button class="vt-add-btn" onclick="vtAdd(${client.id},${m},${year})">Add</button></div>
+    </div>`;
+  }).join('');
+  const topicsSection=`<div class="vt-section">
+    <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <span>🎯 Video Topics — Q${_qpQuarter}</span>
+      <span class="muted fs-12">${qShot}/${qTopics.length} shot · <strong style="color:var(--amber)">${qPlanned} left to shoot</strong> · ${qEdited} edited</span>
+    </div>
+    <div class="vt-grid">${topicCols}</div>
+  </div>`;
   const qTabs=[1,2,3,4].map(q=>`<button style="${_tabStyle(q===_qpQuarter)}" onclick="qpSetQuarter(${client.id},${q})">Q${q}</button>`).join('');
   const yrNav=`<button style="${_tabStyle(false)}" onclick="qpSetYear(${client.id},-1)" title="Previous year">‹ ${year-1}</button><button style="${_tabStyle(false)}" onclick="qpSetYear(${client.id},1)" title="Next year">${year+1} ›</button>`;
   return `<div class="detail-section qp-section">
@@ -2538,6 +2633,7 @@ function quarterlyPlanSection(client,clientProjects){
       <div style="display:flex;gap:6px;flex-wrap:wrap">${qTabs}<span style="width:8px"></span>${yrNav}</div>
     </div>
     <div class="qp-grid">${grid}</div>
+    ${topicsSection}
     ${shootStrip}
     <div class="qp-chart-wrap">${chart}</div>
     <div class="qp-summary"><div class="qp-summary-label">Situation</div><div class="qp-summary-body">${summary}</div></div>
@@ -3036,6 +3132,31 @@ function wpGridRender(){
   const sPill={done:'wp-status-done',delayed:'wp-status-delayed',pending:'wp-status-pending'};
   const sLabel={done:'✅ DONE',delayed:'🔴 DELAYED',pending:'⏳ PENDING'};
 
+  // === MASTER-ONLY SUMMARY: In editing now (by client) + Shot bank ready to edit ===
+  let summaryHtml='';
+  if(isAdmin()){ // admin + video_head only
+    const activeByClient={};
+    (DATA.projects||[]).forEach(p=>{ if(COMPLETED_STAGES.includes(p.current_stage))return; const cl=getClient(p.client_id); const nm=cl?cl.name:'— No client —'; activeByClient[nm]=(activeByClient[nm]||0)+1; });
+    const leftRows=Object.entries(activeByClient).sort((a,b)=>b[1]-a[1]);
+    const leftTotal=leftRows.reduce((s,r)=>s+r[1],0);
+    const bankByClient={};
+    (DATA.videoTopics||[]).forEach(t=>{ if(t.status!=='shot')return; const cl=getClient(t.client_id); const nm=cl?cl.name:'— No client —'; bankByClient[nm]=(bankByClient[nm]||0)+1; });
+    const rightRows=Object.entries(bankByClient).sort((a,b)=>b[1]-a[1]);
+    const rightTotal=rightRows.reduce((s,r)=>s+r[1],0);
+    summaryHtml=`<div class="wp-summary">
+      <div class="wp-sum-col">
+        <div class="wp-sum-head"><span>📋 In editing now</span><span class="wp-sum-total">${leftTotal}</span></div>
+        <div class="wp-sum-sub">Videos in the pipeline being worked, by client</div>
+        ${leftRows.length?leftRows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):'<div class="wp-sum-empty">Nothing in editing</div>'}
+      </div>
+      <div class="wp-sum-col wp-sum-bank">
+        <div class="wp-sum-head"><span>🏦 Shot &amp; ready to edit</span><span class="wp-sum-total">${rightTotal}</span></div>
+        <div class="wp-sum-sub">Already shot, waiting to be edited — no shoot needed</div>
+        ${rightRows.length?rightRows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):'<div class="wp-sum-empty">Bank empty — mark topics as 🎬 Shot to fill it</div>'}
+      </div>
+    </div>`;
+  }
+
   board.innerHTML=`<div class="wp-grid-wrap"><table class="wp-grid-table">
     <thead><tr>
       <th class="wp-grid-editor-col">EDITOR</th>
@@ -3079,7 +3200,7 @@ function wpGridRender(){
         </td>
       </tr>
     </tfoot>
-  </table></div>`;
+  </table></div>${summaryHtml}`;
 }
 
 function wpCellEdit(editor,day){
