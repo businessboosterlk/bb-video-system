@@ -601,10 +601,13 @@ a:hover{text-decoration:underline}
 .wp-total-row td:last-child{border-right:none}
 .wp-total-cell{text-align:center!important}
 .wp-grand-total-row td{background:var(--surface-2);border-top:1px solid var(--border);padding:10px 16px}
-/* Weekly plan master summary: In editing now + Shot bank */
-.wp-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+/* Weekly plan master summary: cutting queue, edit queue, live work, waiting */
+.wp-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:18px}
 .wp-sum-col{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
 .wp-sum-bank{border-color:var(--green);background:linear-gradient(180deg,var(--green-soft) 0%,var(--surface) 55%)}
+.wp-sum-cut{border-color:var(--amber);background:linear-gradient(180deg,var(--amber-soft) 0%,var(--surface) 55%)}
+.wp-sum-cut .wp-sum-total{color:var(--amber)}
+.wp-sum-wait .wp-sum-total{color:var(--text-3)}
 .wp-sum-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:var(--text)}
 .wp-sum-total{font-size:22px;font-weight:900;color:var(--accent)}
 .wp-sum-bank .wp-sum-total{color:var(--green)}
@@ -710,6 +713,35 @@ const SHOOT_STAGES = [
   { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
 const COMPLETED_STAGES=['add_to_drive'];
+// === THE ONE MONTH RULE. Read LANDMINES.md L-VID-003 before you touch this ===
+// A video belongs to the month it was TAGGED for (target_month + target_year),
+// NEVER the date an editor happened to finish it. A video delivered late is
+// still that month's video.
+// Before 2026-08-10 four screens each had their own rule. The Clients page
+// counted by completed_at, so BS WITH LEON's four May videos (finished 24 June)
+// read 0 of 8 while the Pipeline correctly read 4.
+// Archived videos STILL COUNT. Archiving clears the board, it does not undo a
+// delivery, and a month's number must not change because someone tidied up.
+// Every surface answering "how many did we deliver in month X" calls
+// monthDelivery(). Never re-implement this filter inline.
+const DELIVERED_STAGES=['add_to_drive','posted']; // 'posted' is retired, still on archived rows
+function allProjects(){return (DATA.projects||[]).concat(DATA.archivedProjects||[])}
+function isDelivered(p){return !!p&&DELIVERED_STAGES.includes(p.current_stage)}
+function inTargetMonth(p,year,month){
+  if(!p||p.target_month==null)return false;
+  if(parseInt(p.target_month)!==parseInt(month))return false;
+  // target_year is null on one legacy row. Treat null as the year being asked
+  // for so it surfaces somewhere instead of vanishing from every month.
+  const py=p.target_year==null?parseInt(year):parseInt(p.target_year);
+  return py===parseInt(year);
+}
+// THE function. delivered = on drive. inProgress = tagged for the month, not there yet.
+function monthDelivery(clientId,year,month){
+  const rows=allProjects().filter(p=>Number(p.client_id)===Number(clientId)&&inTargetMonth(p,year,month));
+  let delivered=0,inProgress=0;
+  rows.forEach(p=>{if(isDelivered(p))delivered++;else inProgress++});
+  return {delivered,inProgress,total:rows.length,rows};
+}
 const PAGES_FULL = [
   { key: 'dashboard',     label: 'Dashboard',      section: 'WORKSPACE' },
   { key: 'pipeline',      label: 'Pipeline',       section: 'WORKSPACE' },
@@ -740,6 +772,23 @@ let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = nul
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [], archivedProjects: [] };
 let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', sort: 'recent' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+// Month pickers are built from the months that actually carry videos, so every
+// tagged month is reachable and empty months never clutter the list. Value is
+// always 'YYYY-MM' so a month can never be matched without its year.
+function monthPickerOptions(){
+  const seen=new Set();
+  const now=new Date();
+  allProjects().forEach(p=>{
+    if(p.target_month==null)return;
+    const y=p.target_year==null?now.getFullYear():parseInt(p.target_year);
+    seen.add(y+'-'+String(parseInt(p.target_month)).padStart(2,'0'));
+  });
+  seen.add(now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'));
+  return [...seen].sort().reverse().map(v=>{
+    const parts=v.split('-').map(Number);
+    return {v,lbl:MONTHS[parts[1]-1]+' '+parts[0]};
+  });
+}
 function monthLabel(p){if(!p||!p.target_month)return null;const mi=parseInt(p.target_month);if(isNaN(mi)||mi<1||mi>12)return null;return MONTHS[mi-1]+(p.target_year?' '+p.target_year:'');}
 
 // === HELPERS ===
@@ -772,12 +821,9 @@ function clientVideoCount(clientId){
   const now=new Date();
   const curMonth=now.getMonth()+1; // 1-indexed
   const curYear=now.getFullYear();
-  const PUBLISHED=['add_to_drive','posted']; // readiness counts add_to_drive + legacy posted
-  // Count from active + archived projects matching this month
-  const all=(DATA.projects||[]).concat(DATA.archivedProjects||[]);
-  const posted=all.filter(p=>p.client_id===clientId&&PUBLISHED.includes(p.current_stage)&&parseInt(p.target_month)===curMonth&&parseInt(p.target_year||curYear)===curYear).length;
+  const posted=monthDelivery(clientId,curYear,curMonth).delivered;
   const cl=getClient(clientId);
-  const target=cl?.videos_per_month||cl?.monthly_videos||cl?.video_target||null;
+  const target=videoTarget(cl,curYear,curMonth)||null;
   let progressClass='';
   if(target){
     if(posted>=target)progressClass='complete';
@@ -816,24 +862,35 @@ async function getProjectTimeBreakdown(pid){
 function currentEditorId(){if(!isEditor()||!DATA.teamMembers)return null;const m=DATA.teamMembers.find(x=>x.name&&x.name.toUpperCase()===currentUser.name.toUpperCase());return m?m.id:null}
 // Filter projects: editors only see projects assigned to them. Everyone else sees all.
 function visibleProjects(){if(!isEditor())return DATA.projects||[];const eid=currentEditorId();if(!eid)return [];return (DATA.projects||[]).filter(p=>Number(p.assigned_editor_id)===Number(eid))}
-// Returns the monthly video target for a client. Tries multiple column names then falls back to summing smm_shoots.vids for current month.
-function videoTarget(client){
+// Returns the monthly video target for a client FOR THE MONTH ASKED ABOUT.
+// Was hardcoded to the current month, so picking May on the Clients page moved
+// the numerator and left the denominator on today's month. Fixed 2026-08-10.
+// Order of truth: per-month contract override > client default column > shoots.
+function videoTarget(client,year,month){
   if(!client)return 0;
+  const now=new Date();
+  const y=year!=null?parseInt(year):now.getFullYear();
+  const m=month!=null?parseInt(month):now.getMonth()+1;
   const cols=['videos_per_month','monthly_videos','video_count','videos_mo','monthly_video_target','vids_per_month'];
-  for(const c of cols){if(client[c]!=null&&!isNaN(parseInt(client[c])))return parseInt(client[c])}
-  // Fallback: sum smm_shoots.vids for this client this month
+  let base=null;
+  for(const c of cols){if(client[c]!=null&&!isNaN(parseInt(client[c]))){base=parseInt(client[c]);break}}
+  const contract=getClientMonthlyContract(client.id,y,m,base);
+  if(contract.source!=='none'&&contract.value!=null)return parseInt(contract.value)||0;
+  // Fallback: sum smm_shoots.vids for the month being asked about, not today's.
   if(DATA.shoots){
-    const mStart=startOfMonth();
-    const mEnd=new Date(mStart.getFullYear(),mStart.getMonth()+1,1);
+    const mStart=new Date(y,m-1,1);
+    const mEnd=new Date(y,m,1);
     const sh=DATA.shoots.filter(s=>s.client_id===client.id&&s.shoot_date&&new Date(s.shoot_date)>=mStart&&new Date(s.shoot_date)<mEnd);
     return sh.reduce((sum,s)=>sum+(parseInt(s.vids)||0),0);
   }
   return 0;
 }
-// Returns count of projects posted this month for a client
+// Returns count of videos DELIVERED for the current month for a client.
+// Was counting by completed_at with no upper bound, so it also swept up work
+// finished in later months. Now goes through the one month rule.
 function videosPostedThisMonth(clientId){
-  const mStart=startOfMonth();
-  return (DATA.projects||[]).filter(p=>p.client_id===clientId&&p.current_stage==='add_to_drive'&&p.completed_at&&new Date(p.completed_at)>=mStart).length;
+  const now=new Date();
+  return monthDelivery(clientId,now.getFullYear(),now.getMonth()+1).delivered;
 }
 // Returns total seconds spent in given stages for a project (from video_stage_history)
 function stageDurationSecs(projectId,stageKeys){
@@ -1533,7 +1590,9 @@ function renderPipeline(){
   if(f.client)ps=ps.filter(p=>p.client_id===parseInt(f.client));
   if(f.editor)ps=ps.filter(p=>p.assigned_editor_id===parseInt(f.editor));
   if(f.priority)ps=ps.filter(p=>(p.priority||'medium')===f.priority);
-  if(f.month)ps=ps.filter(p=>parseInt(p.target_month)===parseInt(f.month));
+  // Month filter is 'YYYY-MM'. It used to match target_month only, so May 2026
+  // silently mixed with May of any other year. Now matched via the one rule.
+  if(f.month){const fp=String(f.month).split('-').map(Number);ps=ps.filter(p=>inTargetMonth(p,fp[0],fp[1]));}
   const editors=DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
   const bulkBtn=(isAdmin()||isVideoHead())?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">🗄</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
@@ -1549,34 +1608,40 @@ function renderPipeline(){
     <select class="filter-select" id="fClient"><option value="">All clients</option>${DATA.clients.map(c=>`<option value="${c.id}" ${f.client==c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
     <select class="filter-select" id="fEditor"><option value="">All editors</option>${editors.map(m=>`<option value="${m.id}" ${f.editor==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
     <select class="filter-select" id="fPriority"><option value="">All priorities</option>${['urgent','high','medium','low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select>
-    <select class="filter-select" id="fMonth"><option value="">All months</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(f.month)===i+1?'selected':''}>${m}</option>`).join('')}</select>
+    <select class="filter-select" id="fMonth"><option value="">All months</option>${monthPickerOptions().map(o=>`<option value="${o.v}" ${f.month===o.v?'selected':''}>${o.lbl}</option>`).join('')}</select>
     <select class="filter-select" id="fSort" title="Order cards within each stage">${[['recent','🕒 Recently moved (top)'],['delayed','🔴 Delayed first'],['deadline','📅 Deadline soonest'],['priority','⚡ Priority first']].map(o=>`<option value="${o[0]}" ${(f.sort||'recent')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
     ${(f.search||f.client||f.editor||f.priority||f.month)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
     <button class="btn btn-ghost btn-sm" data-action="my-work" style="color:var(--accent);font-weight:700">👤 My Work</button>
   </div>`;
   let monthSummaryHtml='';
   if(f.month){
-    const DONE=['add_to_drive'];
-    const mi=parseInt(f.month);
-    const byClient={};const yearsSeen=new Set();
-    ps.forEach(p=>{
-      if(p.target_year)yearsSeen.add(p.target_year);
-      const cid=p.client_id==null?'none':p.client_id;
-      if(!byClient[cid])byClient[cid]={done:0,prog:0};
-      if(DONE.includes(p.current_stage))byClient[cid].done++;else byClient[cid].prog++;
-    });
-    const rows=Object.keys(byClient).map(cid=>{
-      const name=cid==='none'?'— No client —':(getClient(Number(cid))?.name||'Unknown');
-      const v=byClient[cid];
-      return {name,done:v.done,prog:v.prog,total:v.done+v.prog};
+    // This summary is a REPORT, not the board. It counts archived deliveries so
+    // it agrees with the Clients page and says how many are archived, so the
+    // difference against the live cards below is explained, never mysterious.
+    const _fp=String(f.month).split('-').map(Number);
+    const smY=_fp[0],smM=_fp[1];
+    const tagged=allProjects().filter(p=>inTargetMonth(p,smY,smM));
+    const cids=[...new Set(tagged.map(p=>p.client_id==null?'none':p.client_id))];
+    const rows=cids.filter(cid=>!f.client||String(cid)===String(f.client)).map(cid=>{
+      const mine=tagged.filter(p=>(p.client_id==null?'none':p.client_id)==cid);
+      const cl=cid==='none'?null:getClient(Number(cid));
+      const done=mine.filter(isDelivered).length;
+      return {
+        name:cl?cl.name:(cid==='none'?'(No client)':'Unknown'),
+        done,
+        prog:mine.length-done,
+        archived:mine.filter(p=>p.is_archived&&isDelivered(p)).length,
+        target:cl?videoTarget(cl,smY,smM):0,
+        total:mine.length
+      };
     }).sort((a,b)=>b.total-a.total);
     const totDone=rows.reduce((s,r)=>s+r.done,0),totProg=rows.reduce((s,r)=>s+r.prog,0);
-    const mName=MONTHS[mi-1]||f.month;
-    const yrs=[...yearsSeen].sort();
-    const yrLabel=yrs.length===1?` ${yrs[0]}`:'';
-    const crossYearWarn=yrs.length>1?`<div class="text-3 fs-11" style="color:var(--red);margin-top:4px">⚠ Mixed years in this month: ${yrs.join(', ')} — counts below combine all of them</div>`:'';
-    monthSummaryHtml=`<div class="panel" style="margin-bottom:16px"><div class="panel-head"><div class="panel-title">${esc(mName)}${yrLabel} — completion by client</div><div class="text-3 fs-11">${totDone} on drive · ${totProg} still editing</div></div>${crossYearWarn}
-      ${rows.length?`<table class="tbl"><thead><tr><th>Client</th><th>On drive</th><th>Still editing</th><th>Total</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td><strong style="color:var(--green)">${r.done}</strong></td><td>${r.prog}</td><td class="muted">${r.total}</td></tr>`).join('')}</tbody></table>`:'<div class="link-empty">No videos tagged for this month yet</div>'}
+    const mName=MONTHS[smM-1]+' '+smY;
+    const yrLabel='';
+    const overRows=rows.filter(r=>r.target>0&&r.done>r.target).length;
+    const crossYearWarn=overRows?`<div class="text-3 fs-11" style="color:var(--amber);margin-top:4px;padding:0 14px 8px">${overRows} client${overRows===1?'':'s'} above contract for this month. That usually means duplicated or mis-tagged projects rather than extra delivery. Worth a review.</div>`:'';
+    monthSummaryHtml=`<div class="panel" style="margin-bottom:16px"><div class="panel-head"><div class="panel-title">${esc(mName)}${yrLabel} · completion by client</div><div class="text-3 fs-11">${totDone} on drive · ${totProg} still editing</div></div>${crossYearWarn}
+      ${rows.length?`<table class="tbl"><thead><tr><th>Client</th><th>On drive</th><th>Still editing</th><th>Contract</th><th>Total tagged</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}</td><td><strong style="color:${r.target>0&&r.done>r.target?'var(--amber)':'var(--green)'}">${r.done}</strong>${r.archived?`<span class="muted fs-11"> (${r.archived} archived)</span>`:''}</td><td>${r.prog}</td><td class="muted">${r.target||'not set'}</td><td class="muted">${r.total}</td></tr>`).join('')}</tbody></table>`:'<div class="link-empty">No videos tagged for this month yet</div>'}
     </div>`;
   }
   // Within each column, order by the chosen sort. "recent" is the default so a
@@ -2428,10 +2493,15 @@ function renderClients(){
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
     const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
-    const postedThisMonth=proj.filter(p=>p.current_stage==='add_to_drive'&&p.completed_at&&new Date(p.completed_at)>=monthStart&&new Date(p.completed_at)<monthEnd).length;
-    const target=videoTarget(c);
+    // THE FIX (L-VID-003). This used to count by completed_at inside the calendar
+    // month, so a video tagged for May but finished in June counted for neither.
+    // Now it goes through the one month rule: tagged month, archived included.
+    const md=monthDelivery(c.id,selY,selM);
+    const postedThisMonth=md.delivered;
+    // Target must follow the month the user picked, not today's month.
+    const target=videoTarget(c,selY,selM);
     const lastAct=proj.map(p=>p.updated_at||p.created_at).sort().pop();
-    return {client:c,active,postedThisMonth,target,total:proj.length,lastAct};
+    return {client:c,active,postedThisMonth,inProgress:md.inProgress,target,total:proj.length,lastAct};
   }).sort((a,b)=>b.active-a.active);
   // Summary: how many clients hit target this month
   const withTarget=rows.filter(r=>r.target>0);
@@ -2449,11 +2519,16 @@ function renderClients(){
     ${rows.map(r=>{
       const tgt=r.target||0;
       const posted=r.postedThisMonth;
+      const over=tgt>0&&posted>tgt;
       const pct=tgt>0?Math.min(100,(posted/tgt)*100):0;
-      const barColor=tgt===0?'var(--text-3)':(pct>=100?'var(--green)':(pct>=50?'var(--accent)':'var(--amber)'));
+      const barColor=tgt===0?'var(--text-3)':(over?'var(--amber)':(pct>=100?'var(--green)':(pct>=50?'var(--accent)':'var(--amber)')));
+      // Over contract is almost always duplicated or mis-tagged data, not extra
+      // delivery. Say so on the row instead of printing a number nobody trusts.
+      const overChip=over?`<span class="tag" style="font-size:9px;background:var(--amber-soft);color:var(--amber);margin-left:6px;cursor:help" title="${posted} videos are tagged for this month against a contract of ${tgt}. Usually duplicated or mis-tagged projects. Open the client to review.">over</span>`:'';
+      const editingChip=r.inProgress>0?`<span class="muted fs-11" style="margin-left:6px">${r.inProgress} editing</span>`:'';
       const progressHtml=tgt>0
-        ? `<div style="display:flex;align-items:center;gap:10px;min-width:140px"><div style="font-size:13px;font-weight:700;color:var(--text);min-width:40px"><span style="color:${barColor}">${posted}</span><span style="color:var(--text-3)">/${tgt}</span></div><div style="flex:1;height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;min-width:60px"><div style="height:100%;width:${pct}%;background:${barColor};transition:width 0.3s"></div></div></div>`
-        : `<span class="muted">${posted} posted · no target set</span>`;
+        ? `<div style="display:flex;align-items:center;gap:10px;min-width:140px"><div style="font-size:13px;font-weight:700;color:var(--text);min-width:40px"><span style="color:${barColor}">${posted}</span><span style="color:var(--text-3)">/${tgt}</span></div><div style="flex:1;height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;min-width:60px"><div style="height:100%;width:${pct}%;background:${barColor};transition:width 0.3s"></div></div>${overChip}${editingChip}</div>`
+        : `<span class="muted">${posted} delivered · no target set${editingChip}</span>`;
       return `<tr class="clickable" data-cid="${r.client.id}"><td><strong>${esc(r.client.name)}</strong></td><td>${r.active}</td><td>${progressHtml}</td><td class="muted">${r.total}</td><td class="muted">${r.lastAct?timeAgo(r.lastAct):'—'}</td></tr>`;
     }).join('')}
     </tbody></table>`;
@@ -2491,10 +2566,12 @@ async function vtAdd(cid,month,year){
 }
 async function vtCycle(id,cid){
   const t=(DATA.videoTopics||[]).find(x=>x.id===id);if(!t)return;
-  const next={planned:'shot',shot:'edited',edited:'planned'}[t.status||'planned'];
+  // planned -> shot -> cut -> edited -> planned. 'cut' was added 2026-08-10 so
+  // Ushane's cutting queue is visible instead of hidden inside 'shot'.
+  const next={planned:'shot',shot:'cut',cut:'edited',edited:'planned'}[t.status||'planned'];
   const prev=t.status;
   t.status=next; // optimistic
-  t.shot_date=(next==='shot'||next==='edited')?(t.shot_date||new Date().toISOString().slice(0,10)):null;
+  t.shot_date=(next!=='planned')?(t.shot_date||new Date().toISOString().slice(0,10)):null;
   _pendingOps++;
   try{
     const {error}=await sb.from('video_topics').update({status:next,shot_date:t.shot_date,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()}).eq('id',id);
@@ -2605,10 +2682,11 @@ function quarterlyPlanSection(client,clientProjects){
   const allTopics=(DATA.videoTopics||[]).filter(t=>Number(t.client_id)===Number(client.id)&&Number(t.target_year)===Number(year));
   const qMonths=months.map(x=>x.m);
   const qTopics=allTopics.filter(t=>qMonths.includes(Number(t.target_month)));
-  const qShot=qTopics.filter(t=>t.status==='shot'||t.status==='edited').length;
+  const qShot=qTopics.filter(t=>t.status!=='planned').length; // shot, cut and edited are all shot
   const qEdited=qTopics.filter(t=>t.status==='edited').length;
+  const qCut=qTopics.filter(t=>t.status==='cut').length;
   const qPlanned=qTopics.filter(t=>t.status==='planned').length;
-  const _stCfg={planned:{lbl:'⬜ To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:'🎬 Shot',c:'var(--amber)',bg:'var(--amber-soft)'},edited:{lbl:'✅ Edited',c:'var(--green)',bg:'var(--green-soft)'}};
+  const _stCfg={planned:{lbl:'⬜ To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:'🎬 Shot',c:'var(--amber)',bg:'var(--amber-soft)'},cut:{lbl:'✂️ Cut',c:'var(--accent)',bg:'var(--accent-soft)'},edited:{lbl:'✅ Edited',c:'var(--green)',bg:'var(--green-soft)'}};
   const topicCols=months.map(({m,name})=>{
     const list=allTopics.filter(t=>Number(t.target_month)===m).sort((a,b)=>a.id-b.id);
     const shotN=list.filter(t=>t.status!=='planned').length;
@@ -2621,7 +2699,7 @@ function quarterlyPlanSection(client,clientProjects){
   const topicsSection=`<div class="vt-section">
     <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <span>🎯 Video Topics — Q${_qpQuarter}</span>
-      <span class="muted fs-12">${qShot}/${qTopics.length} shot · <strong style="color:var(--amber)">${qPlanned} left to shoot</strong> · ${qEdited} edited</span>
+      <span class="muted fs-12">${qShot}/${qTopics.length} shot · <strong style="color:var(--amber)">${qPlanned} left to shoot</strong> · ${qCut} cut · ${qEdited} edited</span>
     </div>
     <div class="vt-grid">${topicCols}</div>
   </div>`;
@@ -3135,25 +3213,30 @@ function wpGridRender(){
   // === MASTER-ONLY SUMMARY: In editing now (by client) + Shot bank ready to edit ===
   let summaryHtml='';
   if(isAdmin()){ // admin + video_head only
-    const activeByClient={};
-    (DATA.projects||[]).forEach(p=>{ if(COMPLETED_STAGES.includes(p.current_stage))return; const cl=getClient(p.client_id); const nm=cl?cl.name:'— No client —'; activeByClient[nm]=(activeByClient[nm]||0)+1; });
-    const leftRows=Object.entries(activeByClient).sort((a,b)=>b[1]-a[1]);
-    const leftTotal=leftRows.reduce((s,r)=>s+r[1],0);
-    const bankByClient={};
-    (DATA.videoTopics||[]).forEach(t=>{ if(t.status!=='shot')return; const cl=getClient(t.client_id); const nm=cl?cl.name:'— No client —'; bankByClient[nm]=(bankByClient[nm]||0)+1; });
-    const rightRows=Object.entries(bankByClient).sort((a,b)=>b[1]-a[1]);
-    const rightTotal=rightRows.reduce((s,r)=>s+r[1],0);
+    // Who is actually holding the ball. The old single "In editing now" box
+    // counted every unfinished project, so 48 videos parked with reviewers and
+    // clients were reported as being edited when only 5 were in our hands.
+    // BB_HANDS = our team is working on it. WAITING = it is with someone else.
+    const BB_HANDS=['video_shot','cutting_color_grading','rendering','editing','changes'];
+    const WAITING=['video_head_review','team_review','coo_check','client_review','client_changes'];
+    const byClient=(list,keyFn)=>{const o={};list.forEach(x=>{const k=keyFn(x);if(k==null)return;const cl=getClient(k.cid);const nm=cl?cl.name:'(No client)';o[nm]=(o[nm]||0)+1});return Object.entries(o).sort((a,b)=>b[1]-a[1])};
+    const projRows=(stages)=>byClient((DATA.projects||[]).filter(p=>stages.includes(p.current_stage)),p=>({cid:p.client_id}));
+    const topicRows=(st)=>byClient((DATA.videoTopics||[]).filter(t=>t.status===st),t=>({cid:t.client_id}));
+    const cutRows=topicRows('shot');            // shot, not cut yet: Ushane's queue
+    const readyRows=topicRows('cut');           // cut and handed over
+    const workRows=projRows(BB_HANDS);
+    const waitRows=projRows(WAITING);
+    const tot=rs=>rs.reduce((s,r)=>s+r[1],0);
+    const box=(cls,icon,title,sub,rows,empty)=>`<div class="wp-sum-col ${cls}">
+        <div class="wp-sum-head"><span>${icon} ${title}</span><span class="wp-sum-total">${tot(rows)}</span></div>
+        <div class="wp-sum-sub">${sub}</div>
+        ${rows.length?rows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):`<div class="wp-sum-empty">${empty}</div>`}
+      </div>`;
     summaryHtml=`<div class="wp-summary">
-      <div class="wp-sum-col">
-        <div class="wp-sum-head"><span>📋 In editing now</span><span class="wp-sum-total">${leftTotal}</span></div>
-        <div class="wp-sum-sub">Videos in the pipeline being worked, by client</div>
-        ${leftRows.length?leftRows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):'<div class="wp-sum-empty">Nothing in editing</div>'}
-      </div>
-      <div class="wp-sum-col wp-sum-bank">
-        <div class="wp-sum-head"><span>🏦 Shot &amp; ready to edit</span><span class="wp-sum-total">${rightTotal}</span></div>
-        <div class="wp-sum-sub">Already shot, waiting to be edited — no shoot needed</div>
-        ${rightRows.length?rightRows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):'<div class="wp-sum-empty">Bank empty — mark topics as 🎬 Shot to fill it</div>'}
-      </div>
+      ${box('wp-sum-cut','✂️','Needs cutting','Footage is shot. Waiting on Ushane to cut it.',cutRows,'Nothing waiting to be cut')}
+      ${box('wp-sum-bank','🎞️','Cut, ready to edit','Cut and handed over. An editor can start now.',readyRows,'Nothing cut yet. Click a topic to move it Shot to Cut.')}
+      ${box('','📋','In our hands','Being cut, edited or fixed by our team right now.',workRows,'Nothing in production')}
+      ${box('wp-sum-wait','⏳','Waiting on others','Sitting with a reviewer or the client. Nobody is editing these.',waitRows,'Nothing waiting')}
     </div>`;
   }
 
