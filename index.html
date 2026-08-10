@@ -222,6 +222,7 @@ a:hover{text-decoration:underline}
 .comment-time{font-size:10px;color:var(--text-3)}
 .comment-body{font-size:13px;color:var(--text);white-space:pre-wrap;word-wrap:break-word}
 .comment-img{margin-top:8px;max-width:100%;max-height:280px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in}
+.comment-img-lazy{margin-top:8px;height:96px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px dashed var(--border);background:var(--surface-3);color:var(--text-3);font-size:11px}
 .comment-empty{text-align:center;color:var(--text-3);font-size:12px;padding:18px;font-style:italic}
 .chat-msg:hover .chat-act-btn{opacity:1!important}
 .chat-act-btn[data-del-chat]:hover{background:var(--red-soft)!important;color:var(--red)!important}
@@ -609,6 +610,15 @@ a:hover{text-decoration:underline}
 .wp-sum-cut .wp-sum-total{color:var(--amber)}
 .wp-sum-wait .wp-sum-total{color:var(--text-3)}
 .wp-sum-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:var(--text)}
+.wp-sum-head>span:first-child{display:inline-flex;align-items:center;gap:7px}
+.vicon{flex:none}
+.cut-panel{margin-top:14px}
+.cut-row{display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-top:1px dashed var(--border)}
+.cut-who{min-width:96px;font-weight:800;font-size:13px}
+.cut-tot{min-width:74px;font-weight:900;font-size:15px;color:var(--accent);text-align:right}
+.cut-cls{flex:1;font-size:12px;color:var(--text-2);line-height:1.6}
+.cut-cls b{color:var(--text);font-weight:700}
+.cut-note{font-size:11px;color:var(--text-3);margin-top:8px}
 .wp-sum-total{font-size:22px;font-weight:900;color:var(--accent)}
 .wp-sum-bank .wp-sum-total{color:var(--green)}
 .wp-sum-sub{font-size:11px;color:var(--text-3);margin:2px 0 12px}
@@ -713,6 +723,175 @@ const SHOOT_STAGES = [
   { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
 const COMPLETED_STAGES=['add_to_drive'];
+// === STROKE ICONS, NEVER EMOJI ==============================================
+// bb-anti-ai-tells rule 2. One set, currentColor, so an icon inherits the
+// colour of whatever it sits in and needs no per-use styling. Matches the
+// stroke convention already used by the nav icons in this file.
+const VICON={
+  scissors:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/>',
+  film:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 10h5M2 14h5M17 10h5M17 14h5"/>',
+  pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
+  camera:'<path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>'
+};
+function vicon(name,size){
+  const sz=size||16;
+  return `<svg class="vicon" viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${VICON[name]||''}</svg>`;
+}
+// Short codes the team types into the weekly plan. Anything not listed renders
+// as the raw code, so an unrecognised code is VISIBLE rather than dropped.
+const CUT_CODES={CCT:'CEYLON CARRIER TRAVELS',SAS:'SASTHO',SASTHO:'SASTHO',AM:'AUTO MUSEUM',
+ SWW:'SEEKERS WORLDWIDE',FUSION:'FUSION',CK:'CHERRY KITCHEN',CF:'CHERRY FISH',
+ SCD:'SHOW CAR DETAILERS',LGL:'LGL',BSWL:'BS WITH LEON',LEON:'BS WITH LEON',
+ HD:'HOMEDEPOT',GSC:'GUIDING STEPS COLLEGE',GEM:'SAPPHIRE TRAILS',HP:'HIRE PANTHER',
+ BELL:'BELLVANTAGE',TTM:'TT MOBILE',UMMAT:'UMMAT',CLOVE:'CLOVE WADDUWA',
+ WAV:'WAVERLEY',PUW:'PUWAKARAMBA'};
+// Reads one weekly-plan line and decides whether it is cutting work.
+// The team writes it four different ways, all seen in the live data:
+//   "CUT & GRADE CCT (6)"  "CUT and GRADE CK & CF"  "CUT LGL"  "HD CUT AND GRADE"
+// So: any line mentioning CUT counts, the client is whichever token matches a
+// known code, and the number is taken from brackets or a bare number if present.
+// A line with no number is counted as an ENTRY but contributes 0 videos, and
+// the panel says how many of those there were. It never invents a figure.
+function parseCutLine(line){
+  if(!line||!/\bCUT\b/i.test(line))return null;
+  const up=line.toUpperCase();
+  const codes=[];
+  Object.keys(CUT_CODES).forEach(function(code){
+    if(new RegExp('(^|[^A-Z])'+code+'([^A-Z]|$)').test(up))codes.push(code);
+  });
+  const br=line.match(/\((\d+)\)/);
+  const bare=line.match(/(?:^|\s)(\d+)(?:\s|$)/);
+  const nRaw=br?parseInt(br[1]):(bare?parseInt(bare[1]):null);
+  return {clients:codes.length?codes:[null],n:isNaN(nRaw)?null:nRaw,raw:line.trim()};
+}
+// Rolls every cutting line in a set of weekly-plan cells into per-person totals.
+function cuttingFromCells(cells){
+  const people={};
+  (cells||[]).forEach(function(c){
+    String(c.content||'').split(/\n/).forEach(function(line){
+      const p=parseCutLine(line);
+      if(!p)return;
+      const who=(c.editor_name||'Unknown').toUpperCase();
+      if(!people[who])people[who]={total:0,unknown:0,entries:0,byClient:{},done:0};
+      const rec=people[who];
+      rec.entries++;
+      if(c.status==='done')rec.done++;
+      if(p.n==null){rec.unknown++;}
+      // A line naming two clients splits nothing: we cannot know the split, so
+      // the videos are attributed once and the clients are both listed.
+      p.clients.forEach(function(code){
+        const nm=code?(CUT_CODES[code]||code):'client not named';
+        if(!rec.byClient[nm])rec.byClient[nm]=0;
+        if(p.n!=null&&p.clients.length===1)rec.byClient[nm]+=p.n;
+      });
+      if(p.n!=null)rec.total+=p.n;
+    });
+  });
+  return people;
+}
+// === LAZY IMAGES (L-VID-001). Read LANDMINES.md before changing. ==========
+// Images are stored as base64 text inside the row. 16 of them made every boot
+// AND every 3 minute refresh 10.58 MB, measured, for a Team Chat page that
+// shows one client at a time and that most people never open.
+// The rule: NO list query ever selects image_url. A row the server says carries
+// an image renders a placeholder, and the image is fetched once, only when it
+// actually scrolls into view, then cached for the session.
+// ONE observer pair, never N edited render functions, so any screen added later
+// that emits a placeholder is picked up with no extra wiring.
+const IMG_CACHE={};        // 'table:id' -> data URI, session only
+const IMG_HAS=new Set();   // 'table:id' the server told us carries an image
+function imgHasKey(t,id){return t+':'+id}
+function lazyImgHtml(table,id){
+  const k=imgHasKey(table,id);
+  if(!IMG_HAS.has(k))return '';
+  if(IMG_CACHE[k])return `<img class="comment-img" src="${esc(IMG_CACHE[k])}" onerror="this.style.display='none'">`;
+  return `<div class="comment-img-lazy" data-imgt="${esc(table)}" data-imgid="${esc(id)}">Loading image</div>`;
+}
+let _imgMO=null,_lazyTick=null,_lazyWired=false;
+function _swapLazyImg(el,src){
+  if(!el||!el.parentNode)return;
+  const img=document.createElement('img');
+  img.className='comment-img';
+  img.onerror=function(){img.style.display='none'};
+  img.src=src;
+  el.parentNode.replaceChild(img,el);
+}
+function _fetchLazyImg(el){
+  if(!el||el.dataset.loading==='1')return;
+  const table=el.getAttribute('data-imgt'),id=el.getAttribute('data-imgid');
+  if(!table||!id)return;
+  const k=imgHasKey(table,id);
+  if(IMG_CACHE[k]){_swapLazyImg(el,IMG_CACHE[k]);return}
+  el.dataset.loading='1';
+  sb.from(table).select('image_url').eq('id',id).limit(1)
+    .then(function(res){
+      const row=(res&&res.data&&res.data[0])||null;
+      if(res&&res.error){el.textContent='Image could not load';return}
+      if(!row||!row.image_url){el.textContent='Image not found';return}
+      IMG_CACHE[k]=row.image_url;_swapLazyImg(el,row.image_url);
+    })
+    .catch(function(){el.textContent='Image could not load'});
+}
+// Loads every placeholder that is on screen, or within 250px of it.
+// Rect based on purpose: it can be driven and asserted from a test, which an
+// IntersectionObserver cannot, and it does not care which element scrolls.
+function _lazySweep(){
+  const vh=window.innerHeight||800;
+  const list=document.querySelectorAll('.comment-img-lazy');
+  for(let i=0;i<list.length;i++){
+    const el=list[i];
+    if(el.dataset.loading==='1')continue;
+    const r=el.getBoundingClientRect();
+    if(r.width===0&&r.height===0)continue;      // not rendered, skip
+    if(r.bottom>-250&&r.top<vh+250)_fetchLazyImg(el);
+  }
+}
+function _lazyScheduleSweep(){
+  if(_lazyTick)return;                           // coalesce a burst into one pass
+  _lazyTick=setTimeout(function(){_lazyTick=null;_lazySweep()},120);
+}
+function initLazyImages(){
+  if(_lazyWired)return;
+  _lazyWired=true;
+  _lazyScheduleSweep();
+  // Any render that adds placeholders triggers a sweep. One observer, so a
+  // screen added later needs no wiring of its own.
+  _imgMO=new MutationObserver(function(){_lazyScheduleSweep()});
+  _imgMO.observe(document.body,{childList:true,subtree:true});
+  // capture:true is load bearing. Comments scroll inside .comment-list, and a
+  // bubbling listener on window never sees a nested container scroll.
+  window.addEventListener('scroll',_lazyScheduleSweep,{passive:true,capture:true});
+  window.addEventListener('resize',_lazyScheduleSweep,{passive:true});
+}
+window.bbLazySweep=_lazySweep;                   // so a check can drive it
+// Shrink before it is ever stored. Uncompressed uploads are what made this a
+// 10 MB problem in the first place. Falls back to the original on ANY failure,
+// so a odd file format can never lose someone's image.
+function compressDataUri(dataUri,cb){
+  const MAXD=1400,Q=0.82;
+  const img=new Image();
+  const giveUp=function(){cb(dataUri,dataUri.length,dataUri.length)};
+  img.onerror=giveUp;
+  img.onload=function(){
+    let w=img.naturalWidth,h=img.naturalHeight;
+    if(!w||!h){giveUp();return}
+    const scale=Math.min(1,MAXD/Math.max(w,h));
+    w=Math.round(w*scale);h=Math.round(h*scale);
+    try{
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      const x=c.getContext('2d');
+      x.fillStyle='#ffffff';x.fillRect(0,0,w,h); // PNG transparency turns black in JPEG
+      x.drawImage(img,0,0,w,h);
+      const out=c.toDataURL('image/jpeg',Q);
+      if(out&&out.length<dataUri.length)cb(out,dataUri.length,out.length);
+      else giveUp();
+    }catch(e){giveUp()}
+  };
+  img.src=dataUri;
+}
 // === THE ONE MONTH RULE. Read LANDMINES.md L-VID-003 before you touch this ===
 // A video belongs to the month it was TAGGED for (target_month + target_year),
 // NEVER the date an editor happened to finish it. A video delivered late is
@@ -962,14 +1141,19 @@ function wireImageAttach(hostId,hostTextarea){
   });
 }
 function readImageFile(file,hostId){
-  if(file.size>3*1024*1024){toast('Image too large (max 3MB)','error');return}
+  // Cap raised from 3MB now that we shrink before storing. A 10MB phone photo
+  // lands as roughly 100KB instead of 13MB of base64 text sitting in the row.
+  if(file.size>10*1024*1024){toast('Image too large (max 10MB)','error');return}
   if(PENDING_IMG[hostId]){toast('Replaced previous image','info')}
   const r=new FileReader();
   r.onerror=()=>toast('Could not read image file','error');
   r.onload=ev=>{
-    PENDING_IMG[hostId]=ev.target.result;
-    const pv=$(`#${hostId}-preview`);
-    if(pv){pv.innerHTML=`<div class="image-preview-wrap"><img class="image-preview" src="${ev.target.result}"><div class="image-preview-remove" data-clear-img="${hostId}" title="Remove image">×</div></div>`;}
+    compressDataUri(ev.target.result,function(out,before,after){
+      PENDING_IMG[hostId]=out;
+      const pv=$(`#${hostId}-preview`);
+      if(pv){pv.innerHTML=`<div class="image-preview-wrap"><img class="image-preview" src="${out}"><div class="image-preview-remove" data-clear-img="${hostId}" title="Remove image">×</div></div>`;}
+      if(before>after*1.3)toast(`Image shrunk from ${Math.round(before/1024)}KB to ${Math.round(after/1024)}KB`,'info');
+    });
   };
   r.readAsDataURL(file);
 }
@@ -1000,7 +1184,7 @@ function deriveNotifications(){
     if(!isAdminUser&&Number(p.assigned_editor_id)!==meId)return;
     // Self-notify: skip own comments
     if((c.author||'').toUpperCase()===currentUser.name.toUpperCase())return;
-    events.push({t,kind:'comment',pid:p.id,projectTitle:p.title,who:c.author||'Someone',preview:(c.body||'').slice(0,80)||(c.image_url?'[image]':'')});
+    events.push({t,kind:'comment',pid:p.id,projectTitle:p.title,who:c.author||'Someone',preview:(c.body||'').slice(0,80)||(IMG_HAS.has(imgHasKey('video_project_comments',c.id))?'[image]':'')});
   });
   // 2) Stage moves (Changes / Editing / video_head_review only — high-signal stages)
   const NOTIFY_STAGES=['changes','client_changes','editing','video_head_review'];
@@ -1215,11 +1399,11 @@ async function fetchAll(silent=false){
       sb.from('team_members').select('id, name, role'),
       sb.from('video_project_links').select('*').order('created_at',{ascending:false}),
       sb.from('smm_shoots').select('*').order('shoot_date',{ascending:true}),
-      sb.from('video_chat_messages').select('*').order('created_at',{ascending:true}),
+      sb.from('video_chat_messages').select('id,body,author,created_at,client_id,deleted_at,edited_at').order('created_at',{ascending:true}),
       sb.from('tasks').select('*').order('created_at',{ascending:false}).limit(500),
       sb.from('video_inspo').select('*').order('created_at',{ascending:false}),
       sb.from('video_stage_history').select('*').order('entered_at',{ascending:true}),
-      sb.from('video_project_comments').select('*').order('created_at',{ascending:true}),
+      sb.from('video_project_comments').select('id,video_project_id,body,author,created_at,is_done').order('created_at',{ascending:true}),
       sb.from('client_monthly_targets').select('*'),
       sb.from('video_topics').select('*').order('created_at',{ascending:true}),
     ]);
@@ -1235,6 +1419,23 @@ async function fetchAll(silent=false){
     DATA.projectComments=pcr.data||[];
     DATA.clientTargets=cmtr.data||[];
     DATA.videoTopics=vtr.data||[];
+    // Which rows carry an image. Ids only, roughly 200 bytes, instead of the
+    // 10.5 MB of base64 that selecting image_url used to drag in. Built into a
+    // fresh set and only swapped on success, so a failed refresh never blanks
+    // images that are already on screen.
+    try{
+      const [hasC,hasM]=await Promise.all([
+        sb.from('video_project_comments').select('id').not('image_url','is',null),
+        sb.from('video_chat_messages').select('id').not('image_url','is',null)
+      ]);
+      if(!hasC.error&&!hasM.error){
+        const next=new Set();
+        (hasC.data||[]).forEach(r=>next.add(imgHasKey('video_project_comments',r.id)));
+        (hasM.data||[]).forEach(r=>next.add(imgHasKey('video_chat_messages',r.id)));
+        IMG_HAS.clear();next.forEach(k=>IMG_HAS.add(k));
+      }
+    }catch(_){}
+    initLazyImages();
     // Load archived projects separately — Q2 plan needs them so counts don't break when archive happens
     try{const {data:arch}=await sb.from('video_projects').select('id,client_id,target_month,target_year,current_stage,is_archived').eq('is_archived',true);DATA.archivedProjects=arch||[]}catch(_){DATA.archivedProjects=[]}
     // Filter projects for editors
@@ -2105,7 +2306,7 @@ async function openProjectDetail(id){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id),st=STAGES.find(s=>s.key===p.current_stage);
   // Fetch comments and links
   let comments=[];
-  try{const {data}=await sb.from('video_project_comments').select('*').eq('video_project_id',id).order('created_at',{ascending:true});comments=data||[]}catch(_){}
+  try{const {data}=await sb.from('video_project_comments').select('id,video_project_id,body,author,created_at,is_done').eq('video_project_id',id).order('created_at',{ascending:true});comments=data||[]}catch(_){}
   const allLinks=DATA.links.filter(l=>l.video_project_id===id);
   const rawLinks=allLinks.filter(l=>l.tag==='raw_footage');
   const finalLinks=allLinks.filter(l=>l.tag==='final_cut');
@@ -2129,7 +2330,7 @@ async function openProjectDetail(id){
     <div class="detail-section"><div class="detail-section-head"><div class="detail-section-title">Final Video</div><button class="btn btn-ghost btn-sm" data-add-link="final_cut">+ Add final link</button></div>${linkListHtml(finalLinks,'final_cut')}</div>
     ${otherLinks.length?`<div class="detail-section"><div class="detail-section-title">Other Links</div>${linkListHtml(otherLinks,'other')}</div>`:''}
     <div class="detail-section"><div class="detail-section-title">Team Discussion</div>
-      <div class="comment-list">${comments.length?comments.map(c=>`<div class="comment"><div class="comment-head"><div class="comment-author">${esc(c.author)}</div><div class="comment-time">${timeAgo(c.created_at)}</div></div>${c.body?`<div class="comment-body">${esc(c.body)}</div>`:''}${c.image_url?`<img class="comment-img" src="${esc(c.image_url)}" onerror="this.style.display='none'">`:''}</div>`).join(''):'<div class="comment-empty">No comments yet</div>'}</div>
+      <div class="comment-list">${comments.length?comments.map(c=>`<div class="comment"><div class="comment-head"><div class="comment-author">${esc(c.author)}</div><div class="comment-time">${timeAgo(c.created_at)}</div></div>${c.body?`<div class="comment-body">${esc(c.body)}</div>`:''}${lazyImgHtml('video_project_comments',c.id)}</div>`).join(''):'<div class="comment-empty">No comments yet</div>'}</div>
       <div class="comment-form">
         <textarea id="newComment" class="field-textarea" placeholder="Add a comment… (you can paste an image with Cmd+V)" rows="2"></textarea>
         ${imageAttachHtml('cmt-'+id)}
@@ -2177,7 +2378,7 @@ async function postComment(pid){
   if(!body&&!img)return;
   const btn=document.querySelector(`[data-post-comment="${pid}"]`);
   if(btn){btn.disabled=true;btn.textContent='Posting…'}
-  try{const {error}=await sb.from('video_project_comments').insert({video_project_id:pid,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;clearPendingImg('cmt-'+pid);openProjectDetail(pid)}catch(err){if(btn){btn.disabled=false;btn.textContent='Post Comment'}toast('Comment failed: '+(err.message||''),'error')}
+  try{const {data:ins,error}=await sb.from('video_project_comments').insert({video_project_id:pid,body:body||'',image_url:img,author:currentUser.name}).select('id');if(error)throw error;if(img&&ins&&ins[0])IMG_HAS.add(imgHasKey('video_project_comments',ins[0].id));clearPendingImg('cmt-'+pid);openProjectDetail(pid)}catch(err){if(btn){btn.disabled=false;btn.textContent='Post Comment'}toast('Comment failed: '+(err.message||''),'error')}
 }
 function closeModal(){const m=$('#modalRoot');if(m)m.innerHTML='';const m2=$('#modal2');if(m2)m2.remove()}
 
@@ -2686,7 +2887,7 @@ function quarterlyPlanSection(client,clientProjects){
   const qEdited=qTopics.filter(t=>t.status==='edited').length;
   const qCut=qTopics.filter(t=>t.status==='cut').length;
   const qPlanned=qTopics.filter(t=>t.status==='planned').length;
-  const _stCfg={planned:{lbl:'⬜ To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:'🎬 Shot',c:'var(--amber)',bg:'var(--amber-soft)'},cut:{lbl:'✂️ Cut',c:'var(--accent)',bg:'var(--accent-soft)'},edited:{lbl:'✅ Edited',c:'var(--green)',bg:'var(--green-soft)'}};
+  const _stCfg={planned:{lbl:vicon('square',13)+' To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:vicon('camera',13)+' Shot',c:'var(--amber)',bg:'var(--amber-soft)'},cut:{lbl:vicon('scissors',13)+' Cut',c:'var(--accent)',bg:'var(--accent-soft)'},edited:{lbl:vicon('check',13)+' Edited',c:'var(--green)',bg:'var(--green-soft)'}};
   const topicCols=months.map(({m,name})=>{
     const list=allTopics.filter(t=>Number(t.target_month)===m).sort((a,b)=>a.id-b.id);
     const shotN=list.filter(t=>t.status!=='planned').length;
@@ -2961,7 +3162,7 @@ function renderTeamChat(){
           const delBtn=canManage?`<button class="chat-act-btn" data-del-chat="${m.id}" title="Delete message" style="background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:3px 7px;border-radius:5px;line-height:1;opacity:.65;transition:all .15s">🗑</button>`:'';
           const editedTag=(!isProj&&m.edited_at)?`<span class="text-3" style="font-size:10px;margin-left:6px;font-style:italic">(edited)</span>`:'';
           if(isDeleted)return `<div class="comment" style="opacity:0.45;font-style:italic"><div class="comment-head"><div class="comment-author" style="color:var(--text-3)">${esc(m.author||'')}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div><div class="comment-body" style="color:var(--text-3);font-size:12px">🗑 This message was deleted</div></div>`;
-          return `<div class="comment chat-msg" style="${isProj?'border-left:3px solid var(--accent)':''}"><div class="comment-head" style="display:flex;align-items:center;gap:4px"><div class="comment-author">${esc(m.author||'')}${tagHtml}</div><div class="comment-time" style="margin-left:auto">${timeAgo(m.created_at)}${editedTag}</div>${editBtn}${delBtn}</div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${m.image_url?`<img class="comment-img" src="${esc(m.image_url)}" onerror="this.style.display='none'">`:''}</div>`;
+          return `<div class="comment chat-msg" style="${isProj?'border-left:3px solid var(--accent)':''}"><div class="comment-head" style="display:flex;align-items:center;gap:4px"><div class="comment-author">${esc(m.author||'')}${tagHtml}</div><div class="comment-time" style="margin-left:auto">${timeAgo(m.created_at)}${editedTag}</div>${editBtn}${delBtn}</div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${lazyImgHtml(isProj?'video_project_comments':'video_chat_messages',m.id)}</div>`;
         }).join(''):'<div class="comment-empty">Nothing yet — start the conversation. Project comments will also appear here.</div>'}</div>
         <div class="comment-form">
           <textarea id="chatBody" class="field-textarea" placeholder="Type a message… (you can paste an image with Cmd+V)" rows="2"></textarea>
@@ -2981,7 +3182,7 @@ function renderTeamChat(){
       const body=$('#chatBody').value.trim();
       const img=PENDING_IMG['chat']||null;
       if(!body&&!img)return;
-      try{const {error}=await sb.from('video_chat_messages').insert({client_id:FILTERS.chatClient,body:body||'',image_url:img,author:currentUser.name});if(error)throw error;$('#chatBody').value='';clearPendingImg('chat');await fetchAll();}catch(err){toast('Failed: '+(err.message||''),'error')}
+      try{const {data:ins,error}=await sb.from('video_chat_messages').insert({client_id:FILTERS.chatClient,body:body||'',image_url:img,author:currentUser.name}).select('id');if(error)throw error;if(img&&ins&&ins[0])IMG_HAS.add(imgHasKey('video_chat_messages',ins[0].id));$('#chatBody').value='';clearPendingImg('chat');await fetchAll();}catch(err){toast('Failed: '+(err.message||''),'error')}
     }
   };
 }
@@ -2996,7 +3197,7 @@ function openChatEdit(id){
     <div class="modal-body">
       <label class="field-label">Message</label>
       <textarea class="field-textarea" id="chatEditBody" rows="4">${esc(m.body||'')}</textarea>
-      ${m.image_url?'<div class="text-3 fs-11" style="margin-top:8px">📎 Attached image is kept. Editing changes the text only.</div>':''}
+      ${IMG_HAS.has(imgHasKey('video_chat_messages',m.id))?'<div class="text-3 fs-11" style="margin-top:8px">📎 Attached image is kept. Editing changes the text only.</div>':''}
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" onclick="saveChatEdit(${id})">Save</button></div>
   </div></div>`;
@@ -3006,7 +3207,7 @@ function openChatEdit(id){
 async function saveChatEdit(id){
   const body=document.getElementById('chatEditBody').value.trim();
   const m=(DATA.chats||[]).find(x=>x.id===id);
-  if(!body&&!(m&&m.image_url)){toast('Message cannot be empty','error');return;}
+  if(!body&&!(m&&IMG_HAS.has(imgHasKey('video_chat_messages',m.id)))){toast('Message cannot be empty','error');return;}
   _pendingOps++;
   try{
     const {error}=await sb.from('video_chat_messages').update({body:body,edited_at:new Date().toISOString()}).eq('id',id);
@@ -3208,7 +3409,7 @@ function wpGridRender(){
   const sBorder={done:'#22c55e',delayed:'#ef4444',pending:'#f59e0b'};
   const sBg={done:'rgba(34,197,94,0.07)',delayed:'rgba(239,68,68,0.07)',pending:'rgba(245,158,11,0.06)'};
   const sPill={done:'wp-status-done',delayed:'wp-status-delayed',pending:'wp-status-pending'};
-  const sLabel={done:'✅ DONE',delayed:'🔴 DELAYED',pending:'⏳ PENDING'};
+  const sLabel={done:vicon('check',12)+' DONE',delayed:vicon('clock',12)+' DELAYED',pending:vicon('clock',12)+' PENDING'};
 
   // === MASTER-ONLY SUMMARY: In editing now (by client) + Shot bank ready to edit ===
   let summaryHtml='';
@@ -3232,12 +3433,34 @@ function wpGridRender(){
         <div class="wp-sum-sub">${sub}</div>
         ${rows.length?rows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):`<div class="wp-sum-empty">${empty}</div>`}
       </div>`;
-    summaryHtml=`<div class="wp-summary">
-      ${box('wp-sum-cut','✂️','Needs cutting','Footage is shot. Waiting on Ushane to cut it.',cutRows,'Nothing waiting to be cut')}
-      ${box('wp-sum-bank','🎞️','Cut, ready to edit','Cut and handed over. An editor can start now.',readyRows,'Nothing cut yet. Click a topic to move it Shot to Cut.')}
-      ${box('','📋','In our hands','Being cut, edited or fixed by our team right now.',workRows,'Nothing in production')}
-      ${box('wp-sum-wait','⏳','Waiting on others','Sitting with a reviewer or the client. Nobody is editing these.',waitRows,'Nothing waiting')}
+    // === CUTTING TRACKER =================================================
+    // Counts from what the team already types into this same grid, so it works
+    // on history back to June and needs no new field. Anyone who cuts is
+    // counted, not just Ushane: RAJEEWA and RAMANI both appear in the data.
+    const cutPeople=cuttingFromCells(Object.values(_wpCells||{}));
+    const cutNames=Object.keys(cutPeople).sort(function(a,b){return cutPeople[b].total-cutPeople[a].total});
+    const cutGrand=cutNames.reduce(function(t,k){return t+cutPeople[k].total},0);
+    const cutUnknown=cutNames.reduce(function(t,k){return t+cutPeople[k].unknown},0);
+    const cuttingHtml=`<div class="wp-sum-col cut-panel">
+      <div class="wp-sum-head"><span>${vicon('scissors')} Cutting this week</span><span class="wp-sum-total">${cutGrand}</span></div>
+      <div class="wp-sum-sub">Videos cut per person, per client, read from the plan above</div>
+      ${cutNames.length?cutNames.map(function(k){
+        const r=cutPeople[k];
+        const cls=Object.keys(r.byClient).sort(function(a,b){return r.byClient[b]-r.byClient[a]});
+        return `<div class="cut-row">
+          <div class="cut-who">${esc(k)}</div>
+          <div class="cut-cls">${cls.length?cls.map(function(c){return `<b>${esc(c)}</b>${r.byClient[c]?' '+r.byClient[c]:''}`}).join(' · '):'no client named'}
+            <span class="text-3 fs-11">· ${r.entries} entr${r.entries===1?'y':'ies'}, ${r.done} marked done</span></div>
+          <div class="cut-tot">${r.total}</div>
+        </div>`}).join(''):'<div class="wp-sum-empty">No cutting entered for this week</div>'}
+      ${cutUnknown?`<div class="cut-note">${cutUnknown} cutting entr${cutUnknown===1?'y carries':'ies carry'} no number, so ${cutUnknown===1?'it is':'they are'} counted as work done but add 0 to the totals. Write the count in brackets, for example CUT & GRADE CCT (6), and it will be counted.</div>`:''}
     </div>`;
+    summaryHtml=`<div class="wp-summary">
+      ${box('wp-sum-cut',vicon('scissors'),'Needs cutting','Footage is shot. Waiting on a cut.',cutRows,'Nothing waiting to be cut')}
+      ${box('wp-sum-bank',vicon('film'),'Cut, ready to edit','Cut and handed over. An editor can start now.',readyRows,'Nothing cut yet. Click a topic to move it Shot to Cut.')}
+      ${box('',vicon('pencil'),'In our hands','Being cut, edited or fixed by our team right now.',workRows,'Nothing in production')}
+      ${box('wp-sum-wait',vicon('clock'),'Waiting on others','Sitting with a reviewer or the client. Nobody is editing these.',waitRows,'Nothing waiting')}
+    </div>`+cuttingHtml;
   }
 
   board.innerHTML=`<div class="wp-grid-wrap"><table class="wp-grid-table">
