@@ -4669,9 +4669,9 @@ button,label,.nav-item,.tab,.shoot-tab,.btn,.m-stage-opt,.vt-status,[role="butto
 #bbv-panel,#bb-agent-panel{overscroll-behavior:contain}
 
 /* 4 · SAFE AREA. Read from the device, never detected. */
-.topbar{height:auto;min-height:var(--topbar-h);padding-top:var(--sat)}
-@media(max-width:768px){.topbar{min-height:56px}}
-@media(orientation:landscape) and (max-height:500px) and (max-width:1024px){.topbar{min-height:48px}}
+.topbar{height:auto;min-height:calc(var(--topbar-h) + var(--sat));padding-top:var(--sat)}
+@media(max-width:768px){.topbar{min-height:calc(56px + var(--sat))}}
+@media(orientation:landscape) and (max-height:500px) and (max-width:1024px){.topbar{min-height:calc(48px + var(--sat))}}
 .sidebar{padding-top:var(--sat);padding-bottom:var(--sab)}
 .login{padding-top:calc(24px + var(--sat));padding-bottom:calc(24px + var(--sab))}
 .notif-panel{top:calc(64px + var(--sat));max-height:calc(75dvh - var(--sat))}
@@ -4693,6 +4693,14 @@ button,label,.nav-item,.tab,.shoot-tab,.btn,.m-stage-opt,.vt-status,[role="butto
       negative top and puts it back on close, which is the only reason the
       scroll position survives the sheet at all. */
 body.sheet-open{position:fixed;left:0;right:0;width:100%}
+
+/* 7 · NOTHING FLOATS OVER THE WORK. Two circular buttons sat over the content
+      on a phone and covered the Needs Attention panel outright. The agent
+      alerts already have a home on the Dashboard and their own Agents page,
+      so the floating shortcuts were duplicate chrome charging rent on the one
+      screen with the least room. Removed rather than moved: a floating button
+      on a 375px screen is always covering something. */
+#bbv-fab,#bb-agent-bubble,#bbv-panel,#bb-agent-panel,#vsCheckinBtn{display:none!important}
 </style>
 
 <script>
@@ -5021,6 +5029,47 @@ async function runSelfTest(){
    ok('Layout: every page rendered for the alignment scan',scanned>0,scanned+' pages');
    ok('Layout: nothing sits on the edge of the box it is in',hits.length===0,
       hits.slice(0,4).join(', ')||'clean across '+scanned+' pages');
+  })();
+
+  /* ── H2 · the top bar, measured against a real notch ─────────────────── */
+  /* This is the fault Thulaib caught on his phone: the burger sat 1px off the
+     bar's bottom border. It cannot be seen on a laptop, where --sat is 0, so
+     the check FORCES an island and measures. */
+  (function(){
+   const bar=document.querySelector('.topbar');
+   if(!bar){ok('Chrome: nothing in the top bar sits on its edge',false,
+     'NO .topbar FOUND, this check proved nothing');return;}
+   const root=document.documentElement;
+   const had=root.style.getPropertyValue('--sat');
+   root.style.setProperty('--sat','59px');
+   const br=bar.getBoundingClientRect();
+   const tight=[];
+   bar.querySelectorAll('button,.notif-wrap,.topbar-titles').forEach(el=>{
+    const r=el.getBoundingClientRect();
+    if(r.height<4)return;
+    const below=br.bottom-r.bottom, above=r.top-(br.top+59);
+    if(below<6||above<4)tight.push((String(el.className).split(' ')[0]||el.tagName)+' below'+Math.round(below)+' above'+Math.round(above));
+   });
+   if(had)root.style.setProperty('--sat',had);else root.style.removeProperty('--sat');
+   ok('Chrome: nothing in the top bar sits on its edge, with a notch',tight.length===0,
+      tight.slice(0,3).join(', ')||'clear of both edges at --sat 59px');
+  })();
+
+  /* ── H3 · nothing floats over the work ───────────────────────────────── */
+  (function(){
+   const over=[].slice.call(document.querySelectorAll('body *')).filter(el=>{
+    const c=cs(el); if(c.position!=='fixed'||c.display==='none'||c.visibility==='hidden')return false;
+    const r=el.getBoundingClientRect();
+    if(!(r.width>0&&r.height>0))return false;
+    if(r.width>=window.innerWidth*0.9)return false;      /* a full-width bar is chrome, not an obstruction */
+    if(el.closest('.modal-backdrop,.m-sheet'))return false;
+    /* an off-canvas drawer is parked off-screen and covers nothing until it is
+       opened. Measured by where it actually IS, not by what it is called. */
+    if(r.right<=0||r.left>=window.innerWidth||r.bottom<=0||r.top>=window.innerHeight)return false;
+    return r.width>=40&&r.height>=40;                     /* a real tappable blob over content */
+   }).map(el=>el.id||String(el.className).split(' ')[0]||el.tagName);
+   ok('Chrome: no floating button covers the content',over.length===0,
+      over.slice(0,4).join(', ')||'nothing floating');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
