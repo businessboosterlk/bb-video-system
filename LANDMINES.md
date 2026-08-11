@@ -281,3 +281,73 @@ git checkout -- index.html
 
 Verify it by sha1, never by exit code. There is no `.gitignore` here, so no repeat
 of the gitignored-rollback trap that lost the Command Centre's rollback file.
+
+## L-VID-002 CLOSED: the self-test harness is in (2026-08-11)
+
+37 checks in Section 12. Run `runSelfTest()` in the console or add `?selftest`
+to the URL. **Green at 1280x720 AND at 375x812 with a coarse pointer.** The
+mobile run is the one that counts: the field-zoom rule is coarse-only and can
+never fail on a laptop, so a desktop-only green proves nothing about it.
+
+It found five real faults on its first run, all of which would have shipped:
+
+1. **The page walk navigated the browser out of the app.** Inspo Hub calls
+   `window.open`, so the scan left the system and every later check died. It now
+   skips any nav item carrying the app's own `↗` mark, which also covers the
+   next external page anyone adds.
+2. **The freeze check could not open an overlay.** `openProjectDetail` is
+   `async`: the modal is not in the DOM on the next line. It awaits it now.
+3. **The harness poisoned its own next run** by logging its own `console.warn`
+   into the boot log, failing "zero console errors" with yesterday's noise.
+4. **An alignment false positive** on a horizontally scrolling container, which
+   is meant to hold content wider than itself.
+5. **A whole second layer of emoji written as `\uXXXX` escapes**, invisible to a
+   literal-character sweep. 35 of them in the agent block.
+
+**The permanent block:** a harness is only worth what its hardest run proves.
+Run it at coarse pointer, and treat "could not find the thing I test" as a
+FAILURE, never a pass.
+
+---
+
+## L-VID-007 — the app-shell applier ships another client's identity
+
+**Status:** FIXED 2026-08-11.
+
+`apply_app_shell.py` copies its companion files verbatim, and its defaults are
+**Total Uplift's**. Left alone, this system would have installed on a phone as
+"Uplift", in the gym's `#0B1117`, with a manifest listing **13 icons when only 4
+existed** and an unregistered `sw.js` commented as the gym member app.
+
+The skill does say casting replaces the icons and the name. It is still worth a
+landmine, because the applier reports success either way and nothing fails until
+somebody installs the app and sees another company's name on their home screen.
+
+**The permanent block:** after running any applier that copies companion files,
+open every file it wrote. An applier's defaults belong to whoever it was written
+for. Check the manifest name, the colours, and that every icon it names exists.
+
+---
+
+## L-VID-008 — two ways an emoji hides from a sweep
+
+**Status:** FIXED 2026-08-11.
+
+Sweeping emoji out of this file took three passes because they hide:
+
+1. **As `\uXXXX` escapes.** `🤖` is 🤖 to a browser and plain ASCII to
+   grep. 35 pictographs were written this way in the agent block and survived a
+   sweep that had already "finished".
+2. **Inside single-quoted strings.** Replacing an emoji with `${vicon(...)}`
+   only works inside a template literal. In `'...'` it does not interpolate AND
+   the inner quotes terminate the string. Those sites need concatenation.
+
+**And one that bites harder:** one escape sat inside a **regex literal**,
+`replace(/🤖/g, ...)`. Deleting it left `//g`, which is a line
+comment, and it swallowed the `var` declaration on the next line. The error
+("Unexpected token 'var'") pointed nowhere near the cause. Found by bisecting:
+apply each removal alone, syntax-check, and see which one breaks.
+
+**The permanent block:** sweep for the DECODED character, not the literal one,
+and never delete a token out of a regex literal without checking what the empty
+regex becomes.
