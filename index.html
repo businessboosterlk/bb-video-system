@@ -1015,7 +1015,15 @@ const PAGES_EDITOR = [
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [], archivedProjects: [] };
-let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', sort: 'recent' }, chatClient: null, clientsMonth: new Date().toISOString().slice(0,7) };
+let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', sort: 'recent' }, chatClient: null, clientsMonth: localMonthStr() };
+// === LOCAL DATES, never UTC (L-GYM-006, recurred here as L-VID-012) ========
+// toISOString() converts to UTC. Colombo is UTC+5:30, so any DATE-ONLY value
+// taken before 05:30 local comes back as YESTERDAY. That silently mis-stamped
+// the daily pillars, the login log, the 30-day streak and the month filter.
+// Use these for a calendar day or month. For a full timestamp, toISOString()
+// is correct and must stay.
+function localDateStr(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function localMonthStr(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 // Month pickers are built from the months that actually carry videos, so every
 // tagged month is reachable and empty months never clutter the list. Value is
@@ -1322,10 +1330,29 @@ function toggleNotifPanel(events){
 // === SUPABASE INIT ===
 async function initSupabase(){
   if(!window.supabase){console.error('SDK not loaded');return}
-  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-  // Silent app auth so login-only tables (clients/tasks) stay readable here
-  try{ await sb.auth.signInWithPassword({email:'nirvana@bb-leads.app',password:'pin2222secure'}); }
-  catch(e){ console.warn('[auth]',e); }
+  /* persistSession:false is load bearing. Removing the shared signIn does NOT
+     log anybody out: Supabase stores the session in localStorage, so every
+     person who ever opened this app kept a working authenticated session and
+     kept reading finance data long after the line was deleted. Proven in a
+     browser: session still held after the call was removed.
+     So the client is told never to persist, and any session already sitting in
+     a teammate's browser is signed out explicitly on the next load. */
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  try{ await sb.auth.signOut({scope:'local'}); }catch(e){}
+  /* belt and braces: clear any token the old build left behind, under any key */
+  try{ Object.keys(localStorage).forEach(function(k){ if(/^sb-.*-auth-token$/.test(k)||k.indexOf('supabase.auth.token')===0) localStorage.removeItem(k); }); }catch(e){}
+  /* NO SHARED LOGIN. A signInWithPassword used to run here, before anyone
+     touched the PIN screen, so opening the public URL handed the visitor an
+     authenticated session. invoices and costs carry ONLY an authenticated
+     policy, so that session read all finance data while the login screen was
+     still on top of it. The PIN screen guards what gets DRAWN, never what gets
+     FETCHED, which is why nothing caught it.
+     It was also unnecessary: this system reads 19 tables, every one has a
+     public policy, and it reads invoices and costs zero times. The comment
+     said it existed for clients and tasks; both gained public policies later
+     and nobody removed the line. See LANDMINES.md L-VID-011.
+     If a future screen genuinely needs a login-only table, the answer is
+     per-user Supabase Auth (Mold 6), never a shared password in a public file. */
 }
 
 // === LOGIN ===
@@ -1361,7 +1388,7 @@ function onLoginSuccess(u){
 const VIDEO_MEMBER_IDS = { USHANE:5, RAJEEWA:6, RAMANI:11, SANDUNU:13, NIDWIN:15 };
 function logVideoLogin(u){
   if(!u || !sb) return;
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr();
   const key = 'bb_video_login_' + u.name + '_' + today;
   if(localStorage.getItem(key)) return;           // already logged today → no duplicate rows
   localStorage.setItem(key, '1');
@@ -1585,7 +1612,7 @@ function renderMyDashboard(){
   const meId=(DATA.teamMembers.find(m=>m.name.toLowerCase()===currentUser.name.toLowerCase())||{}).id;
   const mine=DATA.projects.filter(p=>p.assigned_editor_id===meId);
   const now=Date.now();
-  const todayStr=new Date().toISOString().slice(0,10);
+  const todayStr=localDateStr();
   const thisMonthStart=startOfMonth();
   const lastMonthStart=new Date(thisMonthStart);lastMonthStart.setMonth(lastMonthStart.getMonth()-1);
   const lastMonthEnd=new Date(thisMonthStart);
@@ -1614,7 +1641,7 @@ function renderMyDashboard(){
   // Simple streak: consecutive days (looking back) where >=1 video completed. Cap at 30.
   let streak=0;
   const completedDays=new Set(mine.filter(p=>p.completed_at).map(p=>p.completed_at.slice(0,10)));
-  for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const ds=d.toISOString().slice(0,10);if(completedDays.has(ds))streak++;else if(i>0)break;}
+  for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);const ds=localDateStr(d);if(completedDays.has(ds))streak++;else if(i>0)break;}
   // Best month (max completed in any calendar month from their history)
   const byMonth={};mine.filter(p=>p.completed_at).forEach(p=>{const k=p.completed_at.slice(0,7);byMonth[k]=(byMonth[k]||0)+1});
   const bestMonth=Math.max(0,...Object.values(byMonth));
@@ -1698,7 +1725,7 @@ function renderDashboard(){
 
   // === NEEDS ATTENTION — video head command center ===
   const now=Date.now();
-  const todayStr=new Date().toISOString().slice(0,10);
+  const todayStr=localDateStr();
   const overdueList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
   const dueTodayList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&p.deadline.slice(0,10)===todayStr);
   const dueSoonList=ps.filter(p=>{if(!p.deadline||COMPLETED_STAGES.includes(p.current_stage))return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
@@ -1792,7 +1819,7 @@ const USHANE_PILLARS=[
   {key:'close_day',label:'Close Day',sub:'Review system + log any issues'},
 ];
 let _pillarCache={};
-function pillarDateStr(){return new Date().toISOString().slice(0,10)}
+function pillarDateStr(){return localDateStr()}
 async function loadPillarState(){
   try{
     const {data,error}=await sb.from('daily_pillar_state').select('state').eq('user_name','USHANE').eq('pillar_date',pillarDateStr()).maybeSingle();
@@ -2751,14 +2778,14 @@ function renderClients(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   // Selected month from filter (YYYY-MM)
-  const selMonth=FILTERS.clientsMonth||new Date().toISOString().slice(0,7);
+  const selMonth=FILTERS.clientsMonth||localMonthStr();
   const [selY,selM]=selMonth.split('-').map(Number);
   const monthStart=new Date(selY,selM-1,1);
   const monthEnd=new Date(selY,selM,1);
   const monthLabel=monthStart.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   // Build last 12 months options
   const monthOpts=[];
-  for(let i=0;i<12;i++){const d=new Date();d.setMonth(d.getMonth()-i);const v=d.toISOString().slice(0,7);const lbl=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});monthOpts.push({v,lbl})}
+  for(let i=0;i<12;i++){const d=new Date();d.setMonth(d.getMonth()-i);const v=localMonthStr(d);const lbl=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});monthOpts.push({v,lbl})}
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
     const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
@@ -2840,7 +2867,7 @@ async function vtCycle(id,cid){
   const next={planned:'shot',shot:'cut',cut:'edited',edited:'planned'}[t.status||'planned'];
   const prev=t.status;
   t.status=next; // optimistic
-  t.shot_date=(next!=='planned')?(t.shot_date||new Date().toISOString().slice(0,10)):null;
+  t.shot_date=(next!=='planned')?(t.shot_date||localDateStr()):null;
   _pendingOps++;
   try{
     const {error}=await sb.from('video_topics').update({status:next,shot_date:t.shot_date,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()}).eq('id',id);
@@ -3445,7 +3472,7 @@ function wpGoToday(){wpWeekStart=wpGetMonday(new Date());wpGridLoad();}
 
 async function wpGridLoad(){
   if(!wpWeekStart)wpWeekStart=wpGetMonday(new Date());
-  const ws=wpWeekStart.toISOString().slice(0,10);
+  const ws=localDateStr(wpWeekStart);
   const fri=new Date(wpWeekStart);fri.setDate(fri.getDate()+4);
   const label=document.getElementById('wpWeekLabel');
   if(label)label.textContent=wpFmtDate(wpWeekStart)+' — '+wpFmtDate(fri)+', '+wpWeekStart.getFullYear();
@@ -3638,7 +3665,7 @@ function wpPickStatus(s){
 
 async function wpCellSave(editor,day){
   const content=document.getElementById('wpCellContent').value.trim();
-  const ws=wpWeekStart.toISOString().slice(0,10);
+  const ws=localDateStr(wpWeekStart);
   const existing=_wpCells[editor+'-'+day];
   const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
   const data={week_start:ws,editor_name:editor,day_of_week:day,content,status:_wpCurStatus,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()};
@@ -3946,7 +3973,7 @@ document.addEventListener('keydown',function(e){
 function vsCheckinKey(){return 'vs-checkin-last-'+(currentUser?currentUser.name:'');}
 function vsCheckinMaybeShow(){
   if(!currentUser)return;
-  var today=new Date().toISOString().slice(0,10);
+  var today=localDateStr();
   if(localStorage.getItem(vsCheckinKey())===today)return;
   var todayStr=today;
   var myTasks=(DATA.tasks||[]).filter(function(t){
@@ -3961,7 +3988,7 @@ function vsCheckinMaybeShow(){
   vsCheckinRender(myTasks);
 }
 function vsCheckinRender(tasks){
-  var today=new Date().toISOString().slice(0,10);
+  var today=localDateStr();
   var byClient={};
   tasks.forEach(function(t){
     var cl=getClient(t.client_id);var key=(cl?cl.name:'No Client');
@@ -4009,7 +4036,7 @@ function vsCheckinRender(tasks){
   });
 }
 function vsCheckinClose(markDone){
-  if(markDone){var today=new Date().toISOString().slice(0,10);localStorage.setItem(vsCheckinKey(),today);}
+  if(markDone){var today=localDateStr();localStorage.setItem(vsCheckinKey(),today);}
   var el=document.getElementById('vsCheckinWrap');if(el)el.remove();
   vsUpdateCheckinBadge();
 }
@@ -4018,7 +4045,7 @@ function vsCheckinSnooze(){
   var el=document.getElementById('vsCheckinWrap');if(el)el.remove();
 }
 function vsUpdateCheckinBadge(){
-  var today=new Date().toISOString().slice(0,10);
+  var today=localDateStr();
   var done=localStorage.getItem(vsCheckinKey())===today;
   var btn=document.getElementById('vsCheckinBtn');if(!btn)return;
   if(done){btn.style.display='none';return;}
@@ -4408,7 +4435,7 @@ function vsUpdateCheckinBadge(){
   var _orig=window.vsCheckinMaybeShow;
   window.vsCheckinMaybeShow=function(force){
     if(!currentUser)return;
-    var today=new Date().toISOString().slice(0,10);
+    var today=localDateStr();
     var snooze=parseInt(localStorage.getItem(vsCheckinKey()+'_snooze')||'0');
     if(!force&&snooze&&Date.now()<snooze)return;
     if(!force&&localStorage.getItem(vsCheckinKey())===today)return;
@@ -5070,6 +5097,43 @@ async function runSelfTest(){
    }).map(el=>el.id||String(el.className).split(' ')[0]||el.tagName);
    ok('Chrome: no floating button covers the content',over.length===0,
       over.slice(0,4).join(', ')||'nothing floating');
+  })();
+
+  /* ── H4 · AUTH. The page must hold no database session. ──────────────── */
+  /* The fault this catches: a shared signInWithPassword ran at boot, so the
+     public URL handed every visitor an authenticated session and finance data
+     with it, while the login screen sat on top looking like security. */
+  /* THE APP'S source, with the harness block removed. Two checks below scan the
+     source for patterns they must also DESCRIBE, and a check tripped by its own
+     description is a check that can never pass. Excluding the harness is the
+     one fix that works for every such check instead of one at a time. */
+  const APPSRC=Array.from(document.scripts)
+    .filter(x=>x.textContent.indexOf('async function runSelf'+'Test')===-1)
+    .map(x=>x.textContent).join('\n');
+  (function(){
+   const n=(APPSRC.split('signIn'+'WithPassword(').length-1);
+   ok('Auth: the page never signs in with a shared password',n===0,
+      n?(n+' shared login call(s) back in the source'):'no shared login call');
+  })();
+  await (async function(){
+   try{
+    const {data}=await sb.auth.getSession();
+    const has=!!(data&&data.session);
+    ok('Auth: no database session is held',!has,
+       has?('session as '+((data.session.user||{}).email||'unknown')):'anon only, as intended');
+   }catch(e){ ok('Auth: no database session is held',false,'could not read session: '+e.message); }
+  })();
+
+  /* ── H5 · DATES. A calendar day must be local, never UTC. ────────────── */
+  (function(){
+   const bad=(APPSRC.match(/\.toISOString\(\)\.slice\(0,(?:7|10)\)/g)||[]).length;
+   ok('Dates: no calendar day is built from UTC',bad===0,
+      bad?(bad+' date-only toISOString conversions, wrong before 05:30 in Colombo'):'all local');
+   /* prove the helper, not just its absence */
+   const d=new Date(2026,7,11,2,15);       /* 02:15 local, which is the previous day in UTC */
+   ok('Dates: 02:15 local still reports today, not yesterday',
+      localDateStr(d)==='2026-08-11', localDateStr(d)+' (UTC would say '+d.toISOString().slice(0,10)+')');
+   ok('Dates: the month helper agrees',localMonthStr(d)==='2026-08',localMonthStr(d));
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

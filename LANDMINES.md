@@ -418,3 +418,75 @@ screen shows. Rerun it after any logo change.
 
 **The lesson:** fixing the label is not fixing the asset. When an applier
 copies another product's identity, check the PICTURES as well as the words.
+
+---
+
+## L-VID-011 — the login screen was decoration: the page signed in before the PIN
+
+**Status:** FIXED 2026-08-12. Found by a bb-rock-solid run, not by me, after a
+full day of work in this file that never looked at the auth path.
+
+`initSupabase()` called `signInWithPassword` with a shared account at boot,
+before anyone touched the PIN screen. `invoices` and `costs` carry **only** an
+`authenticated` policy, so that session read all finance data from the public
+URL while the login screen sat on top of it.
+
+**Verified, not assumed:** anon alone returns `[]` on both tables, so the shared
+session was genuinely the escalation, not a pre-existing public grant.
+
+**Why the fix was cheap here.** This system reads 19 tables, every one has a
+public policy, and it reads `invoices` and `costs` **zero times**. The line's own
+comment said it existed so "login-only tables (clients/tasks) stay readable";
+both gained public policies later and nobody removed the line. It had become
+dead weight that only held the hole open. **Deleting it was the fix. An auth
+rework would have been the wrong tool.**
+
+**THE PART THAT NEARLY SHIPPED HALF-FIXED.** Removing the call does **not** log
+anyone out. Supabase persists the session in `localStorage`, so every person who
+had ever opened the app kept a working authenticated session and kept reading
+finance long after the line was gone. Proven in a browser: `sessionHeld: true`
+with the call already deleted. The complete fix is three parts:
+
+    persistSession:false, autoRefreshToken:false, detectSessionInUrl:false
+    await sb.auth.signOut({scope:'local'})     // clear what is already stored
+    remove any leftover sb-*-auth-token key    // for tokens the old build left
+
+Re-verified after: `sessionHeld:false`, no leftover tokens, `invoices` 0 rows,
+`costs` 0 rows, and all 8 data sets still load (136 projects, 24 clients, 500
+tasks, 202 comments). **Removing a credential is not the same as revoking the
+access it already handed out.**
+
+**The permanent block:** two checks. One scans the app source for a shared login
+call, one asserts at runtime that no session is held. Both proven against a
+deliberately re-broken copy.
+
+**Still open, and NOT this system's to fix:** the same credential is in
+bb-smm-workspace, bb-dev-system and bb-leads-system, all on the same database,
+and the string is still in bb-graphic-system. Rotating it breaks all of them at
+once, so the dependencies come out first and the rotation happens last. The Dev
+System genuinely needs an authenticated posture and needs the real per-user work.
+
+---
+
+## L-VID-012 — L-GYM-006 came back, 16 times
+
+**Status:** FIXED 2026-08-12.
+
+`toISOString()` converts to UTC. Colombo is UTC+5:30, so any **date-only** value
+taken before 05:30 local returns **yesterday**. 13 date-only and 3 month-only
+conversions were wrong, including `pillarDateStr()` (the daily pillars save
+against the wrong day, and the 2PM alert reads that same field), the once-a-day
+login log, the 30-day streak, and the Clients month filter, which lands on the
+previous month on the 1st.
+
+The other 36 uses are **full timestamps and are correct**. Only date-only and
+month-only conversions were touched. Now `localDateStr()` and `localMonthStr()`.
+
+**The permanent block:** a check scans the app source for
+`.toISOString().slice(0,7|10)` and fails on any, plus a live assertion that
+02:15 local reports today rather than yesterday.
+
+**Both checks had to be taught not to trip on themselves.** They scan source for
+a pattern they must also describe, so the first versions failed on their own
+comments and example line. Fixed once, for all such checks, by scanning the
+app's scripts with the harness block excluded.
