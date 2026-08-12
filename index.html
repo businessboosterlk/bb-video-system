@@ -1483,6 +1483,8 @@ function navTo(page){
 
 // === DATA FETCH ===
 let _pendingOps=0;
+let _silentRender=false;     /* true only while an auto-refresh repaints */
+let PIPELINE_ORDER={};       /* stage key -> card ids, in the order last shown */
 async function fetchAll(silent=false){
   if(silent&&_pendingOps>0)return;
   try{
@@ -1578,6 +1580,10 @@ function _renderSignature(){
   }catch(e){return Math.random().toString();}
 }
 function _silentRerender(){
+      _silentRender=true;
+      try{ return _silentRerenderInner(); } finally { _silentRender=false; }
+    }
+    function _silentRerenderInner(){
       // Silent auto-refresh: snapshot every scroll axis before re-render, restore after
       var _pc=$('#pageContent');
       var _st=_pc?_pc.scrollTop:0;
@@ -1889,6 +1895,8 @@ function renderPipeline(){
   // Month filter is 'YYYY-MM'. It used to match target_month only, so May 2026
   // silently mixed with May of any other year. Now matched via the one rule.
   if(f.month){const fp=String(f.month).split('-').map(Number);ps=ps.filter(p=>inTargetMonth(p,fp[0],fp[1]));}
+  /* A real user action re-sorts. Only the automatic repaint holds the order. */
+  if(!_silentRender)PIPELINE_ORDER={};
   const editors=DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
   const bulkBtn=(isAdmin()||isVideoHead())?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">'+vicon('archive',15)+'</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
@@ -1942,6 +1950,13 @@ function renderPipeline(){
   }
   // Within each column, order by the chosen sort. "recent" is the default so a
   // just-moved card jumps to the TOP of its new stage (moveProject bumps updated_at).
+  /* THE BOARD MUST NOT RESHUFFLE UNDER SOMEONE'S CURSOR. The auto-refresh
+     repaints whenever any teammate moves anything, and re-applying the sort
+     slid cards around while a person was reading them. During a SILENT
+     refresh each column keeps the order already on screen; a card that has
+     genuinely arrived since the last paint goes to the top, which is the one
+     movement that carries information. A real user action (changing the sort
+     or a filter, navigating, hitting refresh) re-sorts properly. */
   const _recency=p=>new Date(p.updated_at||p.created_at||0).getTime();
   const _deadlineMs=p=>p.deadline?new Date(p.deadline).getTime():Infinity; // no deadline sorts last
   const _isOverdue=p=>p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
@@ -1964,7 +1979,22 @@ function renderPipeline(){
     }
     return _recency(b)-_recency(a);                     // 'recent' (default)
   }
-  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=ps.filter(p=>p.current_stage===st.key).sort(_colSort);return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
+  function _stableCol(stageKey,cards){
+    const prev=(_silentRender&&PIPELINE_ORDER[stageKey])?PIPELINE_ORDER[stageKey]:null;
+    if(prev){
+      const at=id=>{const i=prev.indexOf(id);return i===-1?-1:i;};
+      cards.sort((a,b)=>{
+        const ia=at(a.id), ib=at(b.id);
+        if(ia===-1&&ib===-1)return _colSort(a,b);   // both new since last paint
+        if(ia===-1)return -1;                        // a new arrival goes to the top
+        if(ib===-1)return 1;
+        return ia-ib;                                // everything else holds its place
+      });
+    }else cards.sort(_colSort);
+    PIPELINE_ORDER[stageKey]=cards.map(c=>c.id);
+    return cards;
+  }
+  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=_stableCol(st.key,ps.filter(p=>p.current_stage===st.key));return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
   // Bulk action floating bar
   const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
@@ -2293,6 +2323,16 @@ function attachDropListeners(){
   });
 }
 async function moveProject(project,newStage){
+  /* A move to the stage it is ALREADY in is not a move. Without this it wrote
+     a history row, bumped updated_at, and the card jumped to the top of its own
+     column, which reads as the board shuffling itself. It also polluted the
+     stage timings that the Time Tracker and the stall agents read.
+     Seen live: 11 team_review -> team_review rows in 16 seconds from one bulk
+     action that caught cards already sitting in the target stage. */
+  if(project.current_stage===newStage){
+    if(!_bulkRunning)toast(`Already in ${STAGES.find(s=>s.key===newStage)?.label||newStage}`,'info');
+    return;
+  }
   const old=project.current_stage;
   const oldUpdated=project.updated_at;
   project.current_stage=newStage;
@@ -5134,6 +5174,42 @@ async function runSelfTest(){
    ok('Dates: 02:15 local still reports today, not yesterday',
       localDateStr(d)==='2026-08-11', localDateStr(d)+' (UTC would say '+d.toISOString().slice(0,10)+')');
    ok('Dates: the month helper agrees',localMonthStr(d)==='2026-08',localMonthStr(d));
+  })();
+
+  /* ── H6 · the pipeline does not move things by itself ────────────────── */
+  (function(){
+   const src=APPSRC;
+   ok('Pipeline: a move to the same stage is refused',
+      /project\.current_stage===newStage/.test(src),
+      'guard present at the top of moveProject');
+   ok('Pipeline: the board holds its order during an auto-refresh',
+      /_silentRender&&PIPELINE_ORDER\[/.test(src)&&/_silentRender=true/.test(src),
+      'stable-order path present');
+   /* Prove the order is stable by DOING it: go to the pipeline, bump a card's
+      updated_at the way a teammate's move would, repaint silently, compare.
+      The earlier version skipped when it happened to be on another page, and a
+      check that skips is a check that proves nothing. */
+   const wasPage=currentPage;
+   try{ navTo('pipeline'); }catch(e){}
+   const readOrder=()=>[].slice.call(document.querySelectorAll('.stage-cards')).map(c=>
+     [].slice.call(c.querySelectorAll('[data-pid]')).map(x=>x.getAttribute('data-pid')).join(','));
+   const before=readOrder();
+   if(!before.length||!before.join('')){
+    ok('Pipeline: a silent repaint leaves every card where it was',false,
+       'NO CARDS ON THE BOARD, this check proved nothing');
+   }else{
+    const col=(DATA.projects||[]).filter(p=>p.current_stage==='client_review');
+    const victim=col.length?col[col.length-1]:null;
+    const was=victim?victim.updated_at:null;
+    if(victim)victim.updated_at=new Date().toISOString();   // in memory only
+    _silentRender=true; try{ renderPage(); } finally { _silentRender=false; }
+    const after=readOrder();
+    if(victim)victim.updated_at=was;                        // restore
+    ok('Pipeline: a silent repaint leaves every card where it was',
+       JSON.stringify(before)===JSON.stringify(after),
+       victim?('proven by moving #'+victim.id+' and repainting'):'no client_review card to move');
+   }
+   try{ navTo(wasPage); }catch(e){}
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

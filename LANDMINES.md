@@ -490,3 +490,45 @@ month-only conversions were touched. Now `localDateStr()` and `localMonthStr()`.
 a pattern they must also describe, so the first versions failed on their own
 comments and example line. Fixed once, for all such checks, by scanning the
 app's scripts with the harness block excluded.
+
+---
+
+## L-VID-013 — the pipeline moved things by itself
+
+**Status:** FIXED 2026-08-12. Reported by Thulaib as "stuff is just getting
+moved". Two separate causes, both found in `video_stage_history` rather than
+guessed at.
+
+**Cause 1: a move to the stage you are already in was accepted.**
+`moveProject()` had no same-stage guard. Dropping a card into its own column
+wrote a real history row and bumped `updated_at`, and because the default sort
+is "recently moved (top)", the card jumped to the top of its own column.
+
+Evidence, from live history: **11 `team_review -> team_review` rows on 06 Aug,
+one person, 1.5 seconds apart.** Nobody moves 11 cards to where they already
+are; that is a bulk action catching cards already in the target stage. It also
+polluted the stage timings the Time Tracker and the stall agents read.
+
+**Cause 2, the one people actually saw: the board re-sorted under them.**
+The re-render fingerprint includes `updated_at`, so **any** move by **any**
+teammate repainted every column and re-applied the sort. Scroll position was
+preserved, the ORDER was not, so the card someone was reading slid somewhere
+else every three minutes.
+
+**The fix.** A same-stage move returns before touching the database. And during
+a **silent** refresh each column keeps the order already on screen; a card that
+genuinely arrived since the last paint goes to the top, which is the one
+movement that carries information. A real user action (sort, filter, navigate,
+manual refresh) re-sorts properly.
+
+**Verified by doing, not by reading:**
+- same-stage move: **zero** database calls, spied on `sb.from`
+- different-stage move: still writes `video_stage_history` and `video_projects`
+- a teammate's move during auto-refresh: order **held**
+- a user changing the sort: order **changed**
+
+**The permanent block:** three checks, and the third proves itself by navigating
+to the pipeline, bumping a card's `updated_at` in memory the way a teammate's
+move would, repainting, and comparing. Its first version skipped when it landed
+on another page, and a check that skips is a check that proves nothing.
+All three fail on a deliberately re-broken copy.
