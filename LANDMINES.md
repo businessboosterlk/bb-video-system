@@ -577,3 +577,38 @@ catch**. It now takes the newest stored week, loads it through the app's own
 `UPDATE weekly_plan_cells SET week_start = week_start + 1` normalises every row
 to the correct Monday, after which the legacy path can be deleted. That is a
 data change, so it waits for a yes.
+
+---
+
+## L-VID-015 — Weekly Plan carry-over (feature, not a defect)
+
+Built 2026-08-12. Thulaib's ask was to **block saving** until last week was
+clear. Built the same intent with a softer lever, and said why: a block punishes
+whoever plans this week for last week's mess, on a Monday morning, and the
+predictable dodge is typing junk into last week to clear it, which leaves worse
+data than before. A prompt you cannot miss achieves the same thing without
+giving anyone a reason to lie to the system.
+
+**The rule, from Thulaib: only DONE is done. Delayed is not done.**
+Unresolved = has content AND status is not `done`.
+
+**Three ways to resolve, one click each:**
+- **Move to this week** copies the text into this week's same editor and day and
+  removes last week's row, because the work did not happen last week. If this
+  week's cell already has content the text is **appended**, never overwritten:
+  silently replacing someone's typing is unforgivable.
+- **Done** marks last week's row done and leaves it, so the record stays honest.
+- **Drop** removes it. Not done, not carried.
+
+Plus "move all" and "mark all done" for the common Monday case.
+
+**Only shown on the CURRENT week.** Browsing back through history must not nag
+about the week before it.
+
+**Verified against live data, then cleaned up after itself.** A disposable
+`ZZ-TEST` row was created in last week and all three actions exercised on it:
+done set the status and dropped it from the panel; move removed last week's row
+and created this week's under the correct key with the content intact; drop
+deleted a `delayed` row and confirmed delayed counts as unresolved. Cleanup left
+**0 test rows**, and the panel returned to the real 5 items. No real plan was
+touched at any point.

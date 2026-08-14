@@ -673,6 +673,22 @@ a:hover{text-decoration:underline}
 .wp-sum-row strong{font-size:14px;font-weight:800}
 .wp-sum-empty{font-size:12px;color:var(--text-3);font-style:italic;padding:8px 0}
 @media(max-width:720px){.wp-summary{grid-template-columns:1fr}}
+.wp-carry{background:linear-gradient(135deg,var(--amber-soft) 0%,var(--surface) 60%);border:1px solid var(--amber);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.wp-carry-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.wp-carry-title{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--text)}
+.wp-carry-count{font-size:22px;font-weight:900;color:var(--amber)}
+.wp-carry-sub{font-size:11.5px;color:var(--text-3);margin-bottom:12px}
+.wp-carry-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px dashed var(--border);flex-wrap:wrap}
+.wp-carry-who{min-width:92px;font-weight:800;font-size:12.5px;color:var(--text)}
+.wp-carry-day{min-width:44px;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding-top:2px}
+.wp-carry-txt{flex:1;min-width:150px;font-size:12.5px;color:var(--text-2);line-height:1.5;white-space:pre-wrap}
+.wp-carry-acts{display:flex;gap:6px;flex-wrap:wrap}
+.wp-carry-btn{border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-2);border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.wp-carry-btn:hover{background:var(--surface-3);color:var(--text)}
+.wp-carry-btn.move{border-color:var(--accent);color:var(--accent)}
+.wp-carry-btn.done{border-color:var(--green);color:var(--green)}
+.wp-carry-btn.drop{border-color:var(--red);color:var(--red)}
+.wp-carry-all{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
 .wp-status-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-top:5px}
 .wp-status-done{background:rgba(34,197,94,0.15);color:#22c55e}
 .wp-status-delayed{background:rgba(239,68,68,0.12);color:#ef4444}
@@ -3498,6 +3514,24 @@ function wpCountVideos(content){
    that week already lives under. A brand new week uses the correct Monday.
    No stored row is touched. See LANDMINES.md L-VID-014. */
 function wpLegacyKey(d){const x=new Date(d);x.setDate(x.getDate()-1);return localDateStr(x)}
+/* One place that knows how to read a week, so the carry-over panel and the grid
+   can never disagree about which key a week lives under. */
+async function wpFetchWeek(monday){
+  const a=localDateStr(monday), b=wpLegacyKey(monday);
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=in.(${a},${b})&select=*`,
+      {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+    const rows=r.ok?await r.json():[];
+    const byKey={};rows.forEach(x=>{byKey[x.week_start]=(byKey[x.week_start]||0)+1});
+    const key=Object.keys(byKey).sort((x,y)=>byKey[y]-byKey[x])[0]||a;
+    return {key:key,rows:rows.filter(x=>x.week_start===key)};
+  }catch(e){return {key:a,rows:[]};}
+}
+/* UNRESOLVED means: has content, and is not DONE. Delayed is not done, which is
+   Thulaib's rule and the whole point of the panel. */
+function wpIsUnresolved(c){return !!(c&&String(c.content||'').trim())&&c.status!=='done'}
+let _wpCarry=[];        /* last week's unresolved cells, for the panel */
+let _wpCarryKey=null;   /* the week_start key those cells live under */
 let _wpKeyInUse=null;   /* the week_start value this week's rows actually use */
 function wpGetMonday(d){
   const dt = new Date(d);
@@ -3538,6 +3572,17 @@ async function wpGridLoad(){
     _wpKeyInUse=Object.keys(byKey).sort((a,b)=>byKey[b]-byKey[a])[0]||wsMon;
     _wpCells={};
     rows.filter(r=>r.week_start===_wpKeyInUse).forEach(r=>{_wpCells[r.editor_name+'-'+r.day_of_week]=r;});
+    /* Last week's unresolved work, but only while looking at the CURRENT week.
+       Browsing back through history should not nag about the week before it. */
+    _wpCarry=[];_wpCarryKey=null;
+    const thisMonday=wpGetMonday(new Date());
+    if(localDateStr(wpWeekStart)===localDateStr(thisMonday)){
+      const prevMon=new Date(wpWeekStart);prevMon.setDate(prevMon.getDate()-7);
+      const prev=await wpFetchWeek(prevMon);
+      _wpCarryKey=prev.key;
+      _wpCarry=prev.rows.filter(wpIsUnresolved)
+        .sort((a,b)=>(a.editor_name||'').localeCompare(b.editor_name||'')||a.day_of_week-b.day_of_week);
+    }
   }catch(_){_wpCells={};}
   wpGridRender();
 }
@@ -3615,7 +3660,28 @@ function wpGridRender(){
     </div>`+cuttingHtml;
   }
 
-  board.innerHTML=`<div class="wp-grid-wrap"><table class="wp-grid-table">
+  const carryHtml=(!_wpCarry.length)?'':`<div class="wp-carry">
+    <div class="wp-carry-head">
+      <span class="wp-carry-title">${vicon('alert',16)} Last week is not finished</span>
+      <span class="wp-carry-count">${_wpCarry.length}</span>
+    </div>
+    <div class="wp-carry-sub">These were planned last week and never marked done. Move them into this week, mark them done, or drop them. Only Done counts as finished.</div>
+    ${_wpCarry.map(c=>`<div class="wp-carry-row">
+      <div class="wp-carry-who">${esc(c.editor_name||'')}</div>
+      <div class="wp-carry-day">${WP_DAYS_SHORT[(c.day_of_week||1)-1]||''}</div>
+      <div class="wp-carry-txt">${esc(c.content||'')}</div>
+      <div class="wp-carry-acts">
+        <button class="wp-carry-btn move" onclick="wpCarryAct(${c.id},'move')">${vicon('send',12)} Move to this week</button>
+        <button class="wp-carry-btn done" onclick="wpCarryAct(${c.id},'done')">${vicon('check',12)} Done</button>
+        <button class="wp-carry-btn drop" onclick="wpCarryAct(${c.id},'drop')">${vicon('trash',12)} Drop</button>
+      </div>
+    </div>`).join('')}
+    <div class="wp-carry-all">
+      <button class="wp-carry-btn move" onclick="wpCarryAll('move')">${vicon('send',12)} Move all ${_wpCarry.length} into this week</button>
+      <button class="wp-carry-btn done" onclick="wpCarryAll('done')">${vicon('check',12)} Mark all done</button>
+    </div>
+  </div>`;
+  board.innerHTML=carryHtml+`<div class="wp-grid-wrap"><table class="wp-grid-table">
     <thead><tr>
       <th class="wp-grid-editor-col">EDITOR</th>
       ${WP_DAYS_SHORT.map((d,i)=>{
@@ -3717,6 +3783,57 @@ function wpPickStatus(s){
     btn.style.color=active?cols[key]:'var(--text-2)';
   });
 }
+
+/* THE THREE WAYS TO RESOLVE LAST WEEK.
+   move: the text is added to this week's same editor and day, and last week's
+         cell is removed, because the work did not happen last week.
+   done: last week's cell is marked done and STAYS, so the record is honest.
+   drop: last week's cell is removed. It was not done and is not being carried.
+   Appending rather than overwriting matters: this week's cell may already have
+   its own plan in it, and silently replacing someone's typing is unforgivable. */
+async function wpCarryAct(id,action,silent){
+  const c=_wpCarry.find(x=>x.id===id);
+  if(!c)return;
+  const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
+  const who=(currentUser&&currentUser.name)||null;
+  try{
+    if(action==='done'){
+      await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'PATCH',headers,
+        body:JSON.stringify({status:'done',updated_by:who,updated_at:new Date().toISOString()})});
+    }else if(action==='drop'){
+      await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'DELETE',headers});
+    }else if(action==='move'){
+      const ws=_wpKeyInUse||localDateStr(wpWeekStart);
+      const target=_wpCells[c.editor_name+'-'+c.day_of_week];
+      const text=String(c.content||'').trim();
+      if(target){
+        const merged=String(target.content||'').trim();
+        await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${target.id}`,{method:'PATCH',headers,
+          body:JSON.stringify({content:merged?(merged+'\n'+text):text,updated_by:who,updated_at:new Date().toISOString()})});
+      }else{
+        await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells`,{method:'POST',headers,
+          body:JSON.stringify({week_start:ws,editor_name:c.editor_name,day_of_week:c.day_of_week,
+            content:text,status:'pending',updated_by:who,updated_at:new Date().toISOString()})});
+      }
+      await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'DELETE',headers});
+    }
+    if(!silent){toast(action==='move'?'Moved into this week':(action==='done'?'Marked done':'Dropped'),'success');await wpGridLoad();}
+  }catch(err){
+    if(!silent)toast('Could not update: '+(err.message||''),'error');
+    if(window.bbReportDbError)window.bbReportDbError('weekly_plan_cells',action,err);
+  }
+}
+async function wpCarryAll(action){
+  const list=_wpCarry.slice();
+  if(!list.length)return;
+  if(!confirm(action==='move'
+    ? `Move all ${list.length} unfinished items into this week?`
+    : `Mark all ${list.length} unfinished items as done?`))return;
+  for(const c of list){ await wpCarryAct(c.id,action,true); }
+  toast(action==='move'?`Moved ${list.length} into this week`:`Marked ${list.length} done`,'success');
+  await wpGridLoad();
+}
+window.wpCarryAct=wpCarryAct;window.wpCarryAll=wpCarryAll;
 
 async function wpCellSave(editor,day){
   const content=document.getElementById('wpCellContent').value.trim();
@@ -5257,6 +5374,22 @@ async function runSelfTest(){
     ok('Weekly Plan: past weeks still load',loaded>0,
        loaded?(loaded+' cells loaded for the week stored as '+stored):('0 cells for '+stored+', history is unreachable'));
    }catch(e){ ok('Weekly Plan: past weeks still load',false,'check errored: '+e.message); }
+  })();
+
+  /* ── H8 · carry-over: only DONE resolves last week ───────────────────── */
+  (function(){
+   /* Thulaib's rule, and the whole point of the panel: delayed is not done.
+      If this ever loosens, unfinished work quietly disappears from the prompt
+      and the plan goes back to being fiction. */
+   ok('Weekly Plan: only Done resolves last week',
+      wpIsUnresolved({content:'x',status:'pending'})===true &&
+      wpIsUnresolved({content:'x',status:'delayed'})===true &&
+      wpIsUnresolved({content:'x',status:'done'})===false,
+      'pending and delayed both carry over, done does not');
+   ok('Weekly Plan: an empty cell is not carried over',
+      wpIsUnresolved({content:'   ',status:'pending'})===false,'blank cells ignored');
+   ok('Weekly Plan: the three carry-over actions exist',
+      typeof wpCarryAct==='function'&&typeof wpCarryAll==='function');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
