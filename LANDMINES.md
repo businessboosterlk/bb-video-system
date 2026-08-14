@@ -532,3 +532,48 @@ to the pipeline, bumping a card's `updated_at` in memory the way a teammate's
 move would, repainting, and comparing. Its first version skipped when it landed
 on another page, and a check that skips is a check that proves nothing.
 All three fail on a deliberately re-broken copy.
+
+---
+
+## L-VID-014 — fixing the UTC date bug hid every past Weekly Plan
+
+**Status:** FIXED 2026-08-12, same day it was introduced. Reported by Thulaib as
+"can't see past week work".
+
+**This is a regression I caused while fixing L-VID-012.**
+
+Every `week_start` ever written is a **Sunday**. `wpGetMonday()` returns a
+Monday, but the old code stringified it with `toISOString()`, and Colombo is
+UTC+5:30, so Monday 00:00 local became **Sunday** in UTC. Months of rows were
+saved under a key one day earlier than the week they describe.
+
+Fixing the date bug made the code ask for the real Monday. It matched nothing.
+**Eight weeks of plans, 109 cells, silently unreachable.**
+
+| Stored | Day | Cells |
+|---|---|---|
+| 2026-08-09 | Sun | 14 |
+| 2026-08-02 | Sun | 15 |
+| 2026-07-26 | Sun | 16 |
+| ...8 weeks, all Sunday | | 109 total |
+
+**The lesson, and it is the general one:** a stored value written by buggy code
+is part of that bug's blast radius. Fixing the code without migrating or
+tolerating the old values moves the fault from "wrong data" to "no data", which
+is worse, because wrong data is visible and missing data looks like the feature
+never worked.
+
+**The fix, with no row touched.** The week is read under BOTH keys, and a save
+goes back to whichever key that week already uses, so a week can never split
+across two dates. A brand new week starts on the correct Monday.
+
+**The permanent block:** a check that PROVES it by loading. Its first version
+did the date arithmetic itself, recomputed the Monday from a stored Sunday, and
+landed on the previous week, **failing in exactly the way it was written to
+catch**. It now takes the newest stored week, loads it through the app's own
+`wpGridLoad`, and asserts cells come back.
+
+**Still open, needs Thulaib's approval:** the keys are still Sundays. One
+`UPDATE weekly_plan_cells SET week_start = week_start + 1` normalises every row
+to the correct Monday, after which the legacy path can be deleted. That is a
+data change, so it waits for a yes.

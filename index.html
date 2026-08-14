@@ -3489,6 +3489,16 @@ function wpCountVideos(content){
   return total;
 }
 
+/* EVERY stored week_start is a SUNDAY. wpGetMonday returns a Monday, but the
+   old code stringified it with toISOString(), and Colombo is UTC+5:30, so
+   Monday 00:00 local became SUNDAY in UTC and that is what got written for
+   months. Fixing the UTC bug made the code ask for the real Monday, which
+   matched nothing, and every past week's plan vanished. Reported the same day.
+   So the week is read under BOTH keys, and a save goes back to whichever key
+   that week already lives under. A brand new week uses the correct Monday.
+   No stored row is touched. See LANDMINES.md L-VID-014. */
+function wpLegacyKey(d){const x=new Date(d);x.setDate(x.getDate()-1);return localDateStr(x)}
+let _wpKeyInUse=null;   /* the week_start value this week's rows actually use */
 function wpGetMonday(d){
   const dt = new Date(d);
   const day = dt.getDay();
@@ -3512,17 +3522,22 @@ function wpGoToday(){wpWeekStart=wpGetMonday(new Date());wpGridLoad();}
 
 async function wpGridLoad(){
   if(!wpWeekStart)wpWeekStart=wpGetMonday(new Date());
-  const ws=localDateStr(wpWeekStart);
+  const wsMon=localDateStr(wpWeekStart), wsLegacy=wpLegacyKey(wpWeekStart);
   const fri=new Date(wpWeekStart);fri.setDate(fri.getDate()+4);
   const label=document.getElementById('wpWeekLabel');
   if(label)label.textContent=wpFmtDate(wpWeekStart)+' — '+wpFmtDate(fri)+', '+wpWeekStart.getFullYear();
   const board=document.getElementById('wpBoard');
   if(board)board.innerHTML='<div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">Loading…</div>';
   try{
-    const resp=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=eq.${ws}&select=*`,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+    const resp=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=in.(${wsMon},${wsLegacy})&select=*`,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
     const rows=resp.ok?await resp.json():[];
+    /* Whichever key actually holds this week's rows is the key we write back
+       to, so a week can never end up split across two dates. A week with no
+       rows yet is new, and starts on the correct Monday. */
+    const byKey={};rows.forEach(r=>{byKey[r.week_start]=(byKey[r.week_start]||0)+1});
+    _wpKeyInUse=Object.keys(byKey).sort((a,b)=>byKey[b]-byKey[a])[0]||wsMon;
     _wpCells={};
-    rows.forEach(r=>{_wpCells[r.editor_name+'-'+r.day_of_week]=r;});
+    rows.filter(r=>r.week_start===_wpKeyInUse).forEach(r=>{_wpCells[r.editor_name+'-'+r.day_of_week]=r;});
   }catch(_){_wpCells={};}
   wpGridRender();
 }
@@ -3705,7 +3720,8 @@ function wpPickStatus(s){
 
 async function wpCellSave(editor,day){
   const content=document.getElementById('wpCellContent').value.trim();
-  const ws=localDateStr(wpWeekStart);
+  /* write back to the key this week already uses, never a second one */
+  const ws=_wpKeyInUse||localDateStr(wpWeekStart);
   const existing=_wpCells[editor+'-'+day];
   const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
   const data={week_start:ws,editor_name:editor,day_of_week:day,content,status:_wpCurStatus,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()};
@@ -5212,6 +5228,37 @@ async function runSelfTest(){
    try{ navTo(wasPage); }catch(e){}
   })();
 
+  /* ── H7 · the Weekly Plan can still read its own history ─────────────── */
+  /* The fault this catches: every stored week_start is a SUNDAY, because the
+     old code stringified a Monday through toISOString() in a UTC+5:30 zone.
+     Fixing that date bug made the code ask for the real Monday, which matched
+     nothing, and MONTHS OF WEEKLY PLANS VANISHED from the screen. A fix to one
+     bug silently broke the lookup for every row written before it. */
+  await (async function(){
+   try{
+    const r=await fetch(SUPABASE_URL+'/rest/v1/weekly_plan_cells?select=week_start&order=week_start.desc&limit=200',
+      {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+    const rows=r.ok?await r.json():[];
+    if(!rows.length){ok('Weekly Plan: past weeks still load',false,
+      'NO weekly_plan_cells ROWS AT ALL, this check proved nothing');return;}
+    /* Prove it by LOADING that week, not by recomputing a date. The first
+       version of this check did the arithmetic itself and got it wrong in
+       exactly the way it was written to catch: it took a stored SUNDAY, asked
+       wpGetMonday for its Monday, and landed on the week BEFORE. */
+    const stored=rows[0].week_start;
+    const probe=new Date(stored+'T12:00:00');
+    probe.setDate(probe.getDate()+1);               /* the Monday that week belongs to */
+    const wasWeek=wpWeekStart, wasPage=currentPage;
+    wpWeekStart=wpGetMonday(probe);
+    await wpGridLoad();
+    const loaded=Object.keys(_wpCells||{}).length;
+    wpWeekStart=wasWeek; try{ await wpGridLoad(); }catch(e){}
+    try{ navTo(wasPage); }catch(e){}
+    ok('Weekly Plan: past weeks still load',loaded>0,
+       loaded?(loaded+' cells loaded for the week stored as '+stored):('0 cells for '+stored+', history is unreachable'));
+   }catch(e){ ok('Weekly Plan: past weeks still load',false,'check errored: '+e.message); }
+  })();
+
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
   ok('Layout: the page does not scroll sideways',
      document.documentElement.scrollWidth<=window.innerWidth+1,
@@ -5220,7 +5267,11 @@ async function runSelfTest(){
   /* ── J · bb-anti-ai-tells: emoji used as icons ───────────────────────── */
   (function(){
    const host=document.getElementById('pageContent');
-   const found=(host?host.textContent:'').match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu)||[];
+   /* Same policy as the sweep: PICTOGRAPHS are the tell, typographic marks are
+      not. Without this exclusion the check flags its own tick and arrows. */
+   const KEEP='\u2713\u2714\u2715\u2716\u2717\u2718\u25B6\u25C0\u25B2\u25BC\u2726\u2610\u263E\u2600\u2398\u2192\u2190\u2191\u2193\u2197\u21BB\u23F8\u2753\u2795';
+   const found=((host?host.textContent:'').match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu)||[])
+     .filter(ch=>KEEP.indexOf(ch)===-1);
    ok('Design: no emoji used as an icon on this page',found.length===0,
       found.length?('found '+[...new Set(found)].join(' ')):'clean');
   })();
