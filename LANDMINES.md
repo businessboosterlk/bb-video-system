@@ -612,3 +612,17 @@ and created this week's under the correct key with the content intact; drop
 deleted a `delayed` row and confirmed delayed counts as unresolved. Cleanup left
 **0 test rows**, and the panel returned to the real 5 items. No real plan was
 touched at any point.
+
+**MIGRATED 2026-08-12.** All 109 rows shifted from Sunday to the correct Monday
+after checking for collisions (0) against the unique constraint on
+`(week_start, editor_name, day_of_week)`. Counts unchanged: 14, 15, 16, 16, 9,
+14, 10, 15. The tolerant both-keys lookup was then **removed on purpose**: left
+in, a future Sunday write would be silently absorbed and the bug would hide
+again. A wrong key now fails loudly.
+
+**A second self-inflicted cut while removing it.** The removal used a coarse
+region replacement (everything between a comment and the next function) rather
+than precise anchors, and took `wpFetchWeek`, `wpIsUnresolved` and the
+carry-over state with it. The harness caught it in one run:
+`wpIsUnresolved is not defined`, and the weekly check reporting 0 cells.
+**Never delete by region when the region has grown since you last read it.**

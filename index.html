@@ -3505,34 +3505,26 @@ function wpCountVideos(content){
   return total;
 }
 
-/* EVERY stored week_start is a SUNDAY. wpGetMonday returns a Monday, but the
-   old code stringified it with toISOString(), and Colombo is UTC+5:30, so
-   Monday 00:00 local became SUNDAY in UTC and that is what got written for
-   months. Fixing the UTC bug made the code ask for the real Monday, which
-   matched nothing, and every past week's plan vanished. Reported the same day.
-   So the week is read under BOTH keys, and a save goes back to whichever key
-   that week already lives under. A brand new week uses the correct Monday.
-   No stored row is touched. See LANDMINES.md L-VID-014. */
-function wpLegacyKey(d){const x=new Date(d);x.setDate(x.getDate()-1);return localDateStr(x)}
+/* Week keys are the Monday of the week, in LOCAL time. Every row was migrated
+   from the old Sunday keys on 2026-08-12 (109 rows, verified). The tolerant
+   both-keys lookup was removed with it on purpose: left in, a future Sunday
+   write would be silently absorbed and the bug would hide again. A wrong key
+   now fails loudly. See LANDMINES.md L-VID-014. */
 /* One place that knows how to read a week, so the carry-over panel and the grid
-   can never disagree about which key a week lives under. */
+   can never disagree about which week they are looking at. */
 async function wpFetchWeek(monday){
-  const a=localDateStr(monday), b=wpLegacyKey(monday);
+  const a=localDateStr(monday);
   try{
-    const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=in.(${a},${b})&select=*`,
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=eq.${a}&select=*`,
       {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
-    const rows=r.ok?await r.json():[];
-    const byKey={};rows.forEach(x=>{byKey[x.week_start]=(byKey[x.week_start]||0)+1});
-    const key=Object.keys(byKey).sort((x,y)=>byKey[y]-byKey[x])[0]||a;
-    return {key:key,rows:rows.filter(x=>x.week_start===key)};
+    return {key:a,rows:r.ok?await r.json():[]};
   }catch(e){return {key:a,rows:[]};}
 }
 /* UNRESOLVED means: has content, and is not DONE. Delayed is not done, which is
-   Thulaib's rule and the whole point of the panel. */
+   Thulaib's rule and the whole point of the carry-over panel. */
 function wpIsUnresolved(c){return !!(c&&String(c.content||'').trim())&&c.status!=='done'}
 let _wpCarry=[];        /* last week's unresolved cells, for the panel */
 let _wpCarryKey=null;   /* the week_start key those cells live under */
-let _wpKeyInUse=null;   /* the week_start value this week's rows actually use */
 function wpGetMonday(d){
   const dt = new Date(d);
   const day = dt.getDay();
@@ -3556,22 +3548,18 @@ function wpGoToday(){wpWeekStart=wpGetMonday(new Date());wpGridLoad();}
 
 async function wpGridLoad(){
   if(!wpWeekStart)wpWeekStart=wpGetMonday(new Date());
-  const wsMon=localDateStr(wpWeekStart), wsLegacy=wpLegacyKey(wpWeekStart);
+  const wsMon=localDateStr(wpWeekStart);
   const fri=new Date(wpWeekStart);fri.setDate(fri.getDate()+4);
   const label=document.getElementById('wpWeekLabel');
   if(label)label.textContent=wpFmtDate(wpWeekStart)+' — '+wpFmtDate(fri)+', '+wpWeekStart.getFullYear();
   const board=document.getElementById('wpBoard');
   if(board)board.innerHTML='<div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">Loading…</div>';
   try{
-    const resp=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=in.(${wsMon},${wsLegacy})&select=*`,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+    const resp=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=eq.${wsMon}&select=*`,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
     const rows=resp.ok?await resp.json():[];
-    /* Whichever key actually holds this week's rows is the key we write back
-       to, so a week can never end up split across two dates. A week with no
-       rows yet is new, and starts on the correct Monday. */
-    const byKey={};rows.forEach(r=>{byKey[r.week_start]=(byKey[r.week_start]||0)+1});
-    _wpKeyInUse=Object.keys(byKey).sort((a,b)=>byKey[b]-byKey[a])[0]||wsMon;
+    _wpKeyInUse=wsMon;
     _wpCells={};
-    rows.filter(r=>r.week_start===_wpKeyInUse).forEach(r=>{_wpCells[r.editor_name+'-'+r.day_of_week]=r;});
+    rows.forEach(r=>{_wpCells[r.editor_name+'-'+r.day_of_week]=r;});
     /* Last week's unresolved work, but only while looking at the CURRENT week.
        Browsing back through history should not nag about the week before it. */
     _wpCarry=[];_wpCarryKey=null;
