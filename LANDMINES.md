@@ -672,3 +672,41 @@ carry an invisible 44px target. Measured after: drawn 20px, tappable 48px.
 **The check is coarse-only and says so on a laptop**, the same precedent as the
 field-zoom rule: "fine pointer: rule is coarse only, RUN THIS AT 390px TO PROVE
 IT". A check that cannot fail for the right reason must not report a quiet pass.
+
+---
+
+## L-VID-018 — welcome walkthrough (feature)
+
+Built 2026-08-20. Structure ported from `bb-graphic-system`, content written for
+this system. Per `bb-onboarding-standard`.
+
+**Three rules that came with the pattern, all of them earned elsewhere:**
+
+1. **It fires from the SIGN-IN DOOR, never a boot timer.** In the Graphic System
+   it first opened over the login screen and greeted somebody by name before
+   they had proved who they were. It is triggered inside `onLoginSuccess`, where
+   `currentUser` is already set. There is a check for this.
+2. **Reopenable forever, from the sidebar.** That is half the feature. Whoever
+   skips on day one is exactly the person asking in week two.
+3. **Every number is COUNTED, never typed.** The card says "It is 13 pages"
+   because it read the nav, and an **editor is told 7** because they have fewer.
+   A typed number goes stale the day somebody adds a page, and a guide that
+   miscounts the thing it describes loses a new person on card one.
+
+Seven cards, answering what a new person actually arrives asking rather than
+touring the menu: what this is, the Pipeline is your day, Add to Drive is the
+only finish line, the Weekly Plan, Mondays, where the numbers come from, and say
+so if it looks wrong.
+
+**Verified by driving it:** all 7 cards render with icon and dots, Back hides on
+card one, Skip hides on the last where the button reads Start, closing restores
+body scroll, a second sign-in does NOT reopen it, the sidebar button reopens it
+at card one, and Skip closes from midway. At 375px with a notch simulated the
+dots clear the inset, the button is 48px and sits clear of the home bar.
+
+**Still to build, and it is the other half of the standard:** a CHECKLIST
+derived from real data. A walkthrough teaches and is forgotten by tomorrow; a
+checklist changes behaviour because it is tied to things the person actually
+does. Every item must be DERIVED (has this person moved a card, ticked a plan
+line, installed the app), never self-reported, because an item somebody ticks by
+hand is theatre.

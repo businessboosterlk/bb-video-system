@@ -755,6 +755,9 @@ a:hover{text-decoration:underline}
     </div>
     <nav class="sidebar-nav" id="sidebarNav"></nav>
     <div class="sidebar-footer">
+      <!-- THE REOPEN ROW. Half the feature: a tour you can only see once is
+           lost by exactly the people who needed it. -->
+      <div id="vidGuideRow"></div>
       <div class="user-chip">
         <div class="user-avatar" id="userAvatar">?</div>
         <div class="user-info"><div class="user-name" id="userName">—</div><div class="user-role" id="userRole">—</div></div>
@@ -762,6 +765,21 @@ a:hover{text-decoration:underline}
       <button class="logout-btn" id="logoutBtn">Sign out</button>
     </div>
   </aside>
+  <div class="gd-wrap" id="gdWrap" hidden role="dialog" aria-modal="true" aria-labelledby="gdH">
+    <div class="gd-top">
+      <div class="gd-dots" id="gdDots"></div>
+      <button class="gd-skip" id="gdSkip" onclick="gdEnd()">Skip</button>
+    </div>
+    <div class="gd-body">
+      <div class="gd-ic" id="gdIc"></div>
+      <h2 class="gd-h" id="gdH"></h2>
+      <div id="gdP"></div>
+    </div>
+    <div class="gd-foot">
+      <button class="gd-back" id="gdBack" onclick="gdGo(-1)">Back</button>
+      <button class="gd-next" id="gdNext" onclick="gdGo(1)"></button>
+    </div>
+  </div>
   <main class="main">
     <header class="topbar">
       <button class="m-menu-btn" id="mMenuBtn" aria-label="Open menu">&#9776;</button>
@@ -855,7 +873,8 @@ const VICON={
   shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6Z"/>',
   alert:'<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="1" fill="currentColor" stroke="none"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
-  hourglass:'<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0"/>'
+  hourglass:'<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0"/>',
+  board:'<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="11" rx="1"/><rect x="16" y="4" width="5" height="7" rx="1"/>'
 };
 function vicon(name,size){
   const sz=size||16;
@@ -1433,6 +1452,65 @@ function doLogin(){
   if(u.pin!==p){e.textContent='Wrong PIN';$('#loginPin').value='';return}
   e.textContent='';onLoginSuccess(u);
 }
+/* ══ WELCOME WALKTHROUGH ══════════════════════════════════════════════════
+   Cards answer what a new person actually arrives asking, never "here is our
+   Analytics tab". Every number below is COUNTED from the app, because a guide
+   that miscounts the thing it describes loses trust on card one. */
+function gdCards(){
+  const first=(currentUser&&currentUser.name)?String(currentUser.name).split(' ')[0]:'there';
+  const pages=(isEditor()?PAGES_EDITOR:PAGES_FULL).length;
+  const stages=STAGES.length;
+  const nClients=(DATA.clients||[]).length;
+  return [
+   {ic:'camera',h:'Welcome, '+first,
+    p:['This is where every video for every client lives, from the moment it is shot to the moment it lands on the drive.',
+       'It is '+pages+' pages and takes about a minute to learn. Skip this if you like. It stays in the sidebar under your name for whenever you want it again.']},
+   {ic:'board',h:'The Pipeline is your day',
+    p:['Every video is a card. The '+stages+' columns are the stages a video passes through, left to right.',
+       '<b>Move your card the moment the work moves.</b> Not at the end of the day, not on Friday. Everything else in here is only as true as the last time somebody moved a card.']},
+   {ic:'check',h:'Add to Drive is the finish line',
+    p:['A video is not delivered until it sits in <b>Add to Drive</b>. Nothing else marks it done.',
+       'Every client number and every monthly total is counted from that one moment, so a video parked one column short counts as nothing.']},
+   {ic:'calendar',h:'The Weekly Plan',
+    p:['Your week, one row per person. Each client is its own line with its own tick box.',
+       '<b>Tick it when it is finished.</b> If something did not happen, tap the arrow beside it and it moves to the next day. No retyping. Nothing quietly disappears.']},
+   {ic:'send',h:'Mondays',
+    p:['Opening a new week shows anything from last week that was never ticked.',
+       'Move it into this week, mark it done or drop it. <b>Only Done counts as finished.</b> Delayed still means not done. It will keep asking.']},
+   {ic:'target',h:'Where the numbers come from',
+    p:['The Clients page shows, for '+nClients+' clients, how many videos went out against how many we sold them.',
+       'A video belongs to <b>the month it was tagged for</b>, never the month somebody happened to finish it. So set the month correctly when the project is made. That one field decides every count.']},
+   {ic:'alert',h:'If it looks wrong, say so',
+    p:['Every number here comes from what the team put in, so a wrong number is nearly always a wrong entry.',
+       'It is far cheaper to fix on the day it appears than three months later. Tell Thulaib rather than working around it.']}
+  ];
+}
+let GD_I=0;
+function gdOpen(){const w=document.getElementById('gdWrap');if(!w)return;
+  GD_I=0;w.hidden=false;document.body.style.overflow='hidden';gdRender();}
+function gdEnd(){const w=document.getElementById('gdWrap');if(!w)return;
+  w.hidden=true;document.body.style.overflow='';
+  try{localStorage.setItem('bbvid_guide_seen','1');}catch(e){}
+  renderGuideRow();}
+function gdGo(d){const n=gdCards().length;
+  if(GD_I+d>=n){gdEnd();return;}
+  GD_I=Math.max(0,GD_I+d);gdRender();}
+function gdRender(){
+  const cards=gdCards(),c=cards[GD_I],last=GD_I===cards.length-1;
+  document.getElementById('gdIc').innerHTML=vicon(c.ic,28);
+  document.getElementById('gdH').textContent=c.h;
+  document.getElementById('gdP').innerHTML=c.p.map(t=>'<p class="gd-p">'+t+'</p>').join('');
+  document.getElementById('gdDots').innerHTML=cards.map((_,i)=>'<span class="gd-dot'+(i<=GD_I?' on':'')+'"></span>').join('');
+  document.getElementById('gdBack').style.visibility=GD_I?'':'hidden';
+  document.getElementById('gdNext').textContent=last?'Start':'Next';
+  document.getElementById('gdSkip').style.visibility=last?'hidden':'';
+  const b=document.querySelector('.gd-body');if(b)b.scrollTop=0;}
+function gdSeen(){try{return localStorage.getItem('bbvid_guide_seen')==='1';}catch(e){return true;}}
+function renderGuideRow(){
+  const el=document.getElementById('vidGuideRow');if(!el)return;
+  el.innerHTML='<button class="gd-reopen" onclick="gdOpen()">How this works &middot; '+gdCards().length+' cards</button>';}
+window.gdOpen=gdOpen;window.gdEnd=gdEnd;window.gdGo=gdGo;
+
 function onLoginSuccess(u){
   currentUser=u;sessionStorage.setItem('bb_video_user',JSON.stringify({name:u.name}));
   $('#loginScreen').hidden=true;$('#app').hidden=false;
@@ -1441,6 +1519,11 @@ function onLoginSuccess(u){
   // Write a once-per-day login row so CC Team page + the 12 PM digest see who is active
   logVideoLogin(u);
   bootApp();
+  /* FROM THE SIGN-IN DOOR, NEVER A BOOT TIMER. In the Graphic System this first
+     opened over the login screen and greeted somebody by name before they had
+     proved who they were. currentUser is set by the time we reach here. */
+  renderGuideRow();
+  if(!gdSeen())setTimeout(gdOpen,600);
 }
 
 // Correct team_member_id map (SANDUNU was missing → null; now 13). Admins (Thulaib/Shiara)
@@ -5010,6 +5093,33 @@ button,label,.nav-item,.tab,.shoot-tab,.btn,.m-stage-opt,.vt-status,[role="butto
       scroll position survives the sheet at all. */
 body.sheet-open{position:fixed;left:0;right:0;width:100%}
 
+/* ══ WELCOME WALKTHROUGH ══════════════════════════════════════════════
+   Full screen on purpose. A new person should read one idea at a time, not a
+   tooltip pinned to a control they have not found yet. */
+.gd-wrap{position:fixed;inset:0;z-index:400;background:var(--bg);
+  display:flex;flex-direction:column;max-width:560px;margin:0 auto;
+  padding:calc(22px + var(--sat)) 22px calc(22px + var(--sab))}
+.gd-wrap[hidden]{display:none}
+.gd-top{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+.gd-dots{display:flex;gap:6px;flex:1}
+.gd-dot{height:4px;flex:1;border-radius:99px;background:var(--border-strong);transition:background .2s}
+.gd-dot.on{background:var(--accent)}
+.gd-skip{background:none;border:none;color:var(--text-3);font-size:14px;font-weight:600;cursor:pointer;padding:10px 6px;min-height:44px}
+.gd-skip:hover{color:var(--text)}
+.gd-body{flex:1;display:flex;flex-direction:column;justify-content:center;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.gd-ic{width:56px;height:56px;border-radius:14px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);margin-bottom:20px;flex:none}
+.gd-ic svg{width:28px;height:28px}
+.gd-h{font-size:26px;line-height:1.15;font-weight:800;letter-spacing:-0.02em;margin-bottom:16px;color:var(--text)}
+.gd-p{font-size:15.5px;line-height:1.6;color:var(--text-2);margin-bottom:12px}
+.gd-p b{color:var(--text);font-weight:700}
+.gd-foot{display:flex;gap:12px;align-items:center;flex-shrink:0}
+.gd-back{background:none;border:none;color:var(--text-3);font-size:14px;font-weight:600;cursor:pointer;padding:12px 8px;min-height:44px}
+.gd-next{flex:1;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px}
+.gd-next:hover{filter:brightness(1.08)}
+.gd-reopen{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);
+  border-radius:8px;padding:9px 10px;font-size:11.5px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left}
+.gd-reopen:hover{border-color:var(--accent);color:var(--accent)}
+
 /* 8 · TAP TARGETS ON THE WEEKLY PLAN. The tick box is drawn 17px so the grid
       stays dense, which is right on a mouse and a miss waiting to happen on a
       finger. 44px is the platform minimum, so on a COARSE pointer the row gets
@@ -5581,6 +5691,36 @@ async function runSelfTest(){
    ok('Team: past work still shows who did it',
       gone.length===0 || (DATA.teamMembers||[]).length>activeMembers().length,
       'inactive members stay in the list that names past work');
+  })();
+
+  /* ── H10 · the welcome walkthrough ───────────────────────────────────── */
+  (function(){
+   ok('Guide: the walkthrough exists and has cards',
+      typeof gdCards==='function'&&gdCards().length>0,
+      (typeof gdCards==='function'?gdCards().length+' cards':'missing'));
+   /* THE NUMBERS MUST BE COUNTED, NEVER TYPED. A guide that miscounts the thing
+      it describes loses a new person on card one, and a typed number goes stale
+      the day somebody adds a page. */
+   const c=gdCards();
+   const claimed=(c[0].p.join(' ').match(/It is (\d+) pages/)||[])[1];
+   const real=(isEditor()?PAGES_EDITOR:PAGES_FULL).length;
+   ok('Guide: the page count is read from the app, not typed',
+      claimed!==undefined&&Number(claimed)===real,
+      'guide says '+claimed+', the nav has '+real);
+   const stagesClaimed=(c.map(x=>x.p.join(' ')).join(' ').match(/The (\d+) columns/)||[])[1];
+   ok('Guide: the stage count is read from the app',
+      stagesClaimed!==undefined&&Number(stagesClaimed)===STAGES.length,
+      'guide says '+stagesClaimed+', STAGES has '+STAGES.length);
+   /* Reopenable forever is half the feature: whoever skips on day one is
+      exactly the person asking in week two. */
+   ok('Guide: it can be reopened from the sidebar',
+      typeof gdOpen==='function'&&!!document.getElementById('vidGuideRow'),
+      'sidebar row present');
+   /* And it must never greet somebody before they have signed in. */
+   const src=APPSRC;
+   ok('Guide: it fires from the sign-in door, not a boot timer',
+      /logVideoLogin\(u\);[\s\S]{0,400}?if\(!gdSeen\(\)\)/.test(src),
+      'triggered inside onLoginSuccess');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
