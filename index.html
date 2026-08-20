@@ -643,6 +643,38 @@ a:hover{text-decoration:underline}
 .wp-editable{cursor:pointer}
 .wp-editable:hover{background:var(--surface-2)!important}
 .wp-cell-content{font-size:13px;font-weight:600;color:var(--text);line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.wp-item{display:flex;align-items:flex-start;gap:7px;padding:3px 0;font-size:12.5px;font-weight:600;color:var(--text);line-height:1.4}
+.wp-item+.wp-item{border-top:1px dashed var(--border)}
+.wp-item-box{flex:none;width:17px;height:17px;margin-top:1px;border:1.5px solid var(--border-strong);border-radius:5px;background:var(--surface-2);cursor:pointer;display:grid;place-items:center;color:transparent;transition:all .12s}
+.wp-item-box:hover{border-color:var(--accent)}
+.wp-item.done .wp-item-box{background:var(--green);border-color:var(--green);color:#fff}
+.wp-item.done .wp-item-txt{text-decoration:line-through;color:var(--text-3);font-weight:500}
+.wp-item-txt{flex:1;min-width:0;overflow-wrap:break-word;word-break:normal;cursor:pointer}
+/* THE GRID WAS SIZED FOR PLAIN TEXT. A tick box and a move arrow inside a 98px
+   column left the text 17px wide, so "NOT AVA" wrapped one letter per line and
+   the whole plan was unreadable on a phone. The table already scrolls sideways,
+   so the honest fix is to give a day column enough room for what is now in it:
+   editor 110px plus five days at 150px. Measured, not guessed. */
+@media(max-width:768px){.wp-grid-table{min-width:860px!important}}
+.wp-item-next{flex:none;opacity:0;border:none;background:none;color:var(--text-3);cursor:pointer;padding:0 2px;line-height:1;border-radius:5px;transition:opacity .12s}
+.wp-item:hover .wp-item-next{opacity:1}
+.wp-item-next:hover{color:var(--accent);background:var(--surface-3)}
+/* A TOUCH SCREEN NEEDS A FINGER-SIZED TARGET, NOT A FINGER-SIZED PICTURE.
+   The tick box is 17px and the move arrow 16px, which is right for a dense
+   grid and far too small to hit. An ::after overlay extends the TAP area to
+   ~44px without changing the layout by a single pixel, so the grid stays
+   compact and the controls stay hittable. A near-miss here opens the cell
+   editor instead, which is the worst possible failure: it looks like the tick
+   did nothing while quietly putting the person in a text box. */
+.wp-item-box,.wp-item-next{position:relative}
+.wp-item-box::after,.wp-item-next::after{content:'';position:absolute;inset:-13px;z-index:1}
+@media (pointer:coarse){
+  /* no hover on a touch screen, so the move control is always visible */
+  .wp-item-next{opacity:.75}
+  .wp-item{padding:6px 0}                    /* room between rows for a thumb */
+  .wp-item-box{width:20px;height:20px}
+  .wp-item-box::after,.wp-item-next::after{inset:-14px}
+}
 .wp-cell-empty{color:var(--text-3);font-weight:400;font-size:12px}
 .wp-cell-count{margin-top:6px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.04em}
 .wp-total-row td{background:var(--surface-2);padding:10px 14px;font-size:12px;font-weight:700;text-align:center;border-top:2px solid var(--border-strong);border-right:1px solid var(--border)}
@@ -759,6 +791,11 @@ const USERS = [
   { name: 'RAMANI',  pin: '1717', role: 'editor' },
   { name: 'SANDUNU', pin: '7364', role: 'editor' },
   { name: 'NIDWIN',  pin: '5050', role: 'editor' },
+  /* Added 2026-08-14 on Thulaib's ask. TWO ASSUMPTIONS, both flagged to him:
+     the role is `editor` (they see only their own assigned projects), and the
+     PINs are TEMPORARY. Change them here and tell the two of them. */
+  { name: 'BAVITH',  pin: '2846', role: 'editor' },
+  { name: 'KAVISH',  pin: '3927', role: 'editor' },
 ];
 const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
@@ -3477,7 +3514,7 @@ window.openStageMenu=openStageMenu;
 // ═══════════════════════════════════════
 // WEEKLY PLAN
 // ═══════════════════════════════════════
-const WP_EDITORS = ['USHANE','RAJEEWA','RAMANI','NIDWIN','SANDUNU'];
+const WP_EDITORS = ['USHANE','RAJEEWA','RAMANI','NIDWIN','SANDUNU','BAVITH','KAVISH'];
 const WP_DAYS_FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
 const WP_DAYS_SHORT = ['MON','TUE','WED','THU','FRI'];
 let wpWeekStart = null;
@@ -3525,6 +3562,29 @@ async function wpFetchWeek(monday){
 function wpIsUnresolved(c){return !!(c&&String(c.content||'').trim())&&c.status!=='done'}
 let _wpCarry=[];        /* last week's unresolved cells, for the panel */
 let _wpCarryKey=null;   /* the week_start key those cells live under */
+/* ITEMS. One line = one client's work for that person that day.
+   A done line carries a `[x] ` prefix. Anything without it is NOT done, so
+   every row written before this existed stays valid with no migration, and the
+   text is still readable in the database and in the plain textarea. */
+function wpItems(content){
+  return String(content||'').split(/\n/).map(function(l){return l.trim()}).filter(Boolean)
+    .map(function(l){
+      const m=l.match(/^\[( |x|X)\]\s*(.*)$/);
+      return m?{done:m[1].toLowerCase()==='x',text:m[2].trim()}:{done:false,text:l};
+    });
+}
+function wpItemsToText(items){
+  return items.map(function(it){return (it.done?'[x] ':'')+it.text}).join('\n');
+}
+/* The ticks drive the cell status, so the carry-over panel and every other
+   reader agree with what a person can see. All ticked = done. Any unticked
+   pulls a done cell back to pending, never to delayed: only a human sets that. */
+function wpStatusFromItems(items,current){
+  if(!items.length)return current||'pending';
+  const all=items.every(function(it){return it.done});
+  if(all)return 'done';
+  return (current==='done')?'pending':(current||'pending');
+}
 function wpGetMonday(d){
   const dt = new Date(d);
   const day = dt.getDay();
@@ -3692,7 +3752,13 @@ function wpGridRender(){
           return `<td class="wp-grid-cell${canEdit?' wp-editable':''}"
             style="${!isEmpty?`border-left:3px solid ${border};background:${bg};`:''}"
             ${canEdit?`onclick="wpCellEdit('${ed}',${d})"`:''}>
-            <div class="wp-cell-content">${isEmpty?'<span class="wp-cell-empty">—</span>':esc(content).replace(/\n/g,'<br>')}</div>
+            <div class="wp-cell-content">${isEmpty?'<span class="wp-cell-empty">—</span>':wpItems(content).map(function(it,ix){
+              return `<div class="wp-item${it.done?' done':''}">`+
+                (canEdit?`<span class="wp-item-box" onclick="event.stopPropagation();wpToggleItem('${ed}',${d},${ix})" title="Mark done">${vicon('check',12)}</span>`:'')+
+                `<span class="wp-item-txt">${esc(it.text)}</span>`+
+                ((canEdit&&d<5&&!it.done)?`<button class="wp-item-next" onclick="event.stopPropagation();wpMoveItemNextDay('${ed}',${d},${ix})" title="Move to the next day">${vicon('send',12)}</button>`:'')+
+              `</div>`;
+            }).join('')}</div>
             ${!isEmpty?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;flex-wrap:wrap;gap:4px">
               <span class="wp-status-pill ${sPill[status]||sPill.pending}">${sLabel[status]||sLabel.pending}</span>
               ${vidCount>0?`<span class="wp-cell-count">${vidCount} vid${vidCount!==1?'s':''}</span>`:''}
@@ -3822,6 +3888,61 @@ async function wpCarryAll(action){
   await wpGridLoad();
 }
 window.wpCarryAct=wpCarryAct;window.wpCarryAll=wpCarryAll;
+
+/* stopPropagation is correct HERE and only here: the cell opens the editor and
+   these controls do something else entirely. It would be wrong on a control
+   whose own action the cell also performs. */
+async function wpSaveCellRaw(editor,day,items,status){
+  const ws=_wpKeyInUse||localDateStr(wpWeekStart);
+  const existing=_wpCells[editor+'-'+day];
+  const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
+  const content=wpItemsToText(items);
+  const who=(currentUser&&currentUser.name)||null;
+  if(!content.trim()&&existing){
+    await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${existing.id}`,{method:'DELETE',headers});
+    delete _wpCells[editor+'-'+day];
+    return;
+  }
+  const body={week_start:ws,editor_name:editor,day_of_week:day,content:content,status:status,updated_by:who,updated_at:new Date().toISOString()};
+  if(existing){
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${existing.id}`,{method:'PATCH',headers,body:JSON.stringify(body)});
+    const j=await r.json();if(j&&j[0])_wpCells[editor+'-'+day]=j[0];
+  }else{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells`,{method:'POST',headers,body:JSON.stringify(body)});
+    const j=await r.json();if(j&&j[0])_wpCells[editor+'-'+day]=j[0];
+  }
+}
+async function wpToggleItem(editor,day,idx){
+  const cell=_wpCells[editor+'-'+day];if(!cell)return;
+  const items=wpItems(cell.content);
+  if(!items[idx])return;
+  items[idx].done=!items[idx].done;
+  const status=wpStatusFromItems(items,cell.status);
+  try{
+    await wpSaveCellRaw(editor,day,items,status);
+    wpGridRender();
+  }catch(err){toast('Could not save','error');if(window.bbReportDbError)window.bbReportDbError('weekly_plan_cells','toggle',err);}
+}
+/* Move one line to the next day, same person. Monday to Thursday only: a
+   Friday leftover belongs to NEXT WEEK, which the carry-over panel owns, and
+   two features writing the same move is how data gets duplicated. */
+async function wpMoveItemNextDay(editor,day,idx){
+  if(day>=5)return;
+  const cell=_wpCells[editor+'-'+day];if(!cell)return;
+  const items=wpItems(cell.content);
+  const moving=items[idx];if(!moving)return;
+  const rest=items.filter(function(_,i){return i!==idx});
+  const nextCell=_wpCells[editor+'-'+(day+1)];
+  const nextItems=nextCell?wpItems(nextCell.content):[];
+  nextItems.push({done:false,text:moving.text});
+  try{
+    await wpSaveCellRaw(editor,day+1,nextItems,wpStatusFromItems(nextItems,nextCell&&nextCell.status));
+    await wpSaveCellRaw(editor,day,rest,wpStatusFromItems(rest,cell.status));
+    wpGridRender();
+    toast(`Moved to ${WP_DAYS_SHORT[day]}`,'success');
+  }catch(err){toast('Could not move','error');if(window.bbReportDbError)window.bbReportDbError('weekly_plan_cells','move',err);}
+}
+window.wpToggleItem=wpToggleItem;window.wpMoveItemNextDay=wpMoveItemNextDay;
 
 async function wpCellSave(editor,day){
   const content=document.getElementById('wpCellContent').value.trim();
@@ -5378,6 +5499,36 @@ async function runSelfTest(){
       wpIsUnresolved({content:'   ',status:'pending'})===false,'blank cells ignored');
    ok('Weekly Plan: the three carry-over actions exist',
       typeof wpCarryAct==='function'&&typeof wpCarryAll==='function');
+  })();
+
+  /* ── H9 · the Weekly Plan items are usable with a finger ─────────────── */
+  await (async function(){
+   const wasPage=currentPage;
+   try{ navTo('weeklyplan'); }catch(e){}
+   await new Promise(r=>setTimeout(r,1800));
+   const box=document.querySelector('.wp-item-box');
+   if(!box){
+    ok('Weekly Plan: a tick box is big enough to tap',false,
+       'NO TICK BOX ON SCREEN, this check proved nothing');
+    try{ navTo(wasPage); }catch(e){} return;
+   }
+   /* Measure the REAL hit area, not the drawn size. The box is deliberately
+      small so the grid stays dense; an ::after overlay carries the tap. Only
+      elementFromPoint knows the difference. A near-miss opens the cell editor,
+      so this failing means a tick silently drops someone into a text box. */
+   const r=box.getBoundingClientRect();
+   const cx=r.left+r.width/2, cy=r.top+r.height/2;
+   const hits=d=>{const e=document.elementFromPoint(cx+d[0],cy+d[1]);
+     return !!e&&(e===box||box.contains(e)||e.parentElement===box);};
+   const reach=[[-16,0],[16,0],[0,-16],[0,16]].every(hits);
+   ok('Weekly Plan: a tick box is big enough to tap',reach,
+      reach?('drawn '+Math.round(r.width)+'px, tappable about '+(Math.round(r.width)+28)+'px')
+           :('drawn '+Math.round(r.width)+'px and that is ALL it is, a finger will miss it'));
+   ok('Weekly Plan: each client is a separate tickable line',
+      document.querySelectorAll('.wp-item').length>0 &&
+      document.querySelectorAll('.wp-item-box').length===document.querySelectorAll('.wp-item').length,
+      document.querySelectorAll('.wp-item').length+' items, each with a box');
+   try{ navTo(wasPage); }catch(e){}
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
