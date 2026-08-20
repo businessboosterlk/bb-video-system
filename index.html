@@ -789,8 +789,10 @@ const USERS = [
   { name: 'USHANE',  pin: '628474', role: 'video_head' },
   { name: 'RAJEEWA', pin: '1212', role: 'editor' },
   { name: 'RAMANI',  pin: '1717', role: 'editor' },
-  { name: 'SANDUNU', pin: '7364', role: 'editor' },
-  { name: 'NIDWIN',  pin: '5050', role: 'editor' },
+  /* SANDUNU and NIDWIN left the team 2026-08-14. Their logins are gone and
+     their team_members rows are marked active=false, NOT deleted, so every
+     project, stage move and weekly plan cell they ever touched still shows who
+     did it. Deleting a person deletes the history of their work with them. */
   /* Added 2026-08-14 on Thulaib's ask. TWO ASSUMPTIONS, both flagged to him:
      the role is `editor` (they see only their own assigned projects), and the
      PINs are TEMPORARY. Change them here and tell the two of them. */
@@ -1165,6 +1167,11 @@ async function getProjectTimeBreakdown(pid){
   }catch(_){return {editing:0,changes:0,total:0,hasOpen:false}}
 }
 // Returns the team_members.id for current user (used to filter editor visibility). null if not in team_members.
+/* Someone who has left keeps their history but must not appear anywhere you
+   can assign NEW work, or in a headcount. active is only false when a person
+   has gone, so an older row with no value at all still counts as here. */
+function isActiveMember(m){return !!m && m.active!==false}
+function activeMembers(){return (DATA.teamMembers||[]).filter(isActiveMember)}
 function currentEditorId(){if(!isEditor()||!DATA.teamMembers)return null;const m=DATA.teamMembers.find(x=>x.name&&x.name.toUpperCase()===currentUser.name.toUpperCase());return m?m.id:null}
 // Filter projects: editors only see projects assigned to them. Everyone else sees all.
 function visibleProjects(){if(!isEditor())return DATA.projects||[];const eid=currentEditorId();if(!eid)return [];return (DATA.projects||[]).filter(p=>Number(p.assigned_editor_id)===Number(eid))}
@@ -1544,7 +1551,7 @@ async function fetchAll(silent=false){
     const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr,vtr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
       sb.from('clients').select('*'),
-      sb.from('team_members').select('id, name, role'),
+      sb.from('team_members').select('id, name, role, active'),
       sb.from('video_project_links').select('*').order('created_at',{ascending:false}),
       sb.from('smm_shoots').select('*').order('shoot_date',{ascending:true}),
       sb.from('video_chat_messages').select('id,body,author,created_at,client_id,deleted_at,edited_at').order('created_at',{ascending:true}),
@@ -1775,7 +1782,7 @@ function renderDashboard(){
   // Upcoming deadlines
   const upcoming=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
   // Workload bars
-  const editors=DATA.teamMembers.filter(m=>m.role==='editor'||m.role==='video_editor'||(m.role||'').toLowerCase().includes('editor'));
+  const editors=activeMembers().filter(m=>m.role==='editor'||m.role==='video_editor'||(m.role||'').toLowerCase().includes('editor'));
   const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length}));
   editorBars.sort((a,b)=>b.count-a.count);
   const maxEd=Math.max(...editorBars.map(e=>e.count),1);
@@ -1950,7 +1957,7 @@ function renderPipeline(){
   if(f.month){const fp=String(f.month).split('-').map(Number);ps=ps.filter(p=>inTargetMonth(p,fp[0],fp[1]));}
   /* A real user action re-sorts. Only the automatic repaint holds the order. */
   if(!_silentRender)PIPELINE_ORDER={};
-  const editors=DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
+  const editors=activeMembers().filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
   const bulkBtn=(isAdmin()||isVideoHead())?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">'+vicon('archive',15)+'</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
@@ -2423,7 +2430,7 @@ function openProjectForm(existing=null){
   const ie=!!existing;
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">${ie?'Edit Project':'New Project'}</div><button class="modal-close" data-close>&times;</button></div><form id="projectForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Title</label><input class="field-input" name="title" required value="${esc(existing?.title||'')}" autofocus></div>
-    <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">— Unassigned —</option>${DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'}).map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
+    <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">Unassigned</option>${activeMembers().filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'}).map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p=>`<option value="${p}" ${(existing?.priority||'medium')===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select></div><div><label class="field-label">Type</label><select class="field-select" name="type">${['reel','ad','testimonial','product','educational'].map(t=>`<option value="${t}" ${(existing?.type||'reel')===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||''}"></div></div>
     <div class="form-row"><div><label class="field-label">Month <span style="color:var(--red,#ef4444)">*</span> ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month" required><option value="" disabled ${!parseInt(existing?.target_month)?'selected':''}>— Select month —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
@@ -2828,7 +2835,7 @@ function drawTimeTracker(){
 function openTimeForm(){
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">Log Time</div><button class="modal-close" data-close>&times;</button></div><form id="timeForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Project</label><select class="field-select" name="video_project_id" required><option value="">Select project...</option>${DATA.projects.map(p=>`<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select></div>
-    <div><label class="field-label">Editor</label><select class="field-select" name="team_member_id" required><option value="">Select editor...</option>${DATA.teamMembers.filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'}).map(m=>`<option value="${m.id}" ${m.name?.toUpperCase()===currentUser.name.toUpperCase()?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+    <div><label class="field-label">Editor</label><select class="field-select" name="team_member_id" required><option value="">Select editor...</option>${activeMembers().filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'}).map(m=>`<option value="${m.id}" ${m.name?.toUpperCase()===currentUser.name.toUpperCase()?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div><label class="field-label">Stage</label><select class="field-select" name="stage">${STAGES.map(s=>`<option value="${s.key}">${s.label}</option>`).join('')}</select></div>
     <div class="form-row"><div><label class="field-label">Hours</label><input class="field-input" type="number" name="hours" min="0" step="0.25" value="1"></div><div><label class="field-label">Minutes</label><input class="field-input" type="number" name="mins" min="0" max="59" step="5" value="0"></div></div>
     <div><label class="field-label">Started At</label><input class="field-input" type="datetime-local" name="started_at" value="${new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16)}"></div>
@@ -3223,7 +3230,7 @@ function renderTeam(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   // Show everyone — admin can see all, also include video_head (ushane)
-  const members=DATA.teamMembers;
+  const members=activeMembers();
   $('#pageSub').textContent=`${members.length} team member${members.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team</div><div class="page-sub">Click any member to see full history and current work</div></div></div>
     <div class="team-grid">
@@ -3514,7 +3521,7 @@ window.openStageMenu=openStageMenu;
 // ═══════════════════════════════════════
 // WEEKLY PLAN
 // ═══════════════════════════════════════
-const WP_EDITORS = ['USHANE','RAJEEWA','RAMANI','NIDWIN','SANDUNU','BAVITH','KAVISH'];
+const WP_EDITORS = ['USHANE','RAJEEWA','RAMANI','BAVITH','KAVISH'];
 const WP_DAYS_FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
 const WP_DAYS_SHORT = ['MON','TUE','WED','THU','FRI'];
 let wpWeekStart = null;
@@ -5003,6 +5010,22 @@ button,label,.nav-item,.tab,.shoot-tab,.btn,.m-stage-opt,.vt-status,[role="butto
       scroll position survives the sheet at all. */
 body.sheet-open{position:fixed;left:0;right:0;width:100%}
 
+/* 8 · TAP TARGETS ON THE WEEKLY PLAN. The tick box is drawn 17px so the grid
+      stays dense, which is right on a mouse and a miss waiting to happen on a
+      finger. 44px is the platform minimum, so on a COARSE pointer the row gets
+      real height and the two controls carry an invisible 44px target each.
+      A near miss on the tick opens the cell editor instead, so getting this
+      wrong silently drops someone into a text box when they meant to tick. */
+@media (pointer:coarse){
+ .wp-item{padding:12px 0}
+ .wp-item-box,.wp-item-next{position:relative}
+ .wp-item-box::after,.wp-item-next::after{
+   content:'';position:absolute;left:50%;top:50%;
+   width:44px;height:44px;transform:translate(-50%,-50%)}
+ /* the move button sits at the far end of the row, so the two 44px zones
+    cannot reach each other on any column width this grid produces */
+}
+
 /* 7 · NOTHING FLOATS OVER THE WORK. Two circular buttons sat over the content
       on a phone and covered the Needs Attention panel outright. The agent
       alerts already have a home on the Dashboard and their own Agents page,
@@ -5520,6 +5543,14 @@ async function runSelfTest(){
    const cx=r.left+r.width/2, cy=r.top+r.height/2;
    const hits=d=>{const e=document.elementFromPoint(cx+d[0],cy+d[1]);
      return !!e&&(e===box||box.contains(e)||e.parentElement===box);};
+   /* Coarse pointers only, exactly like the field-zoom rule. A 17px target is
+      fine under a mouse, so enforcing it on a laptop would be a check that
+      cannot fail for the right reason. Say so rather than passing quietly. */
+   if(!matchMedia('(pointer:coarse)').matches){
+    ok('Weekly Plan: a tick box is big enough to tap',true,
+       'fine pointer: rule is coarse only, RUN THIS AT 390px TO PROVE IT');
+    try{ navTo(wasPage); }catch(e){} return;
+   }
    const reach=[[-16,0],[16,0],[0,-16],[0,16]].every(hits);
    ok('Weekly Plan: a tick box is big enough to tap',reach,
       reach?('drawn '+Math.round(r.width)+'px, tappable about '+(Math.round(r.width)+28)+'px')
@@ -5529,6 +5560,27 @@ async function runSelfTest(){
       document.querySelectorAll('.wp-item-box').length===document.querySelectorAll('.wp-item').length,
       document.querySelectorAll('.wp-item').length+' items, each with a box');
    try{ navTo(wasPage); }catch(e){}
+  })();
+
+  /* ── H9 · people who have left ───────────────────────────────────────── */
+  (function(){
+   /* The trap this catches: the boot query selected id, name and role and NOT
+      active, so isActiveMember read undefined, treated everyone as current, and
+      two people who had left stayed in every assignment dropdown. The filter
+      looked right and could not work. A flag you never SELECT is a flag you do
+      not have. */
+   ok('Team: the active flag is actually fetched',
+      (DATA.teamMembers||[]).some(m=>m.active!==undefined),
+      'without it every leaver reads as still here');
+   const gone=(DATA.teamMembers||[]).filter(m=>m.active===false).map(m=>m.name);
+   const pickable=activeMembers().map(m=>m.name);
+   const leak=gone.filter(n=>pickable.indexOf(n)>-1);
+   ok('Team: nobody who has left can be given new work',leak.length===0,
+      leak.length?('still assignable: '+leak.join(', ')):(gone.length+' inactive, none assignable'));
+   /* and the other half: their history must NOT vanish with them */
+   ok('Team: past work still shows who did it',
+      gone.length===0 || (DATA.teamMembers||[]).length>activeMembers().length,
+      'inactive members stay in the list that names past work');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

@@ -626,3 +626,49 @@ than precise anchors, and took `wpFetchWeek`, `wpIsUnresolved` and the
 carry-over state with it. The harness caught it in one run:
 `wpIsUnresolved is not defined`, and the weekly check reporting 0 cells.
 **Never delete by region when the region has grown since you last read it.**
+
+---
+
+## L-VID-016 — a flag you never SELECT is a flag you do not have
+
+**Status:** FIXED 2026-08-14.
+
+NIDWIN and SANDUNU left the team. `team_members` already had an `active` column
+and **nothing in the app ever read it**. Worse, when I added `isActiveMember()`
+the boot query still said `select('id, name, role')`, so `m.active` was
+`undefined`, `active!==false` was true for everyone, and both leavers stayed in
+every assignment dropdown. **The filter looked correct and could not work.**
+
+Caught by driving the UI rather than reading the code: logins and the Weekly
+Plan grid were clean, while the Team page and the Pipeline editor filter still
+listed them. One surface passing is not the feature working.
+
+It also revealed KANEESHA had been `active=false` in the database for some time
+and was still showing everywhere, because nobody was reading the flag.
+
+**The shape of the fix that matters:** leavers are marked inactive, never
+deleted. Deleting a person deletes the history of their work with them. They
+vanish from anywhere you can assign NEW work and from the headcount, and their
+name still appears on every project, stage move and plan cell they touched.
+
+**Left for Thulaib:** NIDWIN still owns **2 live HIRE PANTHER videos sitting in
+Editing** (JUL VID 2 and JUL VID 3). Those need a new owner. SANDUNU's 2 are
+already on Add to Drive, so nothing to do there.
+
+---
+
+## L-VID-017 — a 17px tick box is a miss waiting to happen
+
+**Status:** FIXED 2026-08-14.
+
+The Weekly Plan tick box is drawn 17px so the grid stays dense. Correct under a
+mouse, wrong under a thumb, and the failure is nasty: a near miss falls through
+to the cell's own click handler and **drops the person into a text editor when
+they meant to tick something**.
+
+Now, on **coarse pointers only**, the row gets real height and both controls
+carry an invisible 44px target. Measured after: drawn 20px, tappable 48px.
+
+**The check is coarse-only and says so on a laptop**, the same precedent as the
+field-zoom rule: "fine pointer: rule is coarse only, RUN THIS AT 390px TO PROVE
+IT". A check that cannot fail for the right reason must not report a quiet pass.
