@@ -781,3 +781,32 @@ made. There is a check on that invariant.
    which reads as "cut nothing". Ushane did 5 cutting jobs in July, none of them
    numbered. It now shows "5 jobs, not counted" rather than a dash. **A number
    the system cannot compute must say so, never render as zero.**
+
+**v2, 2026-08-21.** Rebuilt as an analytics view for the video head, who already
+sees all 158 projects and already had the page, so this was purely about making
+it answer a harder question: not "what happened" but **"why is this month
+different from last"**.
+
+Every headline number now carries its change, and a **diagnosis block sits at
+the top**, derived from the deltas rather than written by hand. It exists to
+separate three kinds of "down" that look identical in a single number:
+
+| What the numbers say | What it means |
+|---|---|
+| fewer created | a planning gap, before anyone edits anything |
+| same created, fewer delivered | throughput |
+| more parked with reviewers or clients | not ours to clear |
+
+Live example from July against June: *"Delivery is down 1 even though 9 more
+were created. The extra work went in and has not come out yet, so it is sitting
+in the pipe rather than missing."* Followed by where the extra 10 went (5 to
+clients, 5 to the team) and the biggest movers by person.
+
+Also added: a client filter across the whole page, and last month beside this
+month in the workload, stage and client tables.
+
+**One wording bug caught in testing, worth the entry.** The first version said
+"on roughly the same amount created" while **9 more** had in fact been created.
+The number was right and the sentence was wrong, which is the sort of small
+inaccuracy that makes somebody stop trusting the whole page. A derived sentence
+must state what actually happened to **both** numbers, in both directions.
