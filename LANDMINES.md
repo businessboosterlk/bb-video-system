@@ -710,3 +710,33 @@ checklist changes behaviour because it is tied to things the person actually
 does. Every item must be DERIVED (has this person moved a card, ticked a plan
 line, installed the app), never self-reported, because an item somebody ticks by
 hand is theatre.
+
+---
+
+## L-VID-019 — a login with no team_members row is a dead login
+
+**Status:** FIXED 2026-08-20.
+
+BAVITH and KAVISH were added to `USERS` and to `WP_EDITORS`. They could sign in
+perfectly, and **saw an empty board**. Proven before fixing: `visibleProjects()`
+returned **0** for both while RAJEEWA saw 113.
+
+**Why.** An editor's projects are filtered by `assigned_editor_id`, which
+resolves through `team_members` **by name**. No row means `currentEditorId()`
+returns null, and `visibleProjects()` returns `[]`. Nothing errors. Nothing logs.
+The app simply shows them nothing, forever, and **assigning them work would not
+have helped**, because the assignment dropdown is also built from
+`team_members`, so they could not be picked in the first place.
+
+A login is three things in this system and all three must exist:
+1. the `USERS` entry, which is the door
+2. a `team_members` row, which is what work attaches to
+3. `WP_EDITORS`, which is the Weekly Plan row
+
+Two out of three looks completely working right up until the person opens it.
+
+Rows created (BAVITH 20, KAVISH 21, both `active=true`). Admins are deliberately
+exempt: they are not team members and see everything regardless.
+
+**The permanent block:** a check asserts every `USERS` entry with role `editor`
+or `video_head` resolves to a `team_members` row, and names anyone who does not.

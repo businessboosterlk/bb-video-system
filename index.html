@@ -5723,6 +5723,23 @@ async function runSelfTest(){
       'triggered inside onLoginSuccess');
   })();
 
+  /* ── H11 · a login without a team_members row is a dead login ────────── */
+  (function(){
+   /* BAVITH and KAVISH were added to USERS and to the Weekly Plan grid, and had
+      no team_members row. They could sign in perfectly and saw an EMPTY board,
+      because an editor's projects are filtered by assigned_editor_id, which
+      resolves through team_members by name. Nothing errored. The app just
+      showed them nothing, forever, and no amount of assigning work would have
+      helped. Admins are deliberately exempt: they are not team members and see
+      everything anyway. */
+   const need=USERS.filter(u=>u.role==='editor'||u.role==='video_head');
+   const names=(DATA.teamMembers||[]).map(m=>String(m.name||'').toUpperCase());
+   const missing=need.filter(u=>names.indexOf(String(u.name).toUpperCase())===-1).map(u=>u.name);
+   ok('Access: every editor login can actually be assigned work',missing.length===0,
+      missing.length?('no team_members row for '+missing.join(', ')+', their board will be empty')
+                    :(need.length+' editor logins, all resolvable'));
+  })();
+
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
   ok('Layout: the page does not scroll sideways',
      document.documentElement.scrollWidth<=window.innerWidth+1,
