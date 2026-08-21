@@ -810,3 +810,62 @@ month in the workload, stage and client tables.
 The number was right and the sentence was wrong, which is the sort of small
 inaccuracy that makes somebody stop trusting the whole page. A derived sentence
 must state what actually happened to **both** numbers, in both directions.
+
+---
+
+## L-VID-021 · a shared table is not your department
+
+**Spotted** 2026-08-21, by Thulaib, from a screenshot. The Team page read
+**11 team members**: 4 graphic designers, a social media manager and a
+developer, beside the 5 video people.
+
+**Root cause.** `team_members` is one table shared by the Video System, the
+Graphic System, the SMM Workspace and the Dev System. `renderTeam()` called
+`activeMembers()`, which means *every active person at Business Booster*, and
+the code comment above it even said so: `// Show everyone`. Nothing was broken.
+The page was answering a different question from the one it was asked.
+
+**Why it survived so long.** The six extra cards all read `0 ACTIVE · 0 DONE`,
+because a graphic designer is never an `assigned_editor_id` on a video. Zero
+looks like an empty week, not like a bug. The page told the truth on every card
+and still gave the wrong impression as a whole.
+
+**The two places it was not cosmetic:**
+
+| Where | What it did |
+|---|---|
+| Dashboard capacity pillar | measured max load minus min load across all 11. Six people who never take a video pulled minLoad to 0 by definition, so the spread was never a fact about the video team |
+| Analytics `editorStats` | seeded a row per member, then picked `topEditor` by sorting all of them. The visible table filters to rows with activity, which is exactly why nobody caught it |
+
+**The block.** One definition, tested by MEANING and not by an allow list of
+today's five names:
+
+```js
+function isVideoRole(r){r=String(r||'').toLowerCase();return r.indexOf('editor')>=0||r.indexOf('video')>=0}
+function videoMembers(){return activeMembers().filter(m=>isVideoRole(m.role))}
+function assignableEditors(){/* narrower: who can be HANDED a video */}
+```
+
+Hire a videographer and she appears with no code change. Hire a second developer
+and he never does. `assignableEditors()` is deliberately separate and narrower,
+because a videographer shoots, she does not get assigned an edit. That predicate
+existed **verbatim in three places** and a fourth looser variant in a fifth;
+all five now call one function.
+
+**Two harness checks** (H13): only video people are listed, and `WP_EDITORS`
+still matches the video roster. The second one catches the next hire getting a
+login and a board but no row on the Weekly Plan, which is exactly how BAVITH and
+KAVISH were caught the first time.
+
+**The honest part.** Fixing the capacity pillar did **not** change today's
+reading: BAVITH and KAVISH also sit at 0 active, so the spread is 31 either way.
+It changed what the number means, not what it says. Do not claim a fix moved a
+number without looking at the number.
+
+**The rule.** *Any BB system reading a shared table must say which department it
+means.* `team_members`, `tasks` and `clients` are all shared. A query that means
+"our people" and writes `activeMembers()` is a bug that reads as a quiet week.
+
+**Also fixed.** The role printed raw, so Ushane's card read `VIDEO_HEAD` with the
+underscore showing. `roleLabel()` now strips it. A database value on screen is
+the same class of tell as a placeholder reaching a client.

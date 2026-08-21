@@ -1192,6 +1192,18 @@ async function getProjectTimeBreakdown(pid){
    has gone, so an older row with no value at all still counts as here. */
 function isActiveMember(m){return !!m && m.active!==false}
 function activeMembers(){return (DATA.teamMembers||[]).filter(isActiveMember)}
+/* team_members is SHARED with the Graphic System, the SMM Workspace and the Dev
+   System. Anything in here that means "our people" must say so, or the Video
+   System quietly reports on graphic designers. Tested by meaning, not by a list
+   of today's names, so a videographer hired tomorrow appears by herself. */
+function isVideoRole(r){r=String(r||'').toLowerCase();return r.indexOf('editor')>=0||r.indexOf('video')>=0}
+function videoMembers(){return activeMembers().filter(m=>isVideoRole(m.role))}
+/* video_head is a database value, not a job title. Printing it raw is the same
+   class of tell as a placeholder reaching a client: the machine showing. */
+function roleLabel(r){return String(r||'team').replace(/_/g,' ')}
+/* Who can be HANDED a video. Narrower than the video team on purpose: a
+   videographer shoots, she does not get assigned an edit. */
+function assignableEditors(){return activeMembers().filter(m=>{const r=String(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'})}
 function currentEditorId(){if(!isEditor()||!DATA.teamMembers)return null;const m=DATA.teamMembers.find(x=>x.name&&x.name.toUpperCase()===currentUser.name.toUpperCase());return m?m.id:null}
 // Filter projects: editors only see projects assigned to them. Everyone else sees all.
 function visibleProjects(){if(!isEditor())return DATA.projects||[];const eid=currentEditorId();if(!eid)return [];return (DATA.projects||[]).filter(p=>Number(p.assigned_editor_id)===Number(eid))}
@@ -1856,7 +1868,12 @@ function renderDashboard(){
   const stale=ps.filter(p=>p.current_stage==='client_review'&&p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())>5*86400000).length;
   const pillarComm=stale===0?'green':(stale<=1?'amber':'red');
   const editorLoad={};
-  DATA.teamMembers.forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length});
+  /* VIDEO PEOPLE ONLY. Six of the eleven never take a video, so they sat at 0
+     active forever and dragged minLoad down by definition rather than by any
+     fact about the video team. Note this does not always change the reading:
+     today BAVITH and KAVISH also sit at 0, so the spread is 31 either way. It
+     changes what the number MEANS, which is what makes it worth trusting. */
+  videoMembers().forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length});
   const loads=Object.values(editorLoad);
   const maxLoad=Math.max(...loads,0),minLoad=Math.min(...loads,0);
   const pillarCap=(maxLoad-minLoad)<=2?'green':((maxLoad-minLoad)<=4?'amber':'red');
@@ -1866,7 +1883,7 @@ function renderDashboard(){
   // Upcoming deadlines
   const upcoming=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
   // Workload bars
-  const editors=activeMembers().filter(m=>m.role==='editor'||m.role==='video_editor'||(m.role||'').toLowerCase().includes('editor'));
+  const editors=videoMembers();
   const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length}));
   editorBars.sort((a,b)=>b.count-a.count);
   const maxEd=Math.max(...editorBars.map(e=>e.count),1);
@@ -2041,7 +2058,7 @@ function renderPipeline(){
   if(f.month){const fp=String(f.month).split('-').map(Number);ps=ps.filter(p=>inTargetMonth(p,fp[0],fp[1]));}
   /* A real user action re-sorts. Only the automatic repaint holds the order. */
   if(!_silentRender)PIPELINE_ORDER={};
-  const editors=activeMembers().filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'});
+  const editors=assignableEditors();
   const bulkBtn=(isAdmin()||isVideoHead())?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
   $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">'+vicon('archive',15)+'</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
   $('#pageActions').onclick=e=>{
@@ -2514,7 +2531,7 @@ function openProjectForm(existing=null){
   const ie=!!existing;
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">${ie?'Edit Project':'New Project'}</div><button class="modal-close" data-close>&times;</button></div><form id="projectForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Title</label><input class="field-input" name="title" required value="${esc(existing?.title||'')}" autofocus></div>
-    <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">Unassigned</option>${activeMembers().filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'}).map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
+    <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">Unassigned</option>${assignableEditors().map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p=>`<option value="${p}" ${(existing?.priority||'medium')===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select></div><div><label class="field-label">Type</label><select class="field-select" name="type">${['reel','ad','testimonial','product','educational'].map(t=>`<option value="${t}" ${(existing?.type||'reel')===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||''}"></div></div>
     <div class="form-row"><div><label class="field-label">Month <span style="color:var(--red,#ef4444)">*</span> ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month" required><option value="" disabled ${!parseInt(existing?.target_month)?'selected':''}>— Select month —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
@@ -2919,7 +2936,7 @@ function drawTimeTracker(){
 function openTimeForm(){
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">Log Time</div><button class="modal-close" data-close>&times;</button></div><form id="timeForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Project</label><select class="field-select" name="video_project_id" required><option value="">Select project...</option>${DATA.projects.map(p=>`<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select></div>
-    <div><label class="field-label">Editor</label><select class="field-select" name="team_member_id" required><option value="">Select editor...</option>${activeMembers().filter(m=>{const r=(m.role||'').toLowerCase();return r==='editor'||r==='video_editor'||r==='video_head'}).map(m=>`<option value="${m.id}" ${m.name?.toUpperCase()===currentUser.name.toUpperCase()?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+    <div><label class="field-label">Editor</label><select class="field-select" name="team_member_id" required><option value="">Select editor...</option>${assignableEditors().map(m=>`<option value="${m.id}" ${m.name?.toUpperCase()===currentUser.name.toUpperCase()?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div><label class="field-label">Stage</label><select class="field-select" name="stage">${STAGES.map(s=>`<option value="${s.key}">${s.label}</option>`).join('')}</select></div>
     <div class="form-row"><div><label class="field-label">Hours</label><input class="field-input" type="number" name="hours" min="0" step="0.25" value="1"></div><div><label class="field-label">Minutes</label><input class="field-input" type="number" name="mins" min="0" max="59" step="5" value="0"></div></div>
     <div><label class="field-label">Started At</label><input class="field-input" type="datetime-local" name="started_at" value="${new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16)}"></div>
@@ -3501,12 +3518,14 @@ function openClientDetail(cid){
 function renderTeam(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
-  // Show everyone — admin can see all, also include video_head (ushane)
-  const members=activeMembers();
+  // The VIDEO team only. team_members is shared across four BB systems, so
+  // activeMembers() here listed 4 graphic designers, an SMM and a developer,
+  // all permanently reading 0 active and 0 done.
+  const members=videoMembers();
   $('#pageSub').textContent=`${members.length} team member${members.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team</div><div class="page-sub">Click any member to see full history and current work</div></div></div>
     <div class="team-grid">
-      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(m.role||'team')}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
+      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(roleLabel(m.role))}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
     </div>`;
   $('#pageContent').onclick=e=>{const c=e.target.closest('[data-mid]');if(c)openMemberDetail(parseInt(c.dataset.mid))};
 }
@@ -3523,7 +3542,7 @@ async function openMemberDetail(mid){
   let myLogs=[];
   try{const {data}=await sb.from('video_time_logs').select('*').eq('team_member_id',mid).order('started_at',{ascending:false}).limit(20);myLogs=data||[]}catch(_){}
   const monthLogTotal=myLogs.filter(l=>new Date(l.started_at)>=monthStart).reduce((s,l)=>s+(l.duration_seconds||0),0);
-  const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(m.name)}</div><div class="modal-sub">${esc(m.role||'team')}</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
+  const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(m.name)}</div><div class="modal-sub">${esc(roleLabel(m.role))}</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
     <div class="stat-grid">${statCard('Active Now',active.length)}${statCard('Done This Month',doneMonth.length)}${statCard('Hours This Month',secsToHrs(monthLogTotal))}${statCard('Avg Editing Time',avgSec?secsToHrs(avgSec):'—',avgSec?'per stage':'no data')}</div>
     <div class="detail-section"><div class="detail-section-title">Current Work (${active.length})</div>${active.length?`<table class="tbl"><thead><tr><th>Project</th><th>Client</th><th>Stage</th><th>Deadline</th></tr></thead><tbody>${active.map(p=>{const cl=getClient(p.client_id);const ov=p.deadline&&isOverdue(p.deadline);return `<tr class="clickable" data-pid="${p.id}"><td>${esc(p.title)}</td><td class="muted">${esc(cl?.name||'—')}</td><td><span class="tag">${esc(STAGES.find(s=>s.key===p.current_stage)?.label||'')}</span></td><td class="${ov?'':'muted'}" style="${ov?'color:var(--red)':''}">${p.deadline?fmtDate(p.deadline):'—'}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No active work</div>'}</div>
     ${doneMonth.length?`<div class="detail-section"><div class="detail-section-title">Completed This Month (${doneMonth.length})</div><table class="tbl"><thead><tr><th>Project</th><th>Client</th><th>Completed</th></tr></thead><tbody>${doneMonth.slice(0,15).map(p=>{const cl=getClient(p.client_id);return `<tr class="clickable" data-pid="${p.id}"><td>${esc(p.title)}</td><td class="muted">${esc(cl?.name||'—')}</td><td class="muted">${fmtDate(p.completed_at)}</td></tr>`}).join('')}</tbody></table></div>`:''}
@@ -3554,7 +3573,7 @@ async function renderAnalytics(){
   const monthlyDelta=completedLastMonth.length?`vs ${completedLastMonth.length} last month`:'';
   // Per editor
   const editorStats={};
-  DATA.teamMembers.forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,doneLastMonth:0,sumDays:0,countDays:0}});
+  videoMembers().forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,doneLastMonth:0,sumDays:0,countDays:0}});
   ps.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(!COMPLETED_STAGES.includes(p.current_stage))s.active++;if(p.completed_at){const d=new Date(p.completed_at);if(d>=monthStart){s.doneMonth++;s.sumDays+=(d-new Date(p.created_at))/86400000;s.countDays++}else if(d>=lastMonthStart&&d<lastMonthEnd){s.doneLastMonth++}}});
   // Per client
   const clientStats={};
@@ -5975,6 +5994,30 @@ async function runSelfTest(){
       arch.length?'assigned_editor_id present on archived rows':'no archived rows to check');
    ok('Recap: the page is reachable',typeof renderRecap==='function'&&
       (typeof PAGES_FULL!=='undefined'&&PAGES_FULL.some(p=>p.key==='recap')));
+  })();
+
+  /* ── H13 · this is the VIDEO system ──────────────────────────────────── */
+  (function(){
+   /* team_members is shared with the Graphic System, the SMM Workspace and the
+      Dev System. The Team page listed all eleven for months. Six of them could
+      only ever read 0, because a graphic designer is never an assigned editor
+      on a video. The same list also drove the Dashboard capacity light, so that
+      pillar was measuring a spread against people outside the department. */
+   const all=activeMembers().length, vid=videoMembers().length;
+   const strays=activeMembers().filter(m=>!isVideoRole(m.role)).map(m=>m.name);
+   ok('Team: only video people are listed',vid>0&&vid<=all,
+      vid+' of '+all+' members are video'+(strays.length?', excluded '+strays.join(', '):''));
+   /* The Weekly Plan grid is a hardcoded list of names. It has to stay level
+      with the roster or a new hire gets a login, a board and no row to plan in.
+      This is how BAVITH and KAVISH were caught the first time. */
+   const roster=videoMembers().map(m=>String(m.name||'').toUpperCase());
+   const noRow=(typeof WP_EDITORS!=='undefined')?WP_EDITORS.filter(x=>roster.indexOf(x)===-1):[];
+   const noPlan=(typeof WP_EDITORS!=='undefined')?roster.filter(x=>WP_EDITORS.indexOf(x)===-1):[];
+   ok('Team: the Weekly Plan grid matches the video roster',
+      noRow.length===0&&noPlan.length===0,
+      (noRow.length?'on the plan but not in team_members: '+noRow.join(', ')+'. ':'')+
+      (noPlan.length?'in team_members but not on the plan: '+noPlan.join(', ')+'.':'')||
+      (roster.length+' people, both lists agree'));
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
