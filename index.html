@@ -1069,6 +1069,7 @@ const PAGES_FULL = [
   { key: 'time_tracker',  label: 'Time Tracker',   section: 'WORKSPACE' },
   { key: 'weeklyplan',   label: 'Weekly Plan',    section: 'WORKSPACE' },
   { key: 'drive_links',   label: 'Drive Links',    section: 'WORKSPACE' },
+  { key: 'recap',         label: 'Month Recap',    section: 'TEAM' },
   { key: 'clients',       label: 'Clients',        section: 'TEAM' },
   { key: 'team',          label: 'Team',           section: 'TEAM' },
   { key: 'analytics',     label: 'Analytics',      section: 'TEAM' },
@@ -1089,7 +1090,7 @@ const PAGES_EDITOR = [
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [], archivedProjects: [] };
-let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', sort: 'recent' }, chatClient: null, clientsMonth: localMonthStr() };
+let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', sort: 'recent' }, chatClient: null, recapMonth: null, clientsMonth: localMonthStr() };
 // === LOCAL DATES, never UTC (L-GYM-006, recurred here as L-VID-012) ========
 // toISOString() converts to UTC. Colombo is UTC+5:30, so any DATE-ONLY value
 // taken before 05:30 local comes back as YESTERDAY. That silently mis-stamped
@@ -1675,7 +1676,7 @@ async function fetchAll(silent=false){
     }catch(_){}
     initLazyImages();
     // Load archived projects separately — Q2 plan needs them so counts don't break when archive happens
-    try{const {data:arch}=await sb.from('video_projects').select('id,client_id,target_month,target_year,current_stage,is_archived').eq('is_archived',true);DATA.archivedProjects=arch||[]}catch(_){DATA.archivedProjects=[]}
+    try{const {data:arch}=await sb.from('video_projects').select('id,client_id,target_month,target_year,current_stage,is_archived,assigned_editor_id,completed_at').eq('is_archived',true);DATA.archivedProjects=arch||[]}catch(_){DATA.archivedProjects=[]}
     // Filter projects for editors
     if(isEditor()){
       const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());
@@ -1750,7 +1751,7 @@ function _silentRerender(){
 
 // === ROUTER ===
 function renderPage(){
-  const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,weeklyplan:renderWeeklyPlan,drive_links:renderDriveLinks,clients:renderClients,team:renderTeam,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub,agents:renderAgentsPage};
+  const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,weeklyplan:renderWeeklyPlan,drive_links:renderDriveLinks,clients:renderClients,recap:renderRecap,team:renderTeam,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub,agents:renderAgentsPage};
   const fn=map[currentPage]||renderDashboard;
   try{const r=fn();if(r&&typeof r.catch==='function')r.catch(err=>{console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">'+vicon('alert',34)+'</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'})}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">'+vicon('alert',34)+'</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
   try{renderNotifications()}catch(_){}
@@ -2954,6 +2955,130 @@ function renderDriveLinks(){
     ${renderRows(driveTab==='raw_footage'?raw:driveTab==='final_cut'?fin:other)}
   `;
   $('#pageContent').onclick=e=>{const t=e.target.closest('[data-tab]');if(t){driveTab=t.dataset.tab;renderDriveLinks()}const r=e.target.closest('[data-pid]');if(r&&e.target.tagName!=='A')openProjectDetail(parseInt(r.dataset.pid))};
+}
+
+// === PAGE: MONTH RECAP ===================================================
+/* Reuses monthDelivery(), so this page and the Clients page can never give two
+   different answers for the same month. Never re-implement the count here. */
+async function renderRecap(){
+  const sel=FILTERS.recapMonth||localMonthStr();
+  const parts=sel.split('-').map(Number), yr=parts[0], mo=parts[1];
+  $('#pageActions').innerHTML='<button class="btn btn-ghost rc-noprint" onclick="window.print()">Print</button>';
+  $('#pageSub').textContent=MONTHS[mo-1]+' '+yr;
+
+  /* every project TAGGED for this month, archived included, because archiving
+     clears the board and must not change what a month delivered */
+  const tagged=allProjects().filter(p=>inTargetMonth(p,yr,mo));
+  const delivered=tagged.filter(isDelivered);
+  const openOnes=tagged.filter(p=>!isDelivered(p));
+
+  /* SOLD, and the gap nobody sees: sold minus what was ever CREATED. */
+  let sold=0, neverStarted=0, nothingAtAll=0;
+  const rows=(DATA.clients||[]).map(c=>{
+    const mine=tagged.filter(p=>Number(p.client_id)===Number(c.id));
+    const got=mine.filter(isDelivered).length;
+    const open=mine.length-got;
+    const target=videoTarget(c,yr,mo)||0;
+    const missing=Math.max(0,target-mine.length);   /* never created at all */
+    sold+=target; neverStarted+=missing;
+    if(target>0&&mine.length===0)nothingAtAll++;
+    return {name:c.name,target,got,open,missing,made:mine.length,
+            where:[...new Set(mine.filter(p=>!isDelivered(p)).map(p=>stageLabel(p.current_stage)))]};
+  }).filter(r=>r.target>0||r.made>0)
+    .sort((a,b)=>(b.missing+b.open)-(a.missing+a.open)||a.name.localeCompare(b.name));
+
+  /* where the stuck ones sit, so ours is separable from theirs */
+  const WAITING=['team_review','video_head_review','coo_check','client_review','client_changes'];
+  const ours=openOnes.filter(p=>WAITING.indexOf(p.current_stage)===-1).length;
+  const theirs=openOnes.length-ours;
+  const byStage={};openOnes.forEach(p=>{const k=stageLabel(p.current_stage);byStage[k]=(byStage[k]||0)+1});
+
+  /* per person: videos from the pipeline, plan and cutting from the weekly plan */
+  const people={};
+  const add=(nm,f,v)=>{const k=(nm||'(unassigned)').toUpperCase();
+    if(!people[k])people[k]={name:k,done:0,open:0,clients:new Set(),cells:0,cellsDone:0,cuts:0,cutJobs:0};
+    people[k][f]+= (v===undefined?1:v);};
+  tagged.forEach(p=>{const m=getMember(p.assigned_editor_id);
+    const nm=m?m.name:'(unassigned)';
+    add(nm,isDelivered(p)?'done':'open');
+    const k=nm.toUpperCase(); if(p.client_id)people[k].clients.add(p.client_id);});
+
+  /* weekly plan cells for weeks STARTING in this month */
+  let planErr=false;
+  try{
+    const from=localDateStr(new Date(yr,mo-1,1)), to=localDateStr(new Date(yr,mo,1));
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?week_start=gte.${from}&week_start=lt.${to}&select=editor_name,content,status`,
+      {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+    const cells=r.ok?await r.json():[];
+    cells.filter(c=>String(c.content||'').trim()).forEach(c=>{
+      add(c.editor_name,'cells');
+      if(c.status==='done')add(c.editor_name,'cellsDone');
+      String(c.content).split(/\n/).forEach(line=>{const p=parseCutLine(line);
+        if(!p)return;
+        add(c.editor_name,'cutJobs');
+        add(c.editor_name,'cuts',p.n==null?0:p.n);});
+    });
+  }catch(e){planErr=true;}
+  const ppl=Object.values(people).sort((a,b)=>b.done-a.done||a.name.localeCompare(b.name));
+
+  const opts=[];for(let i=0;i<14;i++){const d=new Date(yr,mo-1-i,1);
+    opts.push({v:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),
+               lbl:MONTHS[d.getMonth()]+' '+d.getFullYear()});}
+
+  $('#pageContent').innerHTML=`<div class="page-head"><div>
+      <div class="page-title">Month Recap</div>
+      <div class="page-sub">What went out, what did not, and who did it</div></div>
+      <select class="filter-select rc-noprint" id="recapMonth" style="min-width:170px">${opts.map(o=>`<option value="${o.v}" ${o.v===sel?'selected':''}>${o.lbl}</option>`).join('')}</select>
+    </div>
+    <div class="rc-head">
+      ${[['Videos made',tagged.length,'created for '+MONTHS[mo-1]+'. Of those: '+delivered.length+' delivered, '+openOnes.length+' not.',''],
+         ['Delivered',delivered.length,tagged.length?Math.round(delivered.length/tagged.length*100)+'% of what was made':'nothing made',delivered.length&&delivered.length===tagged.length?'good':''],
+         ['Started, not finished',openOnes.length,ours+' with us, '+theirs+' with a reviewer or the client',openOnes.length?'warn':'good'],
+         ['Never made',neverStarted,'sold '+sold+', created '+tagged.length+'. '+nothingAtAll+' client'+(nothingAtAll===1?'':'s')+' had none at all.',neverStarted?'bad':'good']]
+        .map(x=>`<div class="rc-stat ${x[3]}"><div class="rc-lbl">${x[0]}</div><div class="rc-num">${x[1]}</div><div class="rc-sub">${esc(x[2])}</div></div>`).join('')}
+    </div>
+    <div class="rc-note">${vicon('alert',12)} <b>Never started</b> is the one that hides. A client can show nothing stuck and still be short, because the videos were never created. Delivered counts archived work, so tidying the board never changes a month.</div>
+
+    <div class="panel"><div class="panel-head"><div class="panel-title">Where the unfinished work is sitting</div><div class="text-3 fs-11">${openOnes.length} video${openOnes.length===1?'':'s'}</div></div>
+      ${openOnes.length?`<table class="tbl"><thead><tr><th>Stage</th><th>Videos</th><th>Whose move</th></tr></thead><tbody>
+        ${Object.keys(byStage).sort((a,b)=>byStage[b]-byStage[a]).map(k=>{
+          /* decide from the STAGE KEY, not by hunting a project back out of the
+             list, which was unreadable and easy to get wrong */
+          const st=(STAGES.find(x=>x.label===k)||{}).key||k;
+          const theirMove=WAITING.indexOf(st)>-1;
+          return `<tr><td>${esc(k)}</td><td><strong>${byStage[k]}</strong></td>`+
+                 `<td class="muted">${theirMove?'waiting on a reviewer or the client':'ours to move'}</td></tr>`}).join('')}
+      </tbody></table>`:'<div class="link-empty">Everything tagged for this month was delivered</div>'}
+    </div>
+
+    <div class="panel"><div class="panel-head"><div class="panel-title">By client</div></div>
+      <table class="tbl"><thead><tr><th>Client</th><th>Sold</th><th>Delivered</th><th>Stuck</th><th>Never started</th><th>Where the rest sit</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr>
+        <td><strong>${esc(r.name)}</strong></td>
+        <td class="muted">${r.target||'not set'}</td>
+        <td><strong style="color:${r.target&&r.got>r.target?'var(--amber)':(r.got>=r.target&&r.target?'var(--green)':'var(--text)')}">${r.got}</strong></td>
+        <td>${r.open?`<span style="color:var(--amber)">${r.open}</span>`:'<span class="muted">0</span>'}</td>
+        <td>${r.missing?`<span style="color:var(--red);font-weight:700">${r.missing}</span>`:'<span class="muted">0</span>'}</td>
+        <td class="muted fs-11">${r.where.length?esc(r.where.join(', ')):(r.missing?'never created':'all delivered')}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>
+
+    <div class="panel"><div class="panel-head"><div class="panel-title">By person</div><div class="text-3 fs-11">${planErr?'weekly plan could not be read':'videos and weekly plan'}</div></div>
+      <table class="tbl"><thead><tr><th>Person</th><th>Videos delivered</th><th>Still open</th><th>Clients</th><th>Plan lines done</th><th>Cutting</th></tr></thead><tbody>
+      ${ppl.map(p=>`<tr>
+        <td><strong>${esc(p.name)}</strong></td>
+        <td><strong style="color:var(--green)">${p.done}</strong></td>
+        <td class="muted">${p.open}</td>
+        <td class="muted">${p.clients.size}</td>
+        <td class="muted">${p.cells?p.cellsDone+' of '+p.cells:'—'}</td>
+        <td class="muted">${p.cutJobs?(p.cuts?(p.cuts+' videos'):(p.cutJobs+' job'+(p.cutJobs===1?'':'s')+', not counted')):'—'}</td>
+      </tr>`).join('')||'<tr><td colspan="6" class="muted">Nothing recorded for this month</td></tr>'}
+      </tbody></table>
+    </div>`;
+
+  const ms=document.getElementById('recapMonth');
+  if(ms)ms.onchange=e=>{FILTERS.recapMonth=e.target.value;renderRecap();};
 }
 
 // === PAGE: CLIENTS ===
@@ -5093,6 +5218,26 @@ button,label,.nav-item,.tab,.shoot-tab,.btn,.m-stage-opt,.vt-status,[role="butto
       scroll position survives the sheet at all. */
 body.sheet-open{position:fixed;left:0;right:0;width:100%}
 
+/* ══ MONTH RECAP ══════════════════════════════════════════════════════ */
+.rc-head{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.rc-stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.rc-stat.warn{border-color:var(--amber)}
+.rc-stat.bad{border-color:var(--red)}
+.rc-stat.good{border-color:var(--green)}
+.rc-lbl{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.rc-num{font-size:26px;font-weight:900;line-height:1;color:var(--text)}
+.rc-stat.warn .rc-num{color:var(--amber)}
+.rc-stat.bad .rc-num{color:var(--red)}
+.rc-stat.good .rc-num{color:var(--green)}
+.rc-sub{font-size:11px;color:var(--text-3);margin-top:5px;line-height:1.4}
+.rc-note{font-size:11.5px;color:var(--text-3);margin:-8px 0 16px;line-height:1.5}
+@media print{
+ .sidebar,.topbar,#pageActions,.rc-noprint{display:none!important}
+ .main,.content{overflow:visible!important}
+ body{background:#fff!important;color:#000!important}
+ .rc-stat,.panel{break-inside:avoid}
+}
+
 /* ══ WELCOME WALKTHROUGH ══════════════════════════════════════════════
    Full screen on purpose. A new person should read one idea at a time, not a
    tooltip pinned to a control they have not found yet. */
@@ -5738,6 +5883,28 @@ async function runSelfTest(){
    ok('Access: every editor login can actually be assigned work',missing.length===0,
       missing.length?('no team_members row for '+missing.join(', ')+', their board will be empty')
                     :(need.length+' editor logins, all resolvable'));
+  })();
+
+  /* ── H12 · the Month Recap adds up ───────────────────────────────────── */
+  (function(){
+   /* A recap whose numbers do not reconcile gets distrusted and then ignored.
+      The invariant: everything MADE for a month is either delivered or not.
+      There is no third state, so made must equal delivered plus open. */
+   const now=new Date(), yr=now.getFullYear(), mo=now.getMonth()+1;
+   const tagged=allProjects().filter(p=>inTargetMonth(p,yr,mo));
+   const del=tagged.filter(isDelivered).length;
+   const open=tagged.length-del;
+   ok('Recap: made equals delivered plus not finished',tagged.length===del+open,
+      tagged.length+' made = '+del+' delivered + '+open+' open');
+   /* The archived query must carry the editor, or every archived project counts
+      as unassigned and the person who did the work loses credit. RAJEEWA read
+      26 where the database said 28 until this column was added. */
+   const arch=(DATA.archivedProjects||[]);
+   ok('Recap: archived work still names who did it',
+      arch.length===0||arch.some(p=>'assigned_editor_id' in p),
+      arch.length?'assigned_editor_id present on archived rows':'no archived rows to check');
+   ok('Recap: the page is reachable',typeof renderRecap==='function'&&
+      (typeof PAGES_FULL!=='undefined'&&PAGES_FULL.some(p=>p.key==='recap')));
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

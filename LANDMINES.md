@@ -740,3 +740,44 @@ exempt: they are not team members and see everything regardless.
 
 **The permanent block:** a check asserts every `USERS` entry with role `editor`
 or `video_head` resolves to a `team_members` row, and names anyone who does not.
+
+---
+
+## L-VID-020 — Month Recap (feature), and two bugs it exposed
+
+Built 2026-08-21. A PAGE, not a generated document, so it reads the same
+`monthDelivery` rule as the Clients page and the two can never drift apart. A
+separate report generator would disagree with the app the first time either one
+changed.
+
+**The design point: "not done" is THREE different things**, and a recap that
+reports one number hides the expensive one.
+
+| | July 2026 |
+|---|---|
+| Made | 58 |
+| Delivered | 38 |
+| Started, not finished | 20 (8 ours, 12 waiting on a reviewer or client) |
+| **Never made** | **58** (sold 111, created 58, 8 clients had none at all) |
+
+**Never made is the one that hides.** Sastho sold 8, delivered 3, and had ZERO
+outstanding. A stuck-work report shows Sastho as clean. Nothing on any other
+screen surfaces the gap between what was sold and what anybody even attempted.
+
+**The numbers have to reconcile or the report gets ignored.** The first version
+said "38 delivered of 111 sold", which invites 111 minus 38 and produces a
+number that means nothing, because 5 over-delivered videos do not offset another
+client's shortfall. Now there are two clean statements instead of one confusing
+one: **made = delivered + open** (58 = 38 + 20), and separately sold against
+made. There is a check on that invariant.
+
+**Two bugs it exposed, both in older code:**
+
+1. **The archived query never selected `assigned_editor_id`.** Every archived
+   project resolved to "(unassigned)", so the person who did the work lost
+   credit. RAJEEWA read **26** where the database said **28**. Any per-person
+   view over history was quietly wrong. Column added, plus a check.
+2. **Cutting written without a number counted as 0 and rendered as a dash**,
+   which reads as "cut nothing". Ushane did 5 cutting jobs in July, none of them
+   numbered. It now shows "5 jobs, not counted" rather than a dash. **A number
+   the system cannot compute must say so, never render as zero.**
