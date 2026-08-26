@@ -1098,7 +1098,7 @@ const PAGES_EDITOR = [
 // === STATE ===
 let sb = null, currentUser = null, currentPage = 'dashboard', refreshTimer = null;
 let DATA = { projects: [], clients: [], teamMembers: [], timeLogs: [], links: [], shoots: [], tasks: [], inspo: [], clientTargets: [], archivedProjects: [] };
-let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', sort: 'recent' }, chatClient: null, recapMonth: null, recapClient: '', clientsMonth: localMonthStr() };
+let FILTERS = { pipeline: { search: '', client: '', editor: '', priority: '', month: '', stage: '', sort: 'recent' }, chatClient: null, recapMonth: null, recapClient: '', clientsMonth: localMonthStr() };
 // === LOCAL DATES, never UTC (L-GYM-006, recurred here as L-VID-012) ========
 // toISOString() converts to UTC. Colombo is UTC+5:30, so any DATE-ONLY value
 // taken before 05:30 local comes back as YESTERDAY. That silently mis-stamped
@@ -2084,8 +2084,9 @@ function renderPipeline(){
     <select class="filter-select" id="fEditor"><option value="">All editors</option>${editors.map(m=>`<option value="${m.id}" ${f.editor==m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>
     <select class="filter-select" id="fPriority"><option value="">All priorities</option>${['urgent','high','medium','low'].map(p=>`<option value="${p}" ${f.priority===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select>
     <select class="filter-select" id="fMonth"><option value="">All months</option>${monthPickerOptions().map(o=>`<option value="${o.v}" ${f.month===o.v?'selected':''}>${o.lbl}</option>`).join('')}</select>
+    <select class="filter-select" id="fStage" title="Show one stage on its own"><option value="">All stages</option>${(f.stage&&String(f.stage).indexOf(',')>-1)?`<option value="${esc(f.stage)}" selected>${String(f.stage).split(',').map(k=>(STAGES.find(x=>x.key===k)||{}).label||k).join(' + ')}</option>`:''}${STAGES.map(st=>`<option value="${st.key}" ${f.stage===st.key?'selected':''}>${st.label}</option>`).join('')}</select>
     <select class="filter-select" id="fSort" title="Order cards within each stage">${[['recent','Recently moved (top)'],['delayed','Delayed first'],['deadline','Deadline soonest'],['priority','Priority first']].map(o=>`<option value="${o[0]}" ${(f.sort||'recent')===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
-    ${(f.search||f.client||f.editor||f.priority||f.month)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
+    ${(f.search||f.client||f.editor||f.priority||f.month||f.stage)?'<button class="btn btn-ghost btn-sm" data-action="clear-filters">Clear filters</button>':''}
     <button class="btn btn-ghost btn-sm" data-action="my-work" style="color:var(--accent);font-weight:700">${vicon('user',13)} My Work</button>
   </div>`;
   let monthSummaryHtml='';
@@ -2165,7 +2166,15 @@ function renderPipeline(){
     PIPELINE_ORDER[stageKey]=cards.map(c=>c.id);
     return cards;
   }
-  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${STAGES.map(st=>{const sp=_stableCol(st.key,ps.filter(p=>p.current_stage===st.key));return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
+  /* One stage on its own puts it FIRST on screen. Client Review was column 9 of
+   11 on a board that scrolls sideways, roughly five swipes right on a phone,
+   which is indistinguishable from not existing. */
+  /* A comma list, because three of the five Dashboard alerts span more than one
+     stage. The dropdown only ever sets a single key; the alert cards set the
+     real set so the board shows every item the alert counted. */
+  const _wantStages=f.stage?String(f.stage).split(','):null;
+  const shownStages=_wantStages?STAGES.filter(st=>_wantStages.indexOf(st.key)>-1):STAGES;
+  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${shownStages.map(st=>{const sp=_stableCol(st.key,ps.filter(p=>p.current_stage===st.key));return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
   // Bulk action floating bar
   const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
@@ -2185,9 +2194,10 @@ function renderPipeline(){
   $('#fEditor').onchange=e=>{FILTERS.pipeline.editor=e.target.value;renderPipeline()};
   $('#fPriority').onchange=e=>{FILTERS.pipeline.priority=e.target.value;renderPipeline()};
   $('#fMonth').onchange=e=>{FILTERS.pipeline.month=e.target.value;renderPipeline()};
+  $('#fStage').onchange=e=>{FILTERS.pipeline.stage=e.target.value;renderPipeline()};
   { const _fs=$('#fSort'); if(_fs)_fs.onchange=e=>{FILTERS.pipeline.sort=e.target.value;renderPipeline()}; }
   $('#pageContent').onclick=async e=>{
-    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:'',sort:FILTERS.pipeline.sort||'recent'};renderPipeline();return}
+    if(e.target.closest('[data-action="clear-filters"]')){FILTERS.pipeline={search:'',client:'',editor:'',priority:'',month:'',stage:'',sort:FILTERS.pipeline.sort||'recent'};renderPipeline();return}
     if(e.target.closest('[data-action="my-work"]')){const me=DATA.teamMembers.find(m=>m.name&&m.name.toUpperCase()===currentUser.name.toUpperCase());if(me){FILTERS.pipeline.editor=String(me.id);renderPipeline()}else{toast('No team member found for '+currentUser.name,'error')};return}
     if(e.target.closest('[data-action="bulk-cancel"]')){PIPELINE_STATE.selected.clear();PIPELINE_STATE.bulkMode=false;renderPipeline();return}
     if(e.target.closest('[data-action="bulk-select-all"]')){bulkSelectAllVisible();return}
@@ -4685,8 +4695,8 @@ function vsUpdateCheckinBadge(){
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
-        logEntry(' Editing Stall', 'ALERT', data.length + ' video(s) stuck in Editing 48h+: ' + titles);
-      } else { logEntry(' Editing Stall', 'OK', 'No videos stalled in editing'); }
+        logEntry('Editing Stall', 'ALERT', data.length + ' video(s) stuck in Editing 48h+: ' + titles);
+      } else { logEntry('Editing Stall', 'OK', 'No videos stalled in editing'); }
     });
   }
 
@@ -4696,8 +4706,8 @@ function vsUpdateCheckinBadge(){
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
-        logEntry(' Client Review', 'ALERT', data.length + ' video(s) awaiting client 72h+: ' + titles);
-      } else { logEntry(' Client Review', 'OK', 'No videos stalled awaiting client'); }
+        logEntry('Client Review', 'ALERT', data.length + ' video(s) awaiting client 72h+: ' + titles);
+      } else { logEntry('Client Review', 'OK', 'No videos stalled awaiting client'); }
     });
   }
 
@@ -4707,8 +4717,8 @@ function vsUpdateCheckinBadge(){
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
-        logEntry('\uFE0F Changes Queue', 'ALERT', data.length + ' video(s) with changes unaddressed 48h+: ' + titles);
-      } else { logEntry('\uFE0F Changes Queue', 'OK', 'No change requests overdue'); }
+        logEntry('Changes Queue', 'ALERT', data.length + ' video(s) with changes unaddressed 48h+: ' + titles);
+      } else { logEntry('Changes Queue', 'OK', 'No change requests overdue'); }
     });
   }
 
@@ -4718,8 +4728,8 @@ function vsUpdateCheckinBadge(){
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var items = data.slice(0,3).map(function(p){ return '"' + p.title + '" due ' + p.deadline; }).join(', ');
-        logEntry(' Deadline Alert', 'ALERT', data.length + ' video(s) due in 2 days: ' + items);
-      } else { logEntry(' Deadline Alert', 'OK', 'No urgent deadlines in 2 days'); }
+        logEntry('Deadline Alert', 'ALERT', data.length + ' video(s) due in 2 days: ' + items);
+      } else { logEntry('Deadline Alert', 'OK', 'No urgent deadlines in 2 days'); }
     });
   }
 
@@ -4729,8 +4739,8 @@ function vsUpdateCheckinBadge(){
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var titles = data.slice(0,3).map(function(p){ return '"' + p.title + '"'; }).join(', ');
-        logEntry(' Unassigned', 'ALERT', data.length + ' video(s) in production with no editor: ' + titles);
-      } else { logEntry(' Unassigned', 'OK', 'All production videos have assigned editors'); }
+        logEntry('Unassigned', 'ALERT', data.length + ' video(s) in production with no editor: ' + titles);
+      } else { logEntry('Unassigned', 'OK', 'All production videos have assigned editors'); }
     });
   }
 
@@ -4746,22 +4756,65 @@ function vsUpdateCheckinBadge(){
     document.getElementById('bbv-alerts-run-btn').addEventListener('click', runAll);
   }
 
+  /* Which stage each agent is talking about. Keyed on the trimmed name because
+     these strings still carry a leading space where an emoji was stripped out.
+     Deadline Alert is deliberately absent: it spans every stage, so sending it
+     to one would be a lie dressed as a shortcut. */
+  /* Which stages each agent actually QUERIES. Three of the five span more than
+     one, so a single-stage jump would quietly show half the items and look like
+     the rest had gone. These must stay level with the sbFetch filters above:
+     Changes Queue asks for in.(changes,client_changes) and Unassigned asks for
+     five stages. Deadline Alert is absent on purpose, it spans every stage and
+     sending it to one would be a lie dressed as a shortcut. */
+  var AGENT_STAGE = {
+    'Editing Stall': 'editing',
+    'Client Review': 'client_review',
+    'Changes Queue': 'changes,client_changes',
+    'Unassigned': 'editing,changes,client_changes,rendering,team_review'
+  };
+  /* Published so the harness can actually read it. This map lives inside the
+     agent closure; a check referencing it by bare name would be permanently
+     green and permanently blind. */
+  window.AGENT_STAGE = AGENT_STAGE;
   function updateDashboardSection() {
     var grid = document.getElementById('bbv-alert-grid');
     if (!grid) return;
+    if (!grid._bbGoWired) {
+      grid._bbGoWired = true;
+      var jump = function(el){
+        var st = el && el.getAttribute('data-goto-stage');
+        if (!st) return;
+        try {
+          FILTERS.pipeline.stage = st;
+          FILTERS.pipeline.search = ''; FILTERS.pipeline.client = '';
+          FILTERS.pipeline.editor = ''; FILTERS.pipeline.priority = '';
+          navTo('pipeline');
+        } catch (err) { console.error(err); }
+      };
+      grid.addEventListener('click', function(ev){ jump(ev.target.closest('[data-goto-stage]')); });
+      grid.addEventListener('keydown', function(ev){
+        if (ev.key === 'Enter' || ev.key === ' ') { var t = ev.target.closest('[data-goto-stage]'); if (t) { ev.preventDefault(); jump(t); } }
+      });
+    }
     var seen = {}, cards = [];
     agentLog.forEach(function(e) { if (!seen[e.agent]) { seen[e.agent] = true; cards.push(e); } });
     if (!cards.length) return;
     grid.innerHTML = cards.map(function(e) {
       var c = e.status === 'ALERT' ? 'alert' : 'ok';
       var detail = e.status === 'ALERT' ? e.detail.substring(0,55) + (e.detail.length > 55 ? '\u2026' : '') : '\u2713 All clear';
-      return '<div class="bbv-alert-card ' + c + '"><div class="bbv-alert-card-name">' + e.agent + '</div><div class="bbv-alert-card-detail ' + c + '">' + detail + '</div><div class="bbv-alert-card-time">' + e.time + '</div></div>';
+      /* THE CARD IS THE ROUTE. It names a stage and was the obvious thing to
+         tap, and tapping it did nothing: cursor:auto, no handler anywhere above
+         it. An alert that cannot take you to what it is alerting about makes a
+         working column look like a missing one. */
+      var st = AGENT_STAGE[String(e.agent).trim()] || '';
+      var go = st ? ' data-goto-stage="' + st + '" role="button" tabindex="0" title="Open this stage in the Pipeline" style="cursor:pointer"' : '';
+      return '<div class="bbv-alert-card ' + c + '"' + go + '><div class="bbv-alert-card-name">' + e.agent + '</div><div class="bbv-alert-card-detail ' + c + '">' + detail + '</div><div class="bbv-alert-card-time">' + e.time + '</div>' + (st ? '<div class="bbv-alert-card-go">Open in Pipeline &rarr;</div>' : '') + '</div>';
     }).join('');
   }
 
   function buildUI() {
     var style = document.createElement('style');
-    style.textContent = '#bbv-fab{position:fixed;bottom:24px;right:88px;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;font-size:22px;border:none;cursor:pointer;z-index:9999;box-shadow:0 4px 20px rgba(168,85,247,0.45);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;}#bbv-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(168,85,247,0.65);}#bbv-panel{position:fixed;bottom:90px;right:88px;width:370px;max-height:500px;background:#0f0f1a;border:1px solid rgba(168,85,247,0.35);border-radius:14px;z-index:9998;display:none;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7),0 0 0 1px rgba(168,85,247,0.08);overflow:hidden;}#bbv-panel.open{display:flex;}#bbv-ph{background:linear-gradient(135deg,#a855f7,#7c3aed);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}#bbv-ph-title{color:#fff;font-weight:700;font-size:13px;letter-spacing:.8px;}#bbv-run-btn{background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700;}#bbv-run-btn:hover{background:rgba(255,255,255,.35);}#bbv-log{flex:1;overflow-y:auto;padding:10px;}#bbv-footer{padding:7px 12px;border-top:1px solid #1e293b;font-size:10px;color:#475569;text-align:center;}.bbva-entry{padding:8px 10px;margin-bottom:6px;border-radius:8px;background:#0d0d1a;border-left:3px solid #334155;}.bbva-entry.ok{border-left-color:#22c55e;}.bbva-entry.alert{border-left-color:#ef4444;background:#180d0d;}.bbva-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}.bbva-name{font-size:12px;font-weight:600;color:#e2e8f0;flex:1;}.bbva-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;text-transform:uppercase;}.bbva-badge.ok{background:#14532d;color:#4ade80;}.bbva-badge.alert{background:#7f1d1d;color:#fca5a5;}.bbva-time{font-size:10px;color:#475569;}.bbva-detail{font-size:11px;color:#94a3b8;line-height:1.45;}#bbv-agent-alerts-section{margin:0 0 20px;padding:16px 18px;background:var(--surface-1,#0d0d1a);border:1px solid var(--border,#1e293b);border-radius:12px;}#bbv-alerts-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}#bbv-alerts-title{font-size:13px;font-weight:700;color:#a855f7;letter-spacing:.8px;text-transform:uppercase;}#bbv-alerts-run-btn{background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;font-weight:700;}#bbv-alerts-run-btn:hover{background:#7c3aed;}#bbv-alert-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}.bbv-alert-card{padding:10px 12px;border-radius:8px;background:var(--surface-2,#111122);border:1px solid #1e293b;}.bbv-alert-card.alert{border-color:#ef4444;background:#180d0d;}.bbv-alert-card.ok{border-color:#22c55e;}.bbv-alert-card-name{font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px;}.bbv-alert-card-detail{font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:4px;}.bbv-alert-card-detail.alert{color:#fca5a5;}.bbv-alert-card-detail.ok{color:#4ade80;}.bbv-alert-card-time{font-size:9px;color:#475569;}';
+    style.textContent = '#bbv-fab{position:fixed;bottom:24px;right:88px;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;font-size:22px;border:none;cursor:pointer;z-index:9999;box-shadow:0 4px 20px rgba(168,85,247,0.45);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;}#bbv-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(168,85,247,0.65);}#bbv-panel{position:fixed;bottom:90px;right:88px;width:370px;max-height:500px;background:#0f0f1a;border:1px solid rgba(168,85,247,0.35);border-radius:14px;z-index:9998;display:none;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.7),0 0 0 1px rgba(168,85,247,0.08);overflow:hidden;}#bbv-panel.open{display:flex;}#bbv-ph{background:linear-gradient(135deg,#a855f7,#7c3aed);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}#bbv-ph-title{color:#fff;font-weight:700;font-size:13px;letter-spacing:.8px;}#bbv-run-btn{background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:700;}#bbv-run-btn:hover{background:rgba(255,255,255,.35);}#bbv-log{flex:1;overflow-y:auto;padding:10px;}#bbv-footer{padding:7px 12px;border-top:1px solid #1e293b;font-size:10px;color:#475569;text-align:center;}.bbva-entry{padding:8px 10px;margin-bottom:6px;border-radius:8px;background:#0d0d1a;border-left:3px solid #334155;}.bbva-entry.ok{border-left-color:#22c55e;}.bbva-entry.alert{border-left-color:#ef4444;background:#180d0d;}.bbva-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}.bbva-name{font-size:12px;font-weight:600;color:#e2e8f0;flex:1;}.bbva-badge{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:700;text-transform:uppercase;}.bbva-badge.ok{background:#14532d;color:#4ade80;}.bbva-badge.alert{background:#7f1d1d;color:#fca5a5;}.bbva-time{font-size:10px;color:#475569;}.bbva-detail{font-size:11px;color:#94a3b8;line-height:1.45;}#bbv-agent-alerts-section{margin:0 0 20px;padding:16px 18px;background:var(--surface-1,#0d0d1a);border:1px solid var(--border,#1e293b);border-radius:12px;}#bbv-alerts-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}#bbv-alerts-title{font-size:13px;font-weight:700;color:#a855f7;letter-spacing:.8px;text-transform:uppercase;}#bbv-alerts-run-btn{background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;font-weight:700;}#bbv-alerts-run-btn:hover{background:#7c3aed;}#bbv-alert-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}.bbv-alert-card{padding:10px 12px;border-radius:8px;background:var(--surface-2,#111122);border:1px solid #1e293b;}.bbv-alert-card.alert{border-color:#ef4444;background:#180d0d;}.bbv-alert-card.ok{border-color:#22c55e;}.bbv-alert-card-name{font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px;}.bbv-alert-card-detail{font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:4px;}.bbv-alert-card-detail.alert{color:#fca5a5;}.bbv-alert-card-detail.ok{color:#4ade80;}.bbv-alert-card-time{font-size:9px;color:#475569;}.bbv-alert-card[data-goto-stage]{cursor:pointer;transition:border-color .15s,transform .15s;}.bbv-alert-card[data-goto-stage]:hover{border-color:#a855f7;transform:translateY(-1px);}.bbv-alert-card[data-goto-stage]:focus-visible{outline:2px solid #a855f7;outline-offset:2px;}.bbv-alert-card-go{margin-top:5px;font-size:9.5px;font-weight:700;color:#a855f7;letter-spacing:.03em;}';
     document.head.appendChild(style);
     var fab = document.createElement('button');
     fab.id = 'bbv-fab'; fab.title = 'BB Video Agents'; fab.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M2 13v3M22 13v3"/><circle cx="9" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.1" fill="currentColor" stroke="none"/></svg>';
@@ -6052,6 +6105,42 @@ async function runSelfTest(){
    const pdupe=pins.filter((x,i)=>pins.indexOf(x)!==i);
    ok('Access: no two logins share a PIN',pdupe.length===0,
       pdupe.length?'a PIN is reused, two people can sign in as each other':(pins.length+' PINs, all distinct'));
+  })();
+
+  /* ── H15 · everything a person is shown can be reached ───────────────── */
+  (function(){
+   /* The Command Centre lost twelve working features this way: they existed,
+      they worked, and nothing routed to them, so one was later asked for as new
+      work. Here it was Client Review, column 9 of 11 on a sideways board, plus
+      a Dashboard alert naming it that could not be tapped. */
+   const opts=(typeof STAGES!=='undefined')?STAGES.map(s=>s.key):[];
+   /* Reads the RENDERED control, not the constant it was built from. A filter
+      that exists in FILTERS and never reached the page would pass a check
+      written against FILTERS alone. */
+   const sel=document.getElementById('fStage');
+   const offered=sel?[...sel.options].map(o=>o.value).filter(Boolean):null;
+   const unreachable=offered?opts.filter(k=>offered.indexOf(k)===-1):[];
+   /* When the Pipeline is not the page on screen, fall back to the RENDER
+      SOURCE rather than to FILTERS alone. The shape check passed while the
+      dropdown could have been deleted entirely, which is a green light that
+      looks at nothing. */
+   const src=(typeof renderPipeline==='function')?renderPipeline.toString():'';
+   const wired=/id="fStage"/.test(src)&&/STAGES\.map/.test(src)&&/_wantStages/.test(src);
+   ok('Routing: every stage can be shown on its own',
+      sel?unreachable.length===0:wired,
+      sel?(offered.length+' of '+opts.length+' stages selectable'+(unreachable.length?', missing '+unreachable.join(', '):''))
+         :(wired?('Pipeline off screen; its source builds the filter from all '+opts.length+' stages')
+                :'the stage filter is NOT built by renderPipeline'));
+   /* An alert that names a stage must be able to open it. A card that says
+      "Client Review" and does nothing makes a working column look missing.
+      AGENT_STAGE is published onto window for exactly this reason: a check that
+      reads an out-of-scope name is always green and never looking. */
+   const AS=window.AGENT_STAGE;
+   const named=AS?Object.keys(AS):[];
+   const bad=named.filter(k=>String(AS[k]).split(',').some(x=>opts.indexOf(x)===-1));
+   ok('Routing: every alert points at a stage that exists',!!AS&&bad.length===0,
+      !AS?'AGENT_STAGE is not published, this check cannot see it'
+         :(bad.length?('these point nowhere: '+bad.join(', ')):(named.length+' alerts routed')));
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

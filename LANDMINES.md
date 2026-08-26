@@ -922,3 +922,60 @@ for, and `isAdmin()` also unlocks New Project, Edit, Archive, Restore and the
 permanent Delete on archived projects. There is no look-only role in this system
 today. Narrowing an explicit ask is the owner's call, so it was surfaced rather
 than quietly applied.
+
+---
+
+## L-VID-023 · it existed, nothing pointed at it
+
+**Reported** 2026-08-21 as *"there is no Client Review section"*. Client Review
+had **28 cards** and rendered correctly the whole time.
+
+**Root cause, two halves, both about ROUTING and neither about the feature:**
+
+| | Measured |
+|---|---|
+| Client Review is column **9 of 11** on a board that scrolls sideways | `offsetLeft` 2,734px inside a 574px board, about **five swipes right** |
+| The Dashboard alert that says the words "Client Review" was **not clickable** | `cursor:auto`, no handler within six parent elements |
+
+The one thing on screen naming the stage did nothing when tapped, and the stage
+itself was five screens away. Between those two, a working column is
+indistinguishable from a missing one.
+
+**This is `cc-hidden-pages` again.** The Command Centre had twelve built,
+working, tested features that nothing routed to, and one was later requested as
+NEW WORK because it looked like it did not exist. Taken from the CC's fix: keep
+everything, add the route, add a permanent check that fails on anything a person
+can be shown but cannot reach. Deliberately NOT taken: the CC's method, which
+renamed and collapsed nav. Nothing here needed collapsing.
+
+**The two routes.** A stage filter on the Pipeline, matching the five filters
+already in that row rather than inventing a control; and the alert cards
+themselves, which now open the Pipeline already filtered.
+
+**The trap inside the fix.** Three of the five agents query MORE THAN ONE stage:
+Changes Queue asks for `in.(changes,client_changes)` and Unassigned asks for
+five. The first version of `AGENT_STAGE` mapped each to a single key, so tapping
+Changes Queue would have shown 4 of 9 and looked like the rest had vanished:
+**the same disease as the bug, introduced by its own cure.** The filter now
+accepts a comma list. The dropdown still offers single stages; only the alert
+route sets a set, and the control relabels itself "Changes + Client Changes" so
+the board never silently shows a subset. Deadline Alert stays deliberately
+unrouted because it spans every stage.
+
+**Known and intended:** the board is not age-filtered, so Changes Queue counts
+**8** (unaddressed 48h+) while the two columns total **9**. The alert is about
+what is overdue; the board is the whole queue.
+
+**Two checks (H15).** Every stage is selectable, and every alert points at
+stages that exist, validating **each key in the list**, not just the first.
+
+**And a lesson about the check itself.** The first version read `AGENT_STAGE` by
+bare name, but that map lives inside the agent closure, so the check was
+permanently green and permanently blind. It is now published on `window` for the
+harness to read. The second version fell back to "is `stage` a key in FILTERS",
+which passed while the dropdown could have been deleted outright. It now reads
+`renderPipeline.toString()`. **Proven against the pre-fix file: FAIL before,
+PASS after.** A check nobody has watched fail is not a check.
+
+**Also cleaned:** all five agent names carried a leading space or a stray
+`️` where an emoji was stripped, so they rendered as " Editing Stall".
