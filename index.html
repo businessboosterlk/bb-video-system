@@ -816,6 +816,14 @@ const USERS = [
      PINs are TEMPORARY. Change them here and tell the two of them. */
   { name: 'BAVITH',  pin: '2846', role: 'editor' },
   { name: 'KAVISH',  pin: '3927', role: 'editor' },
+  /* Added 2026-08-21 on Thulaib's ask: the social media manager, with the
+     master view. `admin` is what "master look" means here, the same as SHIARA.
+     Worth knowing it carries more than looking: isAdmin() also unlocks New
+     Project, Edit, Archive and the permanent Delete on archived projects.
+     Flagged to Thulaib. `alt` exists because team_members spells him NIRVANA
+     and the ask spelled him NIRVAAN, and a name typed at the door is matched
+     exactly. One account, two spellings, rather than two accounts. */
+  { name: 'NIRVANA', pin: '6179', role: 'admin', alt: ['NIRVAAN','NIRVAN'] },
 ];
 const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
@@ -1453,14 +1461,16 @@ function setupLogin(){
   $('#loginBtn').onclick=doLogin;
   ['#loginName','#loginPin'].forEach(s=>{const el=$(s);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()})});
   const saved=sessionStorage.getItem('bb_video_user');
-  if(saved){try{const u=JSON.parse(saved);const ex=USERS.find(x=>x.name===u.name);if(ex){onLoginSuccess(ex);return}}catch(_){}}
+  if(saved){try{const u=JSON.parse(saved);const ex=USERS.find(x=>x.name===u.name||(x.alt||[]).indexOf(u.name)>-1);if(ex){onLoginSuccess(ex);return}}catch(_){}}
   setTimeout(()=>$('#loginName')?.focus(),100);
 }
 function doLogin(){
   const n=$('#loginName').value.trim().toUpperCase();const p=$('#loginPin').value.trim();const e=$('#loginError');
   if(!n){e.textContent='Enter your name';return}
   if(!p){e.textContent='Enter your PIN';return}
-  const u=USERS.find(x=>x.name===n);
+  /* Matched on the canonical name OR a known alternate spelling. A login that
+     exists but cannot be typed is the same as no login at all. */
+  const u=USERS.find(x=>x.name===n||(x.alt||[]).indexOf(n)>-1);
   if(!u){e.textContent=`User "${n}" not found`;return}
   if(u.pin!==p){e.textContent='Wrong PIN';$('#loginPin').value='';return}
   e.textContent='';onLoginSuccess(u);
@@ -6020,6 +6030,30 @@ async function runSelfTest(){
       (roster.length+' people, both lists agree'));
   })();
 
+  /* ── H14 · every login can actually be typed ─────────────────────────── */
+  (function(){
+   /* A PIN nobody can reach is not a login. Names collide silently: if an alt
+      spelling equals somebody else's real name, the door hands out the wrong
+      account and the PIN check is the only thing standing between them. */
+   const real=USERS.map(u=>u.name);
+   const dupes=real.filter((x,i)=>real.indexOf(x)!==i);
+   ok('Access: no two logins share a name',dupes.length===0,
+      dupes.length?('duplicated: '+dupes.join(', ')):(real.length+' logins, all distinct'));
+   const clash=[];
+   USERS.forEach(u=>(u.alt||[]).forEach(a=>{
+     if(real.indexOf(a)>-1)clash.push(a+' is an alias for '+u.name+' and somebody else\u2019s real name');
+     USERS.forEach(o=>{if(o!==u&&(o.alt||[]).indexOf(a)>-1)clash.push(a+' is an alias for both '+u.name+' and '+o.name)});
+   }));
+   ok('Access: no alternate spelling points at two people',clash.length===0,
+      clash.length?clash.join('; '):'aliases are unambiguous');
+   /* PINs are the whole door. Two people sharing one means either can sign in
+      as the other, and the stage history then names the wrong person. */
+   const pins=USERS.map(u=>u.pin);
+   const pdupe=pins.filter((x,i)=>pins.indexOf(x)!==i);
+   ok('Access: no two logins share a PIN',pdupe.length===0,
+      pdupe.length?'a PIN is reused, two people can sign in as each other':(pins.length+' PINs, all distinct'));
+  })();
+
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
   ok('Layout: the page does not scroll sideways',
      document.documentElement.scrollWidth<=window.innerWidth+1,
@@ -6056,6 +6090,18 @@ async function runSelfTest(){
 window.runSelfTest=runSelfTest;
 if(location.search.indexOf('selftest')>-1){
  window.addEventListener('load',function(){setTimeout(function(){runSelfTest();},4000);});
+}
+</script>
+
+<script>
+/* The shell tool copies a service worker and never registers it, so the app
+   installs and the worker never runs. Register it here. Network-first, and it
+   never caches the database: a stale board is worse than no board, because
+   somebody acts on work that has already moved on. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
 }
 </script>
 </body>

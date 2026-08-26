@@ -869,3 +869,56 @@ means.* `team_members`, `tasks` and `clients` are all shared. A query that means
 **Also fixed.** The role printed raw, so Ushane's card read `VIDEO_HEAD` with the
 underscore showing. `roleLabel()` now strips it. A database value on screen is
 the same class of tell as a placeholder reaching a client.
+
+---
+
+## L-VID-022 · a login that cannot be typed is not a login
+
+**Added** 2026-08-21 with NIRVANA's account (social media manager, master view).
+
+The ask spelled him **NIRVAAN**. `team_members` spells him **NIRVANA**. The door
+does an exact uppercase match on the typed name:
+
+```js
+const u=USERS.find(x=>x.name===n);
+if(!u){e.textContent=`User "${n}" not found`;return}
+```
+
+One letter and he is locked out, with an error that tells him he does not exist.
+This is the BAVITH and KAVISH failure in a different coat: an account that looks
+perfect on the page and does nothing for the person holding it.
+
+**The block.** An `alt` list on the login row, matched by both the door and the
+remembered-session path. One account, several spellings, never two rows:
+
+```js
+{ name: 'NIRVANA', pin: '6179', role: 'admin', alt: ['NIRVAAN','NIRVAN'] }
+const u=USERS.find(x=>x.name===n||(x.alt||[]).indexOf(n)>-1);
+```
+
+Both lookups had to change. The remembered session resolves by name too, so
+fixing only `doLogin` would have signed him in once and then failed on the
+refresh, which is worse than never working: intermittent faults get blamed on
+the person, not the system.
+
+**Three harness checks** (H14), because aliases introduce a collision the old
+code could not have: no two logins share a name, no alternate spelling points at
+two people, and no two logins share a PIN. That last one matters most. Two people
+on one PIN means either can sign in as the other, and every stage move then
+records the wrong name in the history.
+
+**A testing lesson worth more than the fix.** The first pass at proving this
+appeared to show `NIRVAAN / 0000` signing in with the WRONG PIN. It had not.
+`sessionStorage` is shared between a page and its same-origin iframes, so each
+test frame restored the previous test's session at load, and the probe read that
+restored user instead of the result of `doLogin()`. Clearing the store *after*
+load was too late. **A security check that shares state with the thing it is
+checking proves nothing.** Clear before the load, and always include a
+known-bad case: `ZZZ` failing was the only reason the contamination showed up
+at all.
+
+**Role note, flagged not decided.** `admin` is the master view Thulaib asked
+for, and `isAdmin()` also unlocks New Project, Edit, Archive, Restore and the
+permanent Delete on archived projects. There is no look-only role in this system
+today. Narrowing an explicit ask is the owner's call, so it was surfaced rather
+than quietly applied.
