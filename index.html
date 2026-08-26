@@ -824,6 +824,13 @@ const USERS = [
      and the ask spelled him NIRVAAN, and a name typed at the door is matched
      exactly. One account, two spellings, rather than two accounts. */
   { name: 'NIRVANA', pin: '6179', role: 'admin', alt: ['NIRVAAN','NIRVAN'] },
+  /* Added 2026-08-21 on Thulaib's ask, master view, confirmed by him rather than
+     assumed: the two plausible roles here produce opposite systems, and an
+     `editor` with no team_members row signs in perfectly and sees an EMPTY
+     board. TIANA has NO team_members row at all, which is fine for an admin
+     (they are not assigned work and H11 exempts them) but does mean she appears
+     in no people list in any BB system. Flagged to Thulaib. */
+  { name: 'TIANA',   pin: '7029', role: 'admin', alt: ['TIYANA','THIANA'] },
 ];
 const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
