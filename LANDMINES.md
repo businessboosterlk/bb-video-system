@@ -1057,3 +1057,69 @@ plus the carry-over and cutting tracker, and `bb_week` is authenticated-only
 while this app reads as anon (0 video rows since 3 Aug: the spine is dead for
 video). The text model with a progress prefix keeps every row ever written
 readable in the database and parseable in the app.
+
+---
+
+## L-VID-025 · undo, and the two videos that vanished from Team Review
+
+**Reported** 2026-09-04: *"there was two videos in team review, and it got moved
+away. And we don't know which two was that."*
+
+**Finding them: "the latest two" would have been the WRONG two.** The naive
+answer, the last two rows to leave `team_review`, gives pid 342 (a Waverley
+video) and pid 374. Rebuilding the ROOM over time tells a different story:
+
+```
+13:09:20  AUG VID 5 out            2 left in the room
+13:27:41  JUL VID 3 | TES 02 out   1 left
+13:28:22  JUL VID 4 | TES 01 out   0     <- the room emptied here
+14:28:19  SEP VID 1 in             1     <- a separate solo transit
+14:29:23  SEP VID 1 out            0
+```
+
+The pair that **sat there together and left together** is 374 and 375, both
+BS WITH LEON, moved out by TIANA 41 seconds apart. Video 342 arrived an hour
+later, alone, and left after 64 seconds. Restored 374 and 375.
+
+**Reconstruct the occupancy, do not sort by time.** A history row records
+ENTERING a stage, so a stay is `[entered_at, next row's entered_at)`. Turn
+those into +1 and -1 events, run a window sum, and the moment the count goes
+to zero names the cards. Sorting departures by time answers a different
+question and looks just as plausible.
+
+**A MISTAKE I MADE INSIDE THIS FIX.** My restore was raw SQL, and SHIARA had
+already moved 374 back herself two minutes earlier. The app refuses a move to
+the stage a card is already in (L-VID-013); **my SQL walked straight past that
+guard** and wrote a second `team_review` row, so the card had a
+`team_review -> team_review` pair polluting its stage timings. Merged the
+redundant row into SHIARA's and gave her row the time back. **A raw write is a
+new caller, and it inherits none of the guards the app has learned.** Check the
+current value before writing it.
+
+**THE UNDO FEATURE.** Prior art: BB had none. The nearest thing was
+`moveProject` itself, which already keeps `old` and puts the card back when the
+write fails, a one-step undo that was never exposed.
+
+| Rule | Why |
+|---|---|
+| Reverses through `moveProject` | the history row and `completed_at` behave exactly as a human move, and the trail keeps BOTH the mistake and the correction. Deleting history would be lying about what happened |
+| In memory, this session only | a stack that survived a reload would let somebody undo a colleague's move from three hours ago, a worse accident than the one it fixes |
+| A bulk move is ONE undo | and each card returns to ITS OWN previous stage, because a bulk move can start from five different columns |
+| It re-applies `editorCanMove` | **found while building: that gate lives in the DROP HANDLER, not in `moveProject`.** Any caller of `moveProject` bypasses it |
+
+**Still open for Thulaib:** the editor gate belongs inside `moveProject`, not in
+one caller. Moving it touches a shared function with four other callers and is
+its own job. Until then, every new caller must remember the rule, which is
+exactly the shape of fault that recurs.
+
+**Reached three ways** (L-VID-023): the bar, a Pipeline button and Ctrl+Z. The
+bar hides after 14 seconds; the STACK does not, so a mistake noticed later is
+still fixable. The Pipeline button renders its hidden state from the stack,
+because the board repaints after every move and a button built hidden stays
+hidden.
+
+**Six checks (H17)**, including one that asserts a reversal never records a new
+undo, or the button would push its own opposite and never finish.
+
+**Proven live:** JUL VID 4 moved team_review to changes at 14:50:14 and back at
+14:50:18, both rows in the history, card where it started.

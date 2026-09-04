@@ -693,6 +693,17 @@ a:hover{text-decoration:underline}
 .wp-chip.behind{border-color:rgba(239,68,68,.45)}
 .wp-chip-b{color:var(--red);font-weight:800;font-size:10.5px}
 .wp-carry-line+.wp-carry-line{margin-top:3px}
+.bbu-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab,0px));z-index:350;
+  display:flex;align-items:center;gap:12px;max-width:min(560px,calc(100vw - 24px));
+  padding:11px 12px 11px 16px;border-radius:14px;background:var(--surface);border:1px solid var(--border-strong);
+  box-shadow:0 10px 34px rgba(0,0,0,.42)}
+.bbu-bar[hidden]{display:none}
+.bbu-txt{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bbu-go{flex:none;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:800;cursor:pointer;min-height:40px}
+.bbu-go:hover{filter:brightness(1.08)}
+.bbu-x{flex:none;background:none;border:none;color:var(--text-3);font-size:19px;line-height:1;cursor:pointer;padding:6px 4px;min-width:32px;min-height:40px}
+.bbu-x:hover{color:var(--text)}
+@media(max-width:640px){.bbu-bar{left:12px;right:12px;transform:none;max-width:none}}
 @media(max-width:640px){.wp-strip-main{gap:14px}.wp-strip-kpi{min-width:0;flex:1 1 40%}.wp-strip-n{font-size:22px}.wp-item-n{margin-left:24px}}
 /* A TOUCH SCREEN NEEDS A FINGER-SIZED TARGET, NOT A FINGER-SIZED PICTURE.
    The tick box is 17px and the move arrow 16px, which is right for a dense
@@ -800,6 +811,11 @@ a:hover{text-decoration:underline}
       <button class="logout-btn" id="logoutBtn">Sign out</button>
     </div>
   </aside>
+  <div class="bbu-bar" id="bbuBar" hidden role="status">
+    <span class="bbu-txt" id="bbuText"></span>
+    <button class="bbu-go" onclick="bbuUndo()">Undo</button>
+    <button class="bbu-x" onclick="document.getElementById('bbuBar').hidden=true" aria-label="Hide">&times;</button>
+  </div>
   <div class="gd-wrap" id="gdWrap" hidden role="dialog" aria-modal="true" aria-labelledby="gdH">
     <div class="gd-top">
       <div class="gd-dots" id="gdDots"></div>
@@ -924,6 +940,7 @@ const VICON={
   alert:'<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="1" fill="currentColor" stroke="none"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   hourglass:'<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 0M8 21c0-5 8-5 8 0"/>',
+  back:'<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/>',
   board:'<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="11" rx="1"/><rect x="16" y="4" width="5" height="7" rx="1"/>'
 };
 function vicon(name,size){
@@ -1530,6 +1547,9 @@ function gdCards(){
    {ic:'camera',h:'Welcome, '+first,
     p:['This is where every video for every client lives, from the moment it is shot to the moment it lands on the drive.',
        'It is '+pages+' pages and takes about a minute to learn. Skip this if you like. It stays in the sidebar under your name for whenever you want it again.']},
+   {ic:'back',h:'A wrong move goes back',
+    p:['Moved a card to the wrong column? An <b>Undo</b> bar appears at the bottom. Tap it and the card goes back where it was.',
+       'It also lives on the Pipeline as an <b>Undo</b> button, and <b>Ctrl+Z</b> works. It only undoes moves YOU made in this session, so nobody can reverse somebody else\u2019s work by accident.']},
    {ic:'board',h:'The Pipeline is your day',
     p:['Every video is a card. The '+stages+' columns are the stages a video passes through, left to right.',
        '<b>Move your card the moment the work moves.</b> Not at the end of the day, not on Friday. Everything else in here is only as true as the last time somebody moved a card.']},
@@ -1629,6 +1649,14 @@ function bootApp(){
   if(!window._bbGlobalListeners){
     document.addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
     document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+    /* Cmd+Z on a Mac, Ctrl+Z elsewhere. Ignored while typing, or the shortcut
+       would eat a person's text edit instead of undoing a card. */
+    document.addEventListener('keydown',e=>{
+      if(!((e.metaKey||e.ctrlKey)&&(e.key==='z'||e.key==='Z')&&!e.shiftKey))return;
+      const t=e.target;
+      if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;
+      e.preventDefault(); bbuUndo();
+    });
     window._bbGlobalListeners=true;
   }
   fetchAll();
@@ -2121,8 +2149,10 @@ function renderPipeline(){
   if(!_silentRender)PIPELINE_ORDER={};
   const editors=assignableEditors();
   const bulkBtn=(isAdmin()||isVideoHead())?`<button class="bulk-toggle-btn ${PIPELINE_STATE.bulkMode?'active':''}" data-action="bulk-toggle">${PIPELINE_STATE.bulkMode?'✓ Bulk Mode ON':'☐ Bulk Select'}</button>`:'';
-  $('#pageActions').innerHTML=`<button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">'+vicon('archive',15)+'</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
+  $('#pageActions').innerHTML=`<button class="btn btn-ghost" id="bbuPageBtn" data-action="undo" ${BBU.stack.length?'':'hidden'}>${vicon('back',15)} Undo</button><button class="btn btn-ghost" data-action="refresh">↻</button>${bulkBtn}${isAdmin()?'<button class="btn btn-ghost" data-action="archived" title="View archived projects">'+vicon('archive',15)+'</button>':''}${isAdmin()?'<button class="btn btn-primary" data-action="new">+ New Project</button>':''}`;
+  bbuBtn();   /* the repaint made a fresh button; let the owner set its tooltip */
   $('#pageActions').onclick=e=>{
+    if(e.target.closest('[data-action="undo"]')){bbuUndo();return}
     if(e.target.closest('[data-action="refresh"]'))fetchAll();
     if(e.target.closest('[data-action="new"]'))openProjectForm();
     if(e.target.closest('[data-action="archived"]'))openArchivedView();
@@ -2360,6 +2390,7 @@ async function _runBulk(label, ids, perItem){
   if(_bulkRunning){toast('A bulk action is already running…','error');return;}
   if(!ids.length)return;
   _bulkRunning=true;
+  BBU.batch=[];            /* collect, so twenty moves become ONE undo */
   let ok=0,skip=0,fail=0;
   if(toast)toast(`${label} ${ids.length} project${ids.length>1?'s':''}…`);
   try{
@@ -2369,6 +2400,8 @@ async function _runBulk(label, ids, perItem){
     }
   }finally{
     _bulkRunning=false;
+    const _batch=BBU.batch; BBU.batch=null;
+    if(_batch&&_batch.length)bbuRecord(_batch);   /* duplicate and archive add nothing, so they record nothing */
     PIPELINE_STATE.selected.clear();
     await fetchAll(); // single authoritative refresh + render
     const extra=(skip?` · ${skip} already there`:'')+(fail?` · ${fail} failed`:'');
@@ -2554,6 +2587,102 @@ function attachDropListeners(){
     });
   });
 }
+/* ══ UNDO ═══════════════════════════════════════════════════════════════
+   Read LANDMINES.md L-VID-025 before changing. In memory, this session, stage
+   moves only. Reverses THROUGH moveProject so history and completed_at stay
+   correct, and re-applies the editor permission rule because moveProject does
+   not carry it. */
+const BBU = {
+  stack: [],           /* newest last. {items:[{id,from,to,title}], at} */
+  max: 15,
+  suspended: false,    /* true while undoing, so the reverse move is not recorded */
+  batch: null          /* collects items during a bulk run so N moves are ONE undo */
+};
+function bbuNote(project, from, to){
+  if(BBU.suspended || !project) return;
+  const it={id:project.id, from:from, to:to, title:project.title||'Untitled'};
+  if(BBU.batch) BBU.batch.push(it);
+  else bbuRecord([it]);
+}
+function bbuRecord(items){
+  if(!items || !items.length) return;
+  BBU.stack.push({items:items, at:Date.now()});
+  while(BBU.stack.length>BBU.max) BBU.stack.shift();
+  bbuRender(true);
+}
+function bbuLabel(e){
+  if(!e) return '';
+  const st=k=>(STAGES.find(x=>x.key===k)||{}).label||k;
+  if(e.items.length===1){
+    const i=e.items[0];
+    return `“${i.title.length>34?i.title.slice(0,34)+'…':i.title}” back to ${st(i.from)}`;
+  }
+  return `${e.items.length} cards back out of ${st(e.items[0].to)}`;
+}
+/* The same rule the drop handler enforces. moveProject does NOT carry it, so
+   undo must ask, or it becomes the one way an editor can reach a stage the
+   board refuses to drop into. */
+function bbuBlocked(e){
+  if(!e || isAdmin() || !isEditor()) return null;
+  for(const i of e.items){
+    const p=getProject(i.id);
+    if(p && typeof editorCanMove==='function' && !editorCanMove(p.current_stage, i.from))
+      return (STAGES.find(x=>x.key===i.from)||{}).label||i.from;
+  }
+  return null;
+}
+async function bbuUndo(){
+  const e=BBU.stack[BBU.stack.length-1];
+  if(!e){ toast('Nothing to undo','info'); return; }
+  const blocked=bbuBlocked(e);
+  if(blocked){ toast(`Only admins can move into ${blocked}`,'error'); return; }
+  BBU.stack.pop();
+  BBU.suspended=true;
+  const many=e.items.length>1;
+  if(many) _bulkRunning=true;   /* one repaint at the end, and no auto-refresh mid-flight */
+  let done=0, failed=0;
+  try{
+    for(const i of e.items){
+      const p=getProject(i.id);
+      if(!p){ failed++; continue; }
+      if(p.current_stage===i.from){ continue; }   /* already back, nothing to do */
+      try{ await moveProject(p, i.from); done++; }catch(_){ failed++; }
+    }
+  } finally {
+    BBU.suspended=false;
+    if(many) _bulkRunning=false;
+    bbuRender();
+    await fetchAll(true);
+  }
+  toast(failed?`Undone ${done}, ${failed} could not go back`:(done?'Move undone':'Already back where it was'), failed?'error':'success');
+}
+let _bbuHideTimer=null;
+function bbuRender(flash){
+  const bar=document.getElementById('bbuBar');
+  if(!bar) return;
+  const e=BBU.stack[BBU.stack.length-1];
+  if(!e){ bar.hidden=true; bbuBtn(); return; }
+  bar.querySelector('#bbuText').textContent=bbuLabel(e);
+  if(flash){
+    bar.hidden=false;
+    clearTimeout(_bbuHideTimer);
+    /* The bar goes; the stack stays. Ctrl+Z and the Pipeline button still
+       reach it, so a mistake spotted five minutes later is still fixable. */
+    _bbuHideTimer=setTimeout(()=>{ bar.hidden=true; }, 14000);
+  }
+  bbuBtn();
+}
+/* A permanent way in, because the bar is a moment and a mistake is often
+   noticed after it. L-VID-023: a feature nothing points at is a missing one. */
+function bbuBtn(){
+  const b=document.getElementById('bbuPageBtn');
+  if(!b) return;
+  const e=BBU.stack[BBU.stack.length-1];
+  b.hidden=!e;
+  if(e) b.title='Undo: '+bbuLabel(e);
+}
+window.bbuUndo=bbuUndo;
+
 async function moveProject(project,newStage){
   /* A move to the stage it is ALREADY in is not a move. Without this it wrote
      a history row, bumped updated_at, and the card jumped to the top of its own
@@ -2582,6 +2711,7 @@ async function moveProject(project,newStage){
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
     succeeded=true;
+    bbuNote(project, old, newStage);   /* only after the write is real */
     if(!_bulkRunning)toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`,'success');
   }catch(err){
     console.error(err);
@@ -6366,6 +6496,36 @@ async function runSelfTest(){
    ok('Routing: a #weeklyplan link opens the Weekly Plan',
       typeof bbHashPage==='function'&&bbHashPage('#weeklyplan')==='weeklyplan'&&bbHashPage('#nonsense')===null&&bbHashPage('')===null,
       'alerts deep-link to the plan');
+  })();
+
+  /* ── H17 · undo ──────────────────────────────────────────────────────── */
+  (function(){
+   const before=BBU.stack.length;
+   /* A bulk move must be ONE entry that remembers each card's OWN origin. */
+   bbuRecord([{id:-1,from:'editing',to:'team_review',title:'A'},
+              {id:-2,from:'changes',to:'team_review',title:'B'}]);
+   const e=BBU.stack[BBU.stack.length-1];
+   ok('Undo: many cards moved together are one undo',
+      BBU.stack.length===before+1&&e.items.length===2,
+      'stack '+before+' -> '+BBU.stack.length+', '+(e?e.items.length:0)+' cards in the entry');
+   ok('Undo: each card remembers its own previous stage',
+      e.items[0].from==='editing'&&e.items[1].from==='changes',
+      e.items.map(function(i){return i.from}).join(' + ')+', not one shared origin');
+   /* A recorded move must never be recorded again while it is being reversed,
+      or Undo would push its own opposite and the button would never finish. */
+   BBU.suspended=true; bbuNote({id:-3,title:'C'},'editing','changes'); BBU.suspended=false;
+   ok('Undo: reversing a move does not record a new one',
+      BBU.stack.length===before+1,'stack still '+BBU.stack.length);
+   /* The label has to name the card and the destination or the bar is a
+      mystery button. */
+   const lbl=bbuLabel({items:[{id:-4,from:'editing',to:'team_review',title:'JUL VID 4'}]});
+   ok('Undo: the bar says what will happen',
+      /JUL VID 4/.test(lbl)&&/Editing/.test(lbl),'"'+lbl+'"');
+   BBU.stack.length=before;   /* leave no test state behind */
+   ok('Undo: the check cleaned up after itself',BBU.stack.length===before,'stack back to '+before);
+   ok('Undo: there is a permanent way to reach it',
+      typeof bbuUndo==='function'&&/data-action="undo"/.test(renderPipeline.toString()),
+      'Pipeline button, the bar, and Ctrl+Z');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
