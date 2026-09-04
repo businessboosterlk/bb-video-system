@@ -6509,13 +6509,13 @@ var BBPUSH=(function(){
     var j=sub.toJSON();
     var res=await fetch(FN+'?action=subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team_member_id:m,app:APP,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,ua:navigator.userAgent})});
     var out=await res.json(); if(!res.ok) throw new Error(out.error||'subscribe failed');
-    try{ localStorage.setItem('bbpush_ok',String(Date.now())); }catch(e){}
+    try{ localStorage.setItem('bbpush_ok_'+APP,String(Date.now())); }catch(e){}
     return out;
   }
   function say(t){ try{ if(typeof toast==='function'){ toast(t); return; } }catch(e){} console.log('[BBPUSH]',t); }
   function hide(){ if(banner){ banner.remove(); banner=null; } }
-  function dismiss(){ try{ localStorage.setItem('bbpush_dismiss',String(Date.now())); }catch(e){} hide(); }
-  function dismissed(){ try{ var t=+localStorage.getItem('bbpush_dismiss')||0; return (Date.now()-t)<7*864e5; }catch(e){ return false; } }
+  function dismiss(){ try{ localStorage.setItem('bbpush_dismiss_'+APP,String(Date.now())); }catch(e){} hide(); }
+  function dismissed(){ try{ var t=+localStorage.getItem('bbpush_dismiss_'+APP)||0; return (Date.now()-t)<7*864e5; }catch(e){ return false; } }
   async function enable(){
     var p=await Notification.requestPermission();
     if(p!=='granted'){ hide(); return false; }
@@ -6570,6 +6570,19 @@ var BBPUSH=(function(){
     else if(lastError){ pillEl.textContent='Alerts failed · tap to retry'; }
     else { pillEl.textContent='Alerts off · tap to turn on'; }
   }
+  async function diagnose(){
+    var L=[]; function add(s,ok,d){ L.push((ok?'PASS ':'FAIL ')+s+(d?': '+d:'')); }
+    try{ add('Push supported by this browser', supported(), supported()?'':'open from the Home Screen icon on iPhone'); }catch(e){ add('Push supported',false,String(e)); }
+    add('Running as installed app', standalone(), standalone()?'':'browser tab');
+    add('Signed in as', !!name(), name()||'nobody yet');
+    try{ var m=await resolveMember(); add('Team record found', !!m, m?('id '+m):('no active team member named '+name())); }catch(e){ add('Team record lookup',false,String(e&&e.message||e)); }
+    try{ var reg=await Promise.race([navigator.serviceWorker.ready, new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timed out after 8s')); },8000); })]); add('Service worker ready', !!reg, reg&&reg.scope); }catch(e){ add('Service worker ready',false,String(e&&e.message||e)); }
+    try{ var kr=await fetch(FN+'?action=public-key'); var k=await kr.json(); add('Server key fetched', !!k.publicKey, k.publicKey?(k.publicKey.length+' chars'):JSON.stringify(k)); }catch(e){ add('Server key fetched',false,String(e&&e.message||e)); }
+    add('Notification permission', ('Notification' in window)&&Notification.permission==='granted', ('Notification' in window)?Notification.permission:'API absent');
+    try{ var r2=await navigator.serviceWorker.ready; var sub=await r2.pushManager.getSubscription(); add('Phone subscription exists', !!sub, sub?(sub.endpoint.slice(0,40)+'…'):'none yet'); }catch(e){ add('Phone subscription',false,String(e&&e.message||e)); }
+    add('Registered with server', registered, lastError||'');
+    return L;
+  }
   function status(){ return { app:APP, supported:supported(), permission:('Notification' in window)?Notification.permission:'n/a', ios:isIOS(), standalone:standalone(), user:name(), memberId:memberId, registered:registered, lastError:lastError }; }
   async function test(){
     var m=await resolveMember(); if(!m) throw new Error('no team member row for '+name());
@@ -6577,7 +6590,7 @@ var BBPUSH=(function(){
     return r.json();
   }
   window.addEventListener('load',function(){ setTimeout(boot,2500); });
-  return { enable:enable, test:test, status:status, boot:boot };
+  return { enable:enable, test:test, status:status, boot:boot, diagnose:diagnose };
 })();
 </script>
 <!-- @@BB_PUSH_END@@ -->
@@ -6605,7 +6618,7 @@ var BBSET=(function(){
     var alertsLine = st.registered ? 'On for this phone' : (st.permission==='denied' ? 'Blocked in phone Settings' : (st.ios&&!st.standalone ? 'Needs Home Screen install' : 'Off'));
     var alertsBtns = st.registered ? btn('Send a test alert','BBSET.test()',true) : (st.ios&&!st.standalone ? '' : btn('Turn on alerts','BBSET.enable()',true));
     var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div><div style="font-size:18px;font-weight:800">Settings</div><div style="font-size:11px;color:var(--text3,#9aa3ad)">'+APP_LABEL+'</div></div><button type="button" onclick="BBSET.close()" aria-label="Close" style="border:0;background:transparent;color:inherit;font-size:22px;cursor:pointer;padding:4px 8px">×</button></div>';
-    html+=card('Phone alerts', row('Status',alertsLine)+row('Quiet hours','9pm to 7am, held until 7am')+'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'+alertsBtns+'</div>'+(st.lastError?'<div style="margin-top:8px;font-size:11px;color:#f87171">'+st.lastError+'</div>':''));
+    html+=card('Phone alerts', row('Status',alertsLine)+row('Quiet hours','9pm to 7am, held until 7am')+'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'+alertsBtns+btn('Run diagnostics','BBSET.diag()',false)+'</div><pre id="bbset-diag" style="display:none;white-space:pre-wrap;font-size:11px;line-height:1.5;margin:10px 0 0;padding:10px;border-radius:8px;background:var(--bg,#0c0d10);color:var(--text,#fff)"></pre>'+(st.lastError?'<div style="margin-top:8px;font-size:11px;color:#f87171">'+st.lastError+'</div>':''));
     html+=card('Installed as an app', row('This device', standalone()?'Yes':'No, running in the browser')+(!standalone()?'<div style="margin-top:8px;font-size:12px;color:var(--text3,#9aa3ad)">'+(isIOS()?'Share, then Add to Home Screen. Alerts only work from the installed app.':'Use your browser menu, then Add to Home screen.')+'</div>':''));
     html+=card('Account', row('Signed in as', st.user||'Not signed in')+(logoutFn()?'<div style="margin-top:12px">'+btn('Sign out','BBSET.signout()',false)+'</div>':''));
     html+=card('App', row('Build', document.lastModified||'')+'<div style="margin-top:12px">'+btn('Reload latest version','BBSET.reload()',false)+'</div>');
@@ -6626,6 +6639,7 @@ var BBSET=(function(){
   function close(){ if(sheet){ sheet.style.display='none'; back.style.display='none'; } }
   async function enable(){ try{ await BBPUSH.enable(); }catch(e){} render(); }
   async function test(){ try{ var r=await BBPUSH.test(); alert(r&&r.sent?'Test sent. Check your phone.':'Nothing sent: '+(r&&r.error||'no phone registered')); }catch(e){ alert('Test failed: '+(e&&e.message||e)); } }
+  async function diag(){ var el=document.getElementById('bbset-diag'); if(!el) return; el.style.display='block'; el.textContent='Checking'; try{ var L=await BBPUSH.diagnose(); el.textContent=L.join('\n'); }catch(e){ el.textContent='Diagnostics failed: '+(e&&e.message||e); } }
   function signout(){ var f=logoutFn(); close(); if(f) f(); }
   async function reload(){
     try{ if('serviceWorker' in navigator){ var rs=await navigator.serviceWorker.getRegistrations(); for(var i=0;i<rs.length;i++) await rs[i].unregister(); } if(window.caches){ var ks=await caches.keys(); for(var j=0;j<ks.length;j++) await caches.delete(ks[j]); } }catch(e){}
@@ -6650,7 +6664,7 @@ var BBSET=(function(){
   }
   var tries=0; function boot(){ if(!inject() && tries++<60) setTimeout(boot,2000); }
   window.addEventListener('load',function(){ setTimeout(boot,1500); });
-  return { open:open, close:close, enable:enable, test:test, signout:signout, reload:reload, inject:inject };
+  return { open:open, close:close, enable:enable, test:test, signout:signout, reload:reload, inject:inject, diag:diag };
 })();
 </script>
 <!-- @@BB_SETTINGS_END@@ -->
