@@ -643,13 +643,13 @@ a:hover{text-decoration:underline}
 .wp-editable{cursor:pointer}
 .wp-editable:hover{background:var(--surface-2)!important}
 .wp-cell-content{font-size:13px;font-weight:600;color:var(--text);line-height:1.55;white-space:pre-wrap;word-break:break-word}
-.wp-item{display:flex;align-items:flex-start;gap:7px;padding:3px 0;font-size:12.5px;font-weight:600;color:var(--text);line-height:1.4}
+.wp-item{display:flex;flex-wrap:wrap;align-items:flex-start;gap:5px 7px;padding:3px 0;font-size:12.5px;font-weight:600;color:var(--text);line-height:1.4}
 .wp-item+.wp-item{border-top:1px dashed var(--border)}
 .wp-item-box{flex:none;width:17px;height:17px;margin-top:1px;border:1.5px solid var(--border-strong);border-radius:5px;background:var(--surface-2);cursor:pointer;display:grid;place-items:center;color:transparent;transition:all .12s}
 .wp-item-box:hover{border-color:var(--accent)}
 .wp-item.done .wp-item-box{background:var(--green);border-color:var(--green);color:#fff}
 .wp-item.done .wp-item-txt{text-decoration:line-through;color:var(--text-3);font-weight:500}
-.wp-item-txt{flex:1;min-width:0;overflow-wrap:break-word;word-break:normal;cursor:pointer}
+.wp-item-txt{flex:1 1 0;min-width:56px;overflow-wrap:break-word;word-break:normal;cursor:pointer}
 /* THE GRID WAS SIZED FOR PLAIN TEXT. A tick box and a move arrow inside a 98px
    column left the text 17px wide, so "NOT AVA" wrapped one letter per line and
    the whole plan was unreadable on a phone. The table already scrolls sideways,
@@ -659,6 +659,41 @@ a:hover{text-decoration:underline}
 .wp-item-next{flex:none;opacity:0;border:none;background:none;color:var(--text-3);cursor:pointer;padding:0 2px;line-height:1;border-radius:5px;transition:opacity .12s}
 .wp-item:hover .wp-item-next{opacity:1}
 .wp-item-next:hover{color:var(--accent);background:var(--surface-3)}
+.wp-item.part .wp-item-box{border-color:var(--accent);background:var(--accent-soft)}
+.wp-item-n{flex:none;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-2);border-radius:999px;padding:1px 8px;font-size:10.5px;font-weight:800;font-variant-numeric:tabular-nums;cursor:pointer;line-height:1.5;min-height:22px;position:relative}
+.wp-item-n::after{content:'';position:absolute;inset:-11px;z-index:1}
+.wp-item-n:hover{border-color:var(--accent);color:var(--accent)}
+.wp-item-n.part{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.wp-item-n.fin{border-color:var(--green);color:var(--green)}
+.wp-item-n.static{cursor:default}
+.wp-cnt-pick{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0 6px 0}
+.wp-cnt-lbl{font-size:10px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-right:2px}
+.wp-cnt-pick button{min-width:44px;min-height:44px;border-radius:10px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font-weight:800;font-size:12px;cursor:pointer}
+.wp-cnt-pick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.wp-of{font-size:.72em;font-weight:600;color:var(--text-3)}
+.wp-tot-big{font-size:15px;font-weight:800;color:var(--accent)}
+.wp-tot-big.cut{color:var(--text)}
+.wp-tot-sub{font-size:9px;font-weight:600;color:var(--text-3);text-transform:none;letter-spacing:0;margin-top:2px}
+.wp-total-cut td{border-top:1px solid var(--border)}
+.wp-grid-week-col,.wp-week-cell{border-left:2px solid var(--border-strong);background:var(--surface-2)}
+.wp-week-cell{vertical-align:top;padding:10px 12px;text-align:center;min-width:92px}
+.wp-wk-big{font-size:18px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums}
+.wp-wk-sub{font-size:10.5px;color:var(--text-2);font-weight:600;margin-top:2px;white-space:nowrap}
+.wp-wk-behind{display:inline-block;margin-top:6px;font-size:10px;font-weight:800;color:var(--red);background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:999px;padding:1px 8px}
+.wp-strip{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin:0 0 12px}
+.wp-strip-main{display:flex;gap:22px;flex-wrap:wrap}
+.wp-strip-kpi{min-width:96px}
+.wp-strip-n{font-size:26px;font-weight:900;letter-spacing:-.02em;color:var(--text);line-height:1.1;font-variant-numeric:tabular-nums}
+.wp-strip-l{font-size:11px;color:var(--text-2);font-weight:600;margin-top:2px}
+.wp-strip-kpi.bad .wp-strip-n{color:var(--red)}
+.wp-strip-people{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.wp-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface-2);border-radius:999px;padding:5px 11px;font-size:11.5px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.wp-chip b{color:var(--text)}
+.wp-chip-nm{font-weight:800;color:var(--text);letter-spacing:.02em}
+.wp-chip.behind{border-color:rgba(239,68,68,.45)}
+.wp-chip-b{color:var(--red);font-weight:800;font-size:10.5px}
+.wp-carry-line+.wp-carry-line{margin-top:3px}
+@media(max-width:640px){.wp-strip-main{gap:14px}.wp-strip-kpi{min-width:0;flex:1 1 40%}.wp-strip-n{font-size:22px}.wp-item-n{margin-left:24px}}
 /* A TOUCH SCREEN NEEDS A FINGER-SIZED TARGET, NOT A FINGER-SIZED PICTURE.
    The tick box is 17px and the move arrow 16px, which is right for a dense
    grid and far too small to hit. An ::after overlay extends the TAP area to
@@ -1502,8 +1537,8 @@ function gdCards(){
     p:['A video is not delivered until it sits in <b>Add to Drive</b>. Nothing else marks it done.',
        'Every client number and every monthly total is counted from that one moment, so a video parked one column short counts as nothing.']},
    {ic:'calendar',h:'The Weekly Plan',
-    p:['Your week, one row per person. Each client is its own line with its own tick box.',
-       '<b>Tick it when it is finished.</b> If something did not happen, tap the arrow beside it and it moves to the next day. No retyping. Nothing quietly disappears.']},
+    p:['Your week, one row per person. Each client is its own line: <b>3 CF</b> means three Cherry Fish videos.',
+       '<b>Tick it when it is finished.</b> Did two of three? Tap the <b>0/3</b> and pick 2. The arrow moves what is left to the next day. Nothing quietly disappears.']},
    {ic:'send',h:'Mondays',
     p:['Opening a new week shows anything from last week that was never ticked.',
        'Move it into this week, mark it done or drop it. <b>Only Done counts as finished.</b> Delayed still means not done. It will keep asking.']},
@@ -1575,11 +1610,20 @@ function logVideoLogin(u){
 function logout(){sessionStorage.removeItem('bb_video_user');if(refreshTimer)clearInterval(refreshTimer);currentUser=null;$('#app').hidden=true;$('#loginScreen').hidden=false;$('#loginPin').value=''}
 
 // === BOOT ===
+/* A phone alert about the Weekly Plan links to #weeklyplan. Without this the
+   tap would land on the Dashboard and the person would go looking, which is
+   L-VID-023 again: a route that exists in principle and not in practice. */
+function bbHashPage(h){
+  const k=String(h||'').replace(/^#/,'').toLowerCase();
+  if(!k)return null;
+  const pages=(typeof PAGES_FULL!=='undefined')?PAGES_FULL.concat(typeof PAGES_EDITOR!=='undefined'?PAGES_EDITOR:[]):[];
+  return pages.some(function(p){return p.key===k})?k:null;
+}
 function bootApp(){
   buildSidebar();
   startClock();
   $('#logoutBtn').onclick=logout;
-  currentPage=isEditor()?'my_dashboard':'dashboard';
+  currentPage=bbHashPage(location.hash)||(isEditor()?'my_dashboard':'dashboard');
   navTo(currentPage);
   // Guard: bootApp runs on every login. Without this, each login stacks another global listener.
   if(!window._bbGlobalListeners){
@@ -1832,7 +1876,7 @@ function renderMyDashboard(){
   function queueRow(p){const cl=getClient(p.client_id);const ov=p.deadline&&new Date(p.deadline)<new Date(todayStr);return `<div class="panel-row clickable" data-pid="${p.id}"><div><div style="font-size:13px;font-weight:600">${esc(p.title)}</div><div class="muted">${esc(cl?.name||'No client')} · ${STAGES.find(s=>s.key===p.current_stage)?.label||''}</div></div><div class="${ov?'tag red':'tag'}">${p.deadline?(ov?'OVERDUE · ':'')+fmtDate(p.deadline):'no deadline'}</div></div>`}
 
   $('#pageContent').innerHTML=`
-    <div class="page-head"><div><div class="page-title">${esc(currentUser.name)}'s Dashboard</div><div class="page-sub">Your work, your numbers — ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>
+    <div class="page-head"><div><div class="page-title">${esc(currentUser.name)}'s Dashboard</div><div class="page-sub">Your work, your numbers. ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>
 
     <div class="stat-grid">
       ${statCard('Done This Month',doneThisMonth.length,moTrend)}
@@ -3852,19 +3896,40 @@ function wpVisibleEditors(){
   const name=(currentUser?.name||'').toUpperCase();
   return WP_EDITORS.includes(name)?[name]:[];
 }
+/* WHAT KIND OF LINE IS THIS. Read LANDMINES.md L-VID-024 before changing.
+     video   "3 CF", "LEON 8", "1 HAYMAN VIDEO"   a bare number before or after
+     cut     anything with the word CUT; its number may sit in brackets
+     shoot   anything with the word SHOOT
+     task    everything else: "COMPLETE ALL PENDING WORK", "TT MOBILE"
+   A bracketed number is the cutting convention and NEVER counts as videos,
+   so "sort SO clips (10)" is one task, not ten videos. */
+function wpLineKind(text){
+  const t=String(text||'').trim();
+  const up=t.toUpperCase();
+  const br=t.match(/\((\d+)\)/);
+  const lead=t.match(/^(\d+)(?=\s|$)/);
+  const trail=t.match(/(?:^|\s)(\d+)\s*$/);
+  const code=Object.keys(CUT_CODES).find(function(c){return new RegExp('(^|[^A-Z])'+c+'([^A-Z]|$)').test(up)})||null;
+  const bare=lead?parseInt(lead[1]):(trail?parseInt(trail[1]):null);
+  if(/\bCUT\b/i.test(t)){const nn=br?parseInt(br[1]):bare;return {kind:'cut',n:(nn!=null&&nn>0&&nn<=200)?nn:null,code:code,planned:(nn&&nn>0&&nn<=200)?nn:1};}
+  if(/\bSHOOT\b/i.test(t))return {kind:'shoot',n:null,code:code,planned:1};
+  if(bare!=null&&bare>0&&bare<=50)return {kind:'video',n:bare,code:code,planned:bare};
+  return {kind:'task',n:null,code:code,planned:1};
+}
+/* Rewrites the number in a line, keeping it where the person wrote it. Used
+   when the remainder of a line moves to the next day: "3 CF" done 2 becomes
+   "2 CF" here and "1 CF" tomorrow. A line with no number comes back as is. */
+function wpSetNumber(text,nv){
+  const t=String(text||'');
+  if(/\bCUT\b/i.test(t)&&/\((\d+)\)/.test(t))return t.replace(/\((\d+)\)/,'('+nv+')');
+  if(/^(\d+)(?=\s|$)/.test(t))return t.replace(/^(\d+)/,String(nv));
+  if(/(?:^|\s)(\d+)\s*$/.test(t))return t.replace(/(\d+)\s*$/,String(nv));
+  return t;
+}
+/* Kept for anything outside this file that still calls it: PLANNED videos in
+   a cell, via the parser, so a ticked line no longer vanishes. */
 function wpCountVideos(content){
-  if(!content)return 0;
-  const up=content.trim().toUpperCase();
-  if(!up||up==='NOTHING')return 0;
-  const lines=up.split('\n').map(l=>l.trim()).filter(l=>l&&l!=='NOTHING');
-  let total=0;
-  lines.forEach(line=>{
-    // count leading number if present, else each line with "VIDEO" in it counts as 1
-    const m=line.match(/^(\d+)/);
-    if(m)total+=parseInt(m[1]);
-    else if(line.includes('VIDEO'))total+=1;
-  });
-  return total;
+  return wpItems(content).reduce(function(t,it){return t+(it.kind==='video'?it.planned:0)},0);
 }
 
 /* Week keys are the Monday of the week, in LOCAL time. Every row was migrated
@@ -3891,22 +3956,58 @@ let _wpCarryKey=null;   /* the week_start key those cells live under */
    A done line carries a `[x] ` prefix. Anything without it is NOT done, so
    every row written before this existed stays valid with no migration, and the
    text is still readable in the database and in the plain textarea. */
+/* An item: {text, kind, n, code, planned, done, fin}. `done` is a COUNT, `fin`
+   is done>=planned. Prefixes: "[x] " all done, "[2/3] " part done, nothing
+   for not started. Every row ever written still parses. */
 function wpItems(content){
   return String(content||'').split(/\n/).map(function(l){return l.trim()}).filter(Boolean)
     .map(function(l){
-      const m=l.match(/^\[( |x|X)\]\s*(.*)$/);
-      return m?{done:m[1].toLowerCase()==='x',text:m[2].trim()}:{done:false,text:l};
+      const m=l.match(/^\[( |x|X|(\d+)\/(\d+))\]\s*(.*)$/);
+      const text=(m?m[4]:l).trim();
+      const k=wpLineKind(text);
+      let done=0;
+      if(m){ if(m[2]!==undefined)done=Math.min(parseInt(m[2])||0,k.planned); else if(/x/i.test(m[1]))done=k.planned; }
+      return {text:text,kind:k.kind,n:k.n,code:k.code,planned:k.planned,done:done,fin:done>=k.planned};
     });
 }
 function wpItemsToText(items){
-  return items.map(function(it){return (it.done?'[x] ':'')+it.text}).join('\n');
+  return items.map(function(it){
+    const fin=it.fin!==undefined?it.fin:(it.done>=it.planned);
+    return (fin?'[x] ':(it.done>0?'['+it.done+'/'+it.planned+'] ':''))+it.text;
+  }).join('\n');
+}
+/* EVERY NUMBER ON THE PAGE COMES FROM HERE. The footer, the week column and
+   the strip all read this one object, so they cannot disagree. The week is
+   the sum of the days; the harness proves it is also the sum of the people. */
+function wpWeekStats(){
+  const blank=function(){return {vidDone:0,vidPlan:0,cutDone:0,cutPlan:0,shoots:0,open:0,behind:0}};
+  const day=[null,blank(),blank(),blank(),blank(),blank()];
+  const per={};
+  const today=new Date();today.setHours(0,0,0,0);
+  WP_EDITORS.forEach(function(ed){
+    per[ed]=blank();
+    for(let d=1;d<=5;d++){
+      const c=_wpCells[ed+'-'+d];if(!c)continue;
+      const dd=new Date(wpWeekStart);dd.setDate(dd.getDate()+d-1);
+      wpItems(c.content).forEach(function(it){
+        const D=day[d],Pp=per[ed];
+        if(it.kind==='video'){D.vidPlan+=it.planned;D.vidDone+=it.done;Pp.vidPlan+=it.planned;Pp.vidDone+=it.done;}
+        else if(it.kind==='cut'&&it.n!=null){D.cutPlan+=it.n;D.cutDone+=it.done;Pp.cutPlan+=it.n;Pp.cutDone+=it.done;}
+        else if(it.kind==='shoot'){D.shoots++;Pp.shoots++;}
+        if(!it.fin){D.open++;Pp.open++;if(dd<today){D.behind++;Pp.behind++;}}
+      });
+    }
+  });
+  const week=blank();
+  for(let d=1;d<=5;d++)Object.keys(week).forEach(function(k){week[k]+=day[d][k]});
+  return {day:day,per:per,week:week};
 }
 /* The ticks drive the cell status, so the carry-over panel and every other
    reader agree with what a person can see. All ticked = done. Any unticked
    pulls a done cell back to pending, never to delayed: only a human sets that. */
 function wpStatusFromItems(items,current){
   if(!items.length)return current||'pending';
-  const all=items.every(function(it){return it.done});
+  const all=items.every(function(it){return it.fin!==undefined?it.fin:(it.done>=it.planned)});
   if(all)return 'done';
   return (current==='done')?'pending':(current||'pending');
 }
@@ -3936,7 +4037,7 @@ async function wpGridLoad(){
   const wsMon=localDateStr(wpWeekStart);
   const fri=new Date(wpWeekStart);fri.setDate(fri.getDate()+4);
   const label=document.getElementById('wpWeekLabel');
-  if(label)label.textContent=wpFmtDate(wpWeekStart)+' — '+wpFmtDate(fri)+', '+wpWeekStart.getFullYear();
+  if(label)label.textContent=wpFmtDate(wpWeekStart)+' to '+wpFmtDate(fri)+', '+wpWeekStart.getFullYear();
   const board=document.getElementById('wpBoard');
   if(board)board.innerHTML='<div style="padding:32px;text-align:center;color:var(--text-3);font-size:13px">Loading…</div>';
   try{
@@ -3966,16 +4067,9 @@ function wpGridRender(){
   const canEdit=wpCanEdit();
   const visible=wpVisibleEditors();
   const today=new Date();today.setHours(0,0,0,0);
-  // day totals
-  const dayTotals=[0,0,0,0,0];
-  let grandTotal=0;
-  WP_EDITORS.forEach(ed=>{
-    for(let d=1;d<=5;d++){
-      const c=_wpCells[ed+'-'+d];
-      const n=wpCountVideos(c?.content);
-      dayTotals[d-1]+=n;grandTotal+=n;
-    }
-  });
+  /* ONE source for every number below. See wpWeekStats. */
+  const WS=wpWeekStats();
+  const stripHtml=wpStripHtml(WS,visible);
   const sBorder={done:'#22c55e',delayed:'#ef4444',pending:'#f59e0b'};
   const sBg={done:'rgba(34,197,94,0.07)',delayed:'rgba(239,68,68,0.07)',pending:'rgba(245,158,11,0.06)'};
   const sPill={done:'wp-status-done',delayed:'wp-status-delayed',pending:'wp-status-pending'};
@@ -4042,7 +4136,11 @@ function wpGridRender(){
     ${_wpCarry.map(c=>`<div class="wp-carry-row">
       <div class="wp-carry-who">${esc(c.editor_name||'')}</div>
       <div class="wp-carry-day">${WP_DAYS_SHORT[(c.day_of_week||1)-1]||''}</div>
-      <div class="wp-carry-txt">${esc(c.content||'')}</div>
+      <div class="wp-carry-txt">${wpItems(c.content).filter(function(it){return !it.fin}).map(function(it){
+        /* what is LEFT, in the words that will move: "1 CF" not "[2/3] 3 CF" */
+        const left=(it.planned>1&&it.done>0)?wpSetNumber(it.text,it.planned-it.done):it.text;
+        return `<div class="wp-carry-line">${esc(left)}${(it.planned>1&&it.done>0)?`<span class="wp-of"> left of ${it.planned}</span>`:''}</div>`;
+      }).join('')||'<span class="wp-cell-empty">nothing left</span>'}</div>
       <div class="wp-carry-acts">
         <button class="wp-carry-btn move" onclick="wpCarryAct(${c.id},'move')">${vicon('send',12)} Move to this week</button>
         <button class="wp-carry-btn done" onclick="wpCarryAct(${c.id},'done')">${vicon('check',12)} Done</button>
@@ -4054,7 +4152,7 @@ function wpGridRender(){
       <button class="wp-carry-btn done" onclick="wpCarryAll('done')">${vicon('check',12)} Mark all done</button>
     </div>
   </div>`;
-  board.innerHTML=carryHtml+`<div class="wp-grid-wrap"><table class="wp-grid-table">
+  board.innerHTML=stripHtml+carryHtml+`<div class="wp-grid-wrap"><table class="wp-grid-table">
     <thead><tr>
       <th class="wp-grid-editor-col">EDITOR</th>
       ${WP_DAYS_SHORT.map((d,i)=>{
@@ -4062,7 +4160,7 @@ function wpGridRender(){
         const isTd=dd.getTime()===today.getTime();
         return `<th class="wp-grid-day-col${isTd?' wp-today-col':''}">${d}<div class="wp-day-date">${wpFmtDate(dd)}</div></th>`;
       }).join('')}
-    </tr></thead>
+    <th class="wp-grid-week-col">WEEK<div class="wp-day-date">edited &middot; cut</div></th></tr></thead>
     <tbody>
       ${visible.map(ed=>`<tr class="wp-editor-row">
         <td class="wp-editor-name">${ed}</td>
@@ -4071,41 +4169,105 @@ function wpGridRender(){
           const content=cell?.content||'';
           const status=cell?.status||'pending';
           const isEmpty=!content.trim();
-          const vidCount=wpCountVideos(content);
+          const vidItems=wpItems(content);
+          const vidDone=vidItems.reduce(function(t,it){return t+(it.kind==='video'?it.done:0)},0);
+          const vidPlan=vidItems.reduce(function(t,it){return t+(it.kind==='video'?it.planned:0)},0);
+          const cutDone=vidItems.reduce(function(t,it){return t+(it.kind==='cut'&&it.n!=null?it.done:0)},0);
           const border=isEmpty?'':sBorder[status]||sBorder.pending;
           const bg=isEmpty?'':sBg[status]||sBg.pending;
           return `<td class="wp-grid-cell${canEdit?' wp-editable':''}"
             style="${!isEmpty?`border-left:3px solid ${border};background:${bg};`:''}"
             ${canEdit?`onclick="wpCellEdit('${ed}',${d})"`:''}>
-            <div class="wp-cell-content">${isEmpty?'<span class="wp-cell-empty">—</span>':wpItems(content).map(function(it,ix){
-              return `<div class="wp-item${it.done?' done':''}">`+
-                (canEdit?`<span class="wp-item-box" onclick="event.stopPropagation();wpToggleItem('${ed}',${d},${ix})" title="Mark done">${vicon('check',12)}</span>`:'')+
+            <div class="wp-cell-content">${isEmpty?'<span class="wp-cell-empty">—</span>':vidItems.map(function(it,ix){
+              const part=it.done>0&&!it.fin;
+              const picking=_wpPick===ed+'-'+d+'-'+ix;
+              return `<div class="wp-item${it.fin?' done':''}${part?' part':''}">`+
+                (canEdit?`<span class="wp-item-box" onclick="event.stopPropagation();wpToggleItem('${ed}',${d},${ix})" title="${it.fin?'Mark not done':'Mark all done'}">${vicon('check',12)}</span>`:'')+
                 `<span class="wp-item-txt">${esc(it.text)}</span>`+
-                ((canEdit&&d<5&&!it.done)?`<button class="wp-item-next" onclick="event.stopPropagation();wpMoveItemNextDay('${ed}',${d},${ix})" title="Move to the next day">${vicon('send',12)}</button>`:'')+
-              `</div>`;
+                (it.planned>1?(canEdit?`<button class="wp-item-n${part?' part':''}${it.fin?' fin':''}" onclick="event.stopPropagation();wpPickCount('${ed}',${d},${ix})" title="How many of these are done">${it.done}/${it.planned}</button>`:`<span class="wp-item-n static">${it.done}/${it.planned}</span>`):'')+
+                ((canEdit&&d<5&&!it.fin)?`<button class="wp-item-next" onclick="event.stopPropagation();wpMoveItemNextDay('${ed}',${d},${ix})" title="${it.planned>1&&it.done>0?'Move what is left to the next day':'Move to the next day'}">${vicon('send',12)}</button>`:'')+
+              `</div>`+
+              (picking?`<div class="wp-cnt-pick" onclick="event.stopPropagation()"><span class="wp-cnt-lbl">done</span>${Array.from({length:it.planned+1},function(_,k){return `<button class="${k===it.done?'on':''}" onclick="event.stopPropagation();wpSetCount('${ed}',${d},${ix},${k})">${k}</button>`}).join('')}</div>`:'');
             }).join('')}</div>
             ${!isEmpty?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;flex-wrap:wrap;gap:4px">
               <span class="wp-status-pill ${sPill[status]||sPill.pending}">${sLabel[status]||sLabel.pending}</span>
-              ${vidCount>0?`<span class="wp-cell-count">${vidCount} vid${vidCount!==1?'s':''}</span>`:''}
+              ${vidPlan>0?`<span class="wp-cell-count">${vidDone}<span class="wp-of">/${vidPlan}</span> edited</span>`:''}${cutDone>0?`<span class="wp-cell-count">${cutDone} cut</span>`:''}
             </div>`:''}
           </td>`;
         }).join('')}
+        ${(function(){const Pp=WS.per[ed]||{};return `<td class="wp-week-cell">
+          <div class="wp-wk-big">${Pp.vidPlan?`${Pp.vidDone}<span class="wp-of">/${Pp.vidPlan}</span>`:(Pp.cutPlan?`${Pp.cutDone}<span class="wp-of">/${Pp.cutPlan} cut</span>`:(Pp.shoots?`${Pp.shoots}<span class="wp-of"> shoot${Pp.shoots===1?'':'s'}</span>`:'<span class="wp-of">&mdash;</span>'))}</div>
+          <div class="wp-wk-sub">${Pp.cutDone?`${Pp.cutDone} cut`:''}${Pp.cutDone&&Pp.shoots?' &middot; ':''}${Pp.shoots?`${Pp.shoots} shoot${Pp.shoots===1?'':'s'}`:''}${(!Pp.cutDone&&!Pp.shoots)?'&nbsp;':''}</div>
+          ${Pp.behind?`<div class="wp-wk-behind">${Pp.behind} behind</div>`:''}
+        </td>`})()}
       </tr>`).join('')}
     </tbody>
     <tfoot>
       <tr class="wp-total-row">
-        <td class="wp-editor-name" style="color:var(--accent);font-size:11px">TOTAL VIDEOS</td>
-        ${dayTotals.map(t=>`<td class="wp-total-cell">${t>0?`<span style="font-size:15px;font-weight:800;color:var(--accent)">${t}</span>`:'—'}</td>`).join('')}
+        <td class="wp-editor-name" style="color:var(--accent);font-size:11px">EDITED<div class="wp-tot-sub">done / planned</div></td>
+        ${[1,2,3,4,5].map(d=>{const D=WS.day[d];return `<td class="wp-total-cell">${D.vidPlan>0?`<span class="wp-tot-big">${D.vidDone}</span><span class="wp-of">/${D.vidPlan}</span>`:'—'}</td>`}).join('')}
+        <td class="wp-total-cell wp-week-cell"><span class="wp-tot-big">${WS.week.vidDone}</span><span class="wp-of">/${WS.week.vidPlan}</span></td>
+      </tr>
+      <tr class="wp-total-row wp-total-cut">
+        <td class="wp-editor-name" style="color:var(--text-2);font-size:11px">CUT &amp; GRADED</td>
+        ${[1,2,3,4,5].map(d=>{const D=WS.day[d];return `<td class="wp-total-cell">${D.cutPlan>0?`<span class="wp-tot-big cut">${D.cutDone}</span><span class="wp-of">/${D.cutPlan}</span>`:'—'}</td>`}).join('')}
+        <td class="wp-total-cell wp-week-cell">${WS.week.cutPlan?`<span class="wp-tot-big cut">${WS.week.cutDone}</span><span class="wp-of">/${WS.week.cutPlan}</span>`:'&mdash;'}</td>
       </tr>
       <tr class="wp-grand-total-row">
-        <td colspan="6" style="text-align:right;padding:12px 20px;font-size:13px;font-weight:700;color:var(--accent)">
-          TOTAL VIDEOS THIS WEEK: <span style="font-size:18px;font-weight:900">${grandTotal}</span>
+        <td colspan="7" style="text-align:right;padding:12px 20px;font-size:13px;font-weight:700;color:var(--accent)">
+          EDITED THIS WEEK <span style="font-size:18px;font-weight:900">${WS.week.vidDone}</span><span class="wp-of" style="font-size:13px"> of ${WS.week.vidPlan}</span>
+          <span style="color:var(--text-3);margin:0 10px">&middot;</span>
+          <span style="color:var(--text-2)">CUT &amp; GRADED <span style="font-size:18px;font-weight:900;color:var(--text)">${WS.week.cutDone}</span><span class="wp-of" style="font-size:13px"> of ${WS.week.cutPlan}</span></span>
         </td>
       </tr>
     </tfoot>
   </table></div>${summaryHtml}`;
 }
 
+/* THE WEEK IN ONE GLANCE. For the people who run the department, not the
+   people doing the work: what was planned, what is done, what has slipped,
+   and who is carrying it. Every figure is from wpWeekStats. */
+function wpStripHtml(WS,visible){
+  if(!isAdmin())return '';
+  const W=WS.week;
+  const names=(visible||WP_EDITORS).filter(function(ed){const p=WS.per[ed];return p&&(p.vidPlan||p.cutPlan||p.shoots||p.open)});
+  const chips=names.map(function(ed){const p=WS.per[ed];
+    const bits=[];
+    if(p.vidPlan)bits.push(`<b>${p.vidDone}</b>/${p.vidPlan}`);
+    if(p.cutPlan)bits.push(`<b>${p.cutDone}</b>/${p.cutPlan} cut`);
+    if(p.shoots)bits.push(`${p.shoots} shoot${p.shoots===1?'':'s'}`);
+    return `<span class="wp-chip${p.behind?' behind':''}"><span class="wp-chip-nm">${esc(ed)}</span>${bits.join(' &middot; ')||'&mdash;'}${p.behind?`<span class="wp-chip-b">${p.behind} behind</span>`:''}</span>`;
+  }).join('');
+  const pct=W.vidPlan?Math.round(W.vidDone/W.vidPlan*100):0;
+  return `<div class="wp-strip">
+    <div class="wp-strip-main">
+      <div class="wp-strip-kpi"><div class="wp-strip-n">${W.vidDone}${W.vidPlan?`<span class="wp-of"> of ${W.vidPlan}</span>`:''}</div><div class="wp-strip-l">videos edited${W.vidPlan?` &middot; ${pct}%`:''}</div></div>
+      <div class="wp-strip-kpi"><div class="wp-strip-n">${W.cutDone}${W.cutPlan?`<span class="wp-of"> of ${W.cutPlan}</span>`:''}</div><div class="wp-strip-l">cut &amp; graded${W.cutPlan?'':' <span class="wp-of">(write the count in brackets)</span>'}</div></div>
+      <div class="wp-strip-kpi"><div class="wp-strip-n">${W.shoots}</div><div class="wp-strip-l">shoot${W.shoots===1?'':'s'}</div></div>
+      <div class="wp-strip-kpi${W.behind?' bad':''}"><div class="wp-strip-n">${W.behind}</div><div class="wp-strip-l">behind</div></div>
+    </div>
+    ${chips?`<div class="wp-strip-people">${chips}</div>`:''}
+  </div>`;
+}
+let _wpPick=null;
+function wpPickCount(editor,day,idx){
+  const key=editor+'-'+day+'-'+idx;
+  _wpPick=(_wpPick===key)?null:key;
+  wpGridRender();
+}
+async function wpSetCount(editor,day,idx,nv){
+  const cell=_wpCells[editor+'-'+day];if(!cell)return;
+  const items=wpItems(cell.content);
+  if(!items[idx])return;
+  items[idx].done=Math.max(0,Math.min(items[idx].planned,parseInt(nv)||0));
+  items[idx].fin=items[idx].done>=items[idx].planned;
+  _wpPick=null;
+  try{
+    await wpSaveCellRaw(editor,day,items,wpStatusFromItems(items,cell.status));
+    wpGridRender();
+  }catch(err){toast('Could not save','error');if(window.bbReportDbError)window.bbReportDbError('weekly_plan_cells','count',err);}
+}
+window.wpPickCount=wpPickCount;window.wpSetCount=wpSetCount;
 function wpCellEdit(editor,day){
   if(!wpCanEdit())return;
   const cell=_wpCells[editor+'-'+day]||{};
@@ -4127,8 +4289,8 @@ function wpCellEdit(editor,day){
       </div>
       <div class="modal-body">
         <div style="margin-bottom:16px">
-          <label class="field-label">Tasks <span style="font-size:10px;color:var(--text-3);font-weight:400">(one per line · numbers auto-counted · e.g. "3 REELS" or "NOTHING")</span></label>
-          <textarea class="field-textarea" id="wpCellContent" rows="6" placeholder="e.g.&#10;3 REELS&#10;1 VIDEO EDIT&#10;SHOOT GEM">${esc(content)}</textarea>
+          <label class="field-label">Work, one line each <span style="font-size:10px;color:var(--text-3);font-weight:400">&middot; "3 CF" is three Cherry Fish videos &middot; "CUT &amp; GRADE AM (5)" is cutting &middot; "AM SHOOT" is a shoot</span></label>
+          <textarea class="field-textarea" id="wpCellContent" rows="6" placeholder="e.g.&#10;3 CF&#10;1 LEON&#10;CUT &amp; GRADE AM (5)">${esc(content)}</textarea>
         </div>
         <div>
           <label class="field-label" style="margin-bottom:8px;display:block">Status</label>
@@ -4184,7 +4346,12 @@ async function wpCarryAct(id,action,silent){
     }else if(action==='move'){
       const ws=_wpKeyInUse||localDateStr(wpWeekStart);
       const target=_wpCells[c.editor_name+'-'+c.day_of_week];
-      const text=String(c.content||'').trim();
+      /* Only what is unfinished comes forward, and a part-done line comes
+         forward as its remainder: "3 CF" with 2 done carries as "1 CF". Done
+         lines stay in last week where they belong. */
+      const text=wpItems(c.content).filter(function(it){return !it.fin})
+        .map(function(it){return (it.planned>1&&it.done>0)?wpSetNumber(it.text,it.planned-it.done):it.text}).join('\n').trim();
+      if(!text){await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'DELETE',headers});if(!silent){toast('Nothing left to move','success');await wpGridLoad();}return;}
       if(target){
         const merged=String(target.content||'').trim();
         await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${target.id}`,{method:'PATCH',headers,
@@ -4241,7 +4408,10 @@ async function wpToggleItem(editor,day,idx){
   const cell=_wpCells[editor+'-'+day];if(!cell)return;
   const items=wpItems(cell.content);
   if(!items[idx])return;
-  items[idx].done=!items[idx].done;
+  /* A tap on the box is all-or-nothing, which is the common case. A part count
+     is set from the chip. */
+  items[idx].done=items[idx].fin?0:items[idx].planned;
+  items[idx].fin=items[idx].done>=items[idx].planned;
   const status=wpStatusFromItems(items,cell.status);
   try{
     await wpSaveCellRaw(editor,day,items,status);
@@ -4256,10 +4426,16 @@ async function wpMoveItemNextDay(editor,day,idx){
   const cell=_wpCells[editor+'-'+day];if(!cell)return;
   const items=wpItems(cell.content);
   const moving=items[idx];if(!moving)return;
-  const rest=items.filter(function(_,i){return i!==idx});
+  /* MOVE WHAT IS LEFT. "3 CF" with 2 done stays here as "[x] 2 CF" and "1 CF"
+     goes to tomorrow. A line with nothing done moves whole, as before. */
+  const remainder=moving.planned-moving.done;
+  const partial=moving.planned>1&&moving.done>0&&remainder>0;
+  const rest=partial
+    ?items.map(function(it,i){if(i!==idx)return it;const t=wpSetNumber(it.text,it.done);return {text:t,done:it.done,planned:it.done,fin:true};})
+    :items.filter(function(_,i){return i!==idx});
   const nextCell=_wpCells[editor+'-'+(day+1)];
   const nextItems=nextCell?wpItems(nextCell.content):[];
-  nextItems.push({done:false,text:moving.text});
+  nextItems.push({done:0,text:partial?wpSetNumber(moving.text,remainder):moving.text,planned:partial?remainder:moving.planned,fin:false});
   try{
     await wpSaveCellRaw(editor,day+1,nextItems,wpStatusFromItems(nextItems,nextCell&&nextCell.status));
     await wpSaveCellRaw(editor,day,rest,wpStatusFromItems(rest,cell.status));
@@ -6148,6 +6324,48 @@ async function runSelfTest(){
    ok('Routing: every alert points at a stage that exists',!!AS&&bad.length===0,
       !AS?'AGENT_STAGE is not published, this check cannot see it'
          :(bad.length?('these point nowhere: '+bad.join(', ')):(named.length+' alerts routed')));
+  })();
+
+  /* ── H16 · the Weekly Plan adds up ───────────────────────────────────── */
+  (function(){
+   /* THE REGRESSION. The tick boxes (L-VID-015) prefixed done lines with
+      "[x] ", and the counter read the raw text and wanted a leading digit, so
+      every ticked line left the total. The week read 2 where the cells held
+      about 21. This is the exact line that was miscounted. */
+   const t1=wpItems('[x] 3 LEON')[0];
+   ok('Plan: a ticked line still counts',t1&&t1.kind==='video'&&t1.planned===3&&t1.done===3&&t1.fin===true,
+      t1?('"[x] 3 LEON" reads '+t1.kind+' '+t1.done+'/'+t1.planned):'no item');
+   /* Half the history writes the number AFTER the client. It counted zero. */
+   const t2=wpItems('SO 1\nLEON 8\n[x] CCT 3');
+   ok('Plan: a number after the client counts',t2.length===3&&t2[0].planned===1&&t2[1].planned===8&&t2[2].done===3,
+      t2.map(function(i){return i.text+'='+i.done+'/'+i.planned}).join(', '));
+   /* Brackets are the cutting convention. Ten sorted clips are not ten videos. */
+   const t3=wpItems('sort SO clips (10)\nCUT & GRADE CCT (6)\nAM SHOOT\nCOMPLETE ALL PENDING WORK');
+   ok('Plan: brackets belong to cutting, shoots and tasks count no videos',
+      t3[0].kind==='task'&&t3[1].kind==='cut'&&t3[1].n===6&&t3[2].kind==='shoot'&&t3[3].kind==='task',
+      t3.map(function(i){return i.kind+(i.n!=null?'('+i.n+')':'')}).join(', '));
+   /* Part done must survive a save and a reload byte for byte. */
+   const src='[2/3] 3 CF\n[x] 1 LEON\n2 AM';
+   const rt=wpItemsToText(wpItems(src));
+   ok('Plan: a part-done line round-trips',rt===src,JSON.stringify(rt));
+   /* Moving the remainder is arithmetic on the text. */
+   const m=[wpSetNumber('3 CF',2),wpSetNumber('LEON 8',5),wpSetNumber('CUT & GRADE CCT (6)',4),wpSetNumber('TT MOBILE',9)];
+   ok('Plan: the remainder keeps the number where it was written',
+      m[0]==='2 CF'&&m[1]==='LEON 5'&&m[2]==='CUT & GRADE CCT (4)'&&m[3]==='TT MOBILE',m.join(' | '));
+   /* NUMBER LOCK. The week is the sum of the days. It must also be the sum of
+      the people, or the footer and the WEEK column would disagree. */
+   if(typeof wpWeekStats==='function'&&wpWeekStart){
+     const WS=wpWeekStats();
+     const byDay=[1,2,3,4,5].reduce(function(t,d){return t+WS.day[d].vidDone},0);
+     const byPerson=Object.keys(WS.per).reduce(function(t,k){return t+WS.per[k].vidDone},0);
+     const cells=Object.keys(_wpCells||{}).length;
+     ok('Plan: the week total is the sum of the days and of the people',
+        WS.week.vidDone===byDay&&byDay===byPerson,
+        'week '+WS.week.vidDone+' = days '+byDay+' = people '+byPerson+' over '+cells+' cells'+(cells?'':' (NO CELLS LOADED, this proved only that 0=0)'));
+   }
+   ok('Routing: a #weeklyplan link opens the Weekly Plan',
+      typeof bbHashPage==='function'&&bbHashPage('#weeklyplan')==='weeklyplan'&&bbHashPage('#nonsense')===null&&bbHashPage('')===null,
+      'alerts deep-link to the plan');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

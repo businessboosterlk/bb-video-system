@@ -979,3 +979,81 @@ PASS after.** A check nobody has watched fail is not a check.
 
 **Also cleaned:** all five agent names carried a leading space or a stray
 `️` where an emoji was stripped, so they rendered as " Editing Stall".
+
+---
+
+## L-VID-024 · the total counted the wrong thing, and my own fix made it worse
+
+**Reported** 2026-09-04 by Thulaib: the Weekly Plan footer should show videos
+completed per day and for the week, and it should show cutting. The footer read
+**TOTAL VIDEOS THIS WEEK: 2**. Adding the cells by hand gives **22 of 23**.
+
+**Two faults in `wpCountVideos`, one of them mine.**
+
+| | What it did |
+|---|---|
+| 1 (mine, L-VID-015) | It read the RAW cell text. The tick boxes prefix every done line with `[x] `, and a line starting with `[x]` does not start with a digit. **The moment a line was ticked it left the total.** Done work counted zero; unticked work counted. The number was "planned and not yet done", labelled as the opposite |
+| 2 (older) | It only read a LEADING number. Half the history is written the other way: `SO 1`, `LEON 8`, `CCT 3`, `AM 2`. All of it counted zero, for months |
+
+Nobody could have said what the footer measured. It was wrong in both
+directions at once, which is why it never looked wrong enough to report.
+
+**Why my fix caused it.** L-VID-015 changed the STORAGE format (a prefix on the
+line) and updated every reader I knew about. The counter read the raw string,
+not the parsed items, so it was not on my list of readers. **A format change is
+not done when the writers are updated. It is done when every READER goes
+through the parser.** `grep` for the column name, not the function name.
+
+**The grammar now**, one parser (`wpLineKind` + `wpItems`), every reader on it:
+
+```
+3 CF                 video, planned 3, done 0
+[2/3] 3 CF           video, planned 3, done 2        (new: part done)
+[x] 3 CF             video, planned 3, done 3
+LEON 8               video, number after the code counts too
+CUT & GRADE CCT (6)  cutting 6, brackets belong to cutting
+AM SHOOT             a shoot, no video count
+COMPLETE ALL PENDING WORK   a task, no video count
+sort SO clips (10)   a task: a bracketed number is NEVER videos
+```
+
+**One source of numbers.** `wpWeekStats()` feeds the footer, the WEEK column
+and the strip. The week is the sum of the days, and the harness asserts it is
+also the sum of the people (bb-number-lock). Live on 31 Aug: week 22 = days 22 =
+people 22 over 23 cells.
+
+**Part done.** "We gave Rajeewa three Cherry Fish, he did two, one had to
+pass." Tap the `0/3` chip, pick 2. The move arrow moves WHAT IS LEFT: today
+keeps `[x] 2 CF`, tomorrow gets `1 CF`. The Monday carry-over does the same.
+The number stays where the person wrote it: `LEON 8` done 5 carries as `LEON 3`.
+
+**Alerts.** A DB trigger (`bb_notify_on_plan`) queues a push when somebody ELSE
+adds work to a person's day. A tick, a `[2/3]` mark and a number going DOWN stay
+silent; a number going UP alerts as `+2 CF`. Five days filled in a row fold into
+one alert. **Proven inside a rolled-back block** (six steps, one queue row, body
+`THULAIB added to your Friday: 3 CF · Friday: +2 CF · Friday: CUT AND GRADE AM`).
+
+**The trigger's own bug, caught by that proof.** The first version declared a
+plpgsql variable named `body`, the same as the queue column. Inside the debounce
+UPDATE Postgres raised an ambiguity error, and the `exception when others`
+handler ate it. The first alert was created and every later addition was
+silently dropped. **A "fail silently" handler hides exactly the bug you most
+need to see. Never name a variable after a column in the same function, and
+never trust a trigger you have not watched fold.**
+
+**Why nobody gets these alerts yet.** RAJEEWA, RAMANI, BAVITH and KAVISH have
+**zero phones registered**. Every push to them this week logged `no phone
+registered`. The pipeline itself works: NIRVANA 20 of 20 delivered. The step
+that is missing is human: install the app, tap "Alerts off, tap to turn on".
+
+**Checks (H16).** The exact regression line `[x] 3 LEON` still counts; a
+trailing number counts; brackets, shoots and tasks count no videos; a part-done
+line round-trips byte for byte; the remainder keeps its number where written;
+week = days = people; `#weeklyplan` deep-links to the plan.
+
+**Deliberately NOT taken:** the SMM Workspace's one-row-per-task table and the
+`bb_week` spine. Both are the "right" shape, both orphan 109 weeks of history
+plus the carry-over and cutting tracker, and `bb_week` is authenticated-only
+while this app reads as anon (0 video rows since 3 Aug: the spine is dead for
+video). The text model with a progress prefix keeps every row ever written
+readable in the database and parseable in the app.
