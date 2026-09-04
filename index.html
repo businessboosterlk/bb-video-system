@@ -6581,3 +6581,76 @@ var BBPUSH=(function(){
 })();
 </script>
 <!-- @@BB_PUSH_END@@ -->
+<!-- @@BB_SETTINGS_BEGIN@@ -->
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   BB SETTINGS (hub build 2026-09-04). Identical sheet in every BB app.
+   One place a person goes to: turn alerts on, send themselves a test, see
+   whether the app is installed, reload to the latest build, sign out.
+   It is injected into each app's own navigation by cloning the last real
+   nav item, so it inherits that app's look without a line of app CSS.
+   ════════════════════════════════════════════════════════════════════════ */
+var BBSET=(function(){
+  var APP_LABEL='Video System', ACCENT='#a855f7';
+  var GEAR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  var sheet=null, back=null;
+  function standalone(){ return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
+  function isIOS(){ return /iPhone|iPad|iPod/.test(navigator.userAgent); }
+  function logoutFn(){ return (typeof logout==='function')?logout:(typeof signOut==='function')?signOut:null; }
+  function row(label, value){ return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border,#2a2d35);font-size:13px"><span style="color:var(--text3,#9aa3ad)">'+label+'</span><span style="font-weight:700;text-align:right">'+value+'</span></div>'; }
+  function btn(label, onclick, primary){ return '<button type="button" onclick="'+onclick+'" style="border:'+(primary?'0':'1px solid var(--border,#2a2d35)')+';border-radius:10px;padding:10px 14px;font-weight:800;font-size:12px;cursor:pointer;background:'+(primary?ACCENT:'transparent')+';color:'+(primary?'#0b1014':'var(--text,#fff)')+';font-family:inherit">'+label+'</button>'; }
+  function card(title, body){ return '<div style="background:var(--bg3,#15171c);border:1px solid var(--border,#2a2d35);border-radius:14px;padding:14px 16px;margin-bottom:12px"><div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:'+ACCENT+';margin-bottom:6px">'+title+'</div>'+body+'</div>'; }
+  function render(){
+    var st=(typeof BBPUSH!=='undefined'&&BBPUSH.status)?BBPUSH.status():{};
+    var alertsLine = st.registered ? 'On for this phone' : (st.permission==='denied' ? 'Blocked in phone Settings' : (st.ios&&!st.standalone ? 'Needs Home Screen install' : 'Off'));
+    var alertsBtns = st.registered ? btn('Send a test alert','BBSET.test()',true) : (st.ios&&!st.standalone ? '' : btn('Turn on alerts','BBSET.enable()',true));
+    var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div><div style="font-size:18px;font-weight:800">Settings</div><div style="font-size:11px;color:var(--text3,#9aa3ad)">'+APP_LABEL+'</div></div><button type="button" onclick="BBSET.close()" aria-label="Close" style="border:0;background:transparent;color:inherit;font-size:22px;cursor:pointer;padding:4px 8px">×</button></div>';
+    html+=card('Phone alerts', row('Status',alertsLine)+row('Quiet hours','9pm to 7am, held until 7am')+'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'+alertsBtns+'</div>'+(st.lastError?'<div style="margin-top:8px;font-size:11px;color:#f87171">'+st.lastError+'</div>':''));
+    html+=card('Installed as an app', row('This device', standalone()?'Yes':'No, running in the browser')+(!standalone()?'<div style="margin-top:8px;font-size:12px;color:var(--text3,#9aa3ad)">'+(isIOS()?'Share, then Add to Home Screen. Alerts only work from the installed app.':'Use your browser menu, then Add to Home screen.')+'</div>':''));
+    html+=card('Account', row('Signed in as', st.user||'Not signed in')+(logoutFn()?'<div style="margin-top:12px">'+btn('Sign out','BBSET.signout()',false)+'</div>':''));
+    html+=card('App', row('Build', document.lastModified||'')+'<div style="margin-top:12px">'+btn('Reload latest version','BBSET.reload()',false)+'</div>');
+    sheet.innerHTML=html;
+  }
+  function open(){
+    if(!sheet){
+      back=document.createElement('div'); back.id='bbset-back'; back.onclick=close;
+      back.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)';
+      sheet=document.createElement('div'); sheet.id='bbset-sheet'; sheet.setAttribute('role','dialog'); sheet.setAttribute('aria-label','Settings');
+      sheet.style.cssText='position:fixed;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;overscroll-behavior:contain;z-index:100001;background:var(--bg2,#101216);color:var(--text,#fff);border-radius:18px 18px 0 0;padding:16px 16px calc(var(--sab,0px) + 20px);box-shadow:0 -12px 40px rgba(0,0,0,.5);font-family:inherit';
+      var mq=window.matchMedia&&window.matchMedia('(min-width: 861px)');
+      if(mq&&mq.matches){ sheet.style.cssText+=';left:auto;right:24px;bottom:auto;top:calc(var(--sat,0px) + 24px);width:380px;border-radius:18px'; }
+      document.body.appendChild(back); document.body.appendChild(sheet);
+    }
+    render(); back.style.display='block'; sheet.style.display='block';
+  }
+  function close(){ if(sheet){ sheet.style.display='none'; back.style.display='none'; } }
+  async function enable(){ try{ await BBPUSH.enable(); }catch(e){} render(); }
+  async function test(){ try{ var r=await BBPUSH.test(); alert(r&&r.sent?'Test sent. Check your phone.':'Nothing sent: '+(r&&r.error||'no phone registered')); }catch(e){ alert('Test failed: '+(e&&e.message||e)); } }
+  function signout(){ var f=logoutFn(); close(); if(f) f(); }
+  async function reload(){
+    try{ if('serviceWorker' in navigator){ var rs=await navigator.serviceWorker.getRegistrations(); for(var i=0;i<rs.length;i++) await rs[i].unregister(); } if(window.caches){ var ks=await caches.keys(); for(var j=0;j<ks.length;j++) await caches.delete(ks[j]); } }catch(e){}
+    location.reload();
+  }
+  /* Put "Settings" into this app's own navigation by cloning its last nav
+     item, so it looks native. The clone loses its data attributes and id,
+     gets the gear and the label, and opens the sheet. */
+  function inject(){
+    if(document.getElementById('bbset-nav')) return true;
+    var items=document.querySelectorAll('.sidebar-nav .nav-item');
+    var host=null;
+    if(items.length){ var last=items[items.length-1]; var el=last.cloneNode(true); el.id='bbset-nav'; el.removeAttribute('data-page'); el.removeAttribute('onclick'); el.classList.remove('active');
+      var svg=el.querySelector('svg'); if(svg){ svg.outerHTML=GEAR; }
+      var textNodes=[]; (function walk(n){ for(var i=0;i<n.childNodes.length;i++){ var c=n.childNodes[i]; if(c.nodeType===3&&c.textContent.trim()) textNodes.push(c); else if(c.nodeType===1&&c.tagName!=='svg') walk(c); } })(el);
+      if(textNodes.length){ textNodes[0].textContent='Settings'; for(var k=1;k<textNodes.length;k++) textNodes[k].textContent=''; } else { el.appendChild(document.createTextNode('Settings')); }
+      el.onclick=function(ev){ ev.preventDefault(); open(); };
+      last.parentNode.appendChild(el); return true; }
+    host=document.querySelector('.sidebar-footer');
+    if(host){ var d=document.createElement('div'); d.id='bbset-nav'; d.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;color:var(--text3,#9aa3ad);font-size:13px;font-weight:600'; d.innerHTML=GEAR+'<span>Settings</span>'; d.onclick=open; host.insertBefore(d, host.firstChild); return true; }
+    return false;
+  }
+  var tries=0; function boot(){ if(!inject() && tries++<60) setTimeout(boot,2000); }
+  window.addEventListener('load',function(){ setTimeout(boot,1500); });
+  return { open:open, close:close, enable:enable, test:test, signout:signout, reload:reload, inject:inject };
+})();
+</script>
+<!-- @@BB_SETTINGS_END@@ -->
