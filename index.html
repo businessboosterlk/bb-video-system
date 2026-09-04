@@ -6494,6 +6494,15 @@ var BBPUSH=(function(){
   function standalone(){ return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
   function supported(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
   function b64ToU8(b){ var p='='.repeat((4-b.length%4)%4); var s=(b+p).replace(/-/g,'+').replace(/_/g,'/'); var r=atob(s); var a=new Uint8Array(r.length); for(var i=0;i<r.length;i++) a[i]=r.charCodeAt(i); return a; }
+  function withTimeout(p,ms,what){ return Promise.race([p, new Promise(function(_,rej){ setTimeout(function(){ rej(new Error(what+' timed out after '+(ms/1000)+'s')); },ms); })]); }
+  async function swReady(ms){
+    ms=ms||15000;
+    var reg=await withTimeout(navigator.serviceWorker.getRegistration(), 5000, 'service worker lookup');
+    if(!reg){ reg=await withTimeout(navigator.serviceWorker.register('./sw.js'), 8000, 'service worker install'); }
+    var t0=Date.now();
+    while(!reg.active){ if(Date.now()-t0>ms) throw new Error('service worker never became active'); await new Promise(function(r){ setTimeout(r,250); }); }
+    return reg;
+  }
   async function resolveMember(){
     if(memberId) return memberId;
     var n=name(); if(!n) return null;
@@ -6501,13 +6510,13 @@ var BBPUSH=(function(){
     var d=await r.json(); memberId=(d&&d[0]&&d[0].id)||null; return memberId;
   }
   async function subscribe(){
-    var reg=await navigator.serviceWorker.ready;
-    var kr=await fetch(FN+'?action=public-key'); var k=(await kr.json()).publicKey;
+    var reg=await swReady(15000);
+    var kr=await withTimeout(fetch(FN+'?action=public-key'), 10000, 'key fetch'); var k=(await kr.json()).publicKey;
     var sub=await reg.pushManager.getSubscription();
-    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k)});
+    if(!sub) sub=await withTimeout(reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k)}), 15000, 'phone subscription');
     var m=await resolveMember(); if(!m) throw new Error('no active team member row named '+name());
     var j=sub.toJSON();
-    var res=await fetch(FN+'?action=subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team_member_id:m,app:APP,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,ua:navigator.userAgent})});
+    var res=await withTimeout(fetch(FN+'?action=subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team_member_id:m,app:APP,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,ua:navigator.userAgent})}), 10000, 'server registration');
     var out=await res.json(); if(!res.ok) throw new Error(out.error||'subscribe failed');
     try{ localStorage.setItem('bbpush_ok_'+APP,String(Date.now())); }catch(e){}
     return out;
@@ -6570,16 +6579,18 @@ var BBPUSH=(function(){
     else if(lastError){ pillEl.textContent='Alerts failed · tap to retry'; }
     else { pillEl.textContent='Alerts off · tap to turn on'; }
   }
-  async function diagnose(){
-    var L=[]; function add(s,ok,d){ L.push((ok?'PASS ':'FAIL ')+s+(d?': '+d:'')); }
-    try{ add('Push supported by this browser', supported(), supported()?'':'open from the Home Screen icon on iPhone'); }catch(e){ add('Push supported',false,String(e)); }
+  async function diagnose(onLine){
+    var L=[]; function add(s,ok,d){ var line=(ok?'PASS ':'FAIL ')+s+(d?': '+d:''); L.push(line); try{ if(onLine) onLine(L.slice()); }catch(e){} }
+    add('Push supported by this browser', supported(), supported()?'':'on iPhone, open from the Home Screen icon');
     add('Running as installed app', standalone(), standalone()?'':'browser tab');
     add('Signed in as', !!name(), name()||'nobody yet');
-    try{ var m=await resolveMember(); add('Team record found', !!m, m?('id '+m):('no active team member named '+name())); }catch(e){ add('Team record lookup',false,String(e&&e.message||e)); }
-    try{ var reg=await Promise.race([navigator.serviceWorker.ready, new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timed out after 8s')); },8000); })]); add('Service worker ready', !!reg, reg&&reg.scope); }catch(e){ add('Service worker ready',false,String(e&&e.message||e)); }
-    try{ var kr=await fetch(FN+'?action=public-key'); var k=await kr.json(); add('Server key fetched', !!k.publicKey, k.publicKey?(k.publicKey.length+' chars'):JSON.stringify(k)); }catch(e){ add('Server key fetched',false,String(e&&e.message||e)); }
+    try{ var m=await withTimeout(resolveMember(), 10000, 'lookup'); add('Team record found', !!m, m?('id '+m):('no active team member named '+name())); }catch(e){ add('Team record found',false,String(e&&e.message||e)); }
+    var reg=null;
+    try{ reg=await swReady(12000); add('Service worker active', true, reg.scope); }catch(e){ add('Service worker active',false,String(e&&e.message||e)); }
+    try{ var k=await withTimeout(fetch(FN+'?action=public-key').then(function(r){ return r.json(); }), 10000, 'key fetch'); add('Server key fetched', !!k.publicKey, k.publicKey?(k.publicKey.length+' chars'):JSON.stringify(k)); }catch(e){ add('Server key fetched',false,String(e&&e.message||e)); }
     add('Notification permission', ('Notification' in window)&&Notification.permission==='granted', ('Notification' in window)?Notification.permission:'API absent');
-    try{ var r2=await navigator.serviceWorker.ready; var sub=await r2.pushManager.getSubscription(); add('Phone subscription exists', !!sub, sub?(sub.endpoint.slice(0,40)+'…'):'none yet'); }catch(e){ add('Phone subscription',false,String(e&&e.message||e)); }
+    if(reg){ try{ var sub=await withTimeout(reg.pushManager.getSubscription(), 5000, 'subscription check'); add('Phone subscription exists', !!sub, sub?(sub.endpoint.slice(0,40)+'…'):'none yet'); }catch(e){ add('Phone subscription exists',false,String(e&&e.message||e)); } }
+    else add('Phone subscription exists', false, 'no service worker');
     add('Registered with server', registered, lastError||'');
     return L;
   }
@@ -6639,7 +6650,7 @@ var BBSET=(function(){
   function close(){ if(sheet){ sheet.style.display='none'; back.style.display='none'; } }
   async function enable(){ try{ await BBPUSH.enable(); }catch(e){} render(); }
   async function test(){ try{ var r=await BBPUSH.test(); alert(r&&r.sent?'Test sent. Check your phone.':'Nothing sent: '+(r&&r.error||'no phone registered')); }catch(e){ alert('Test failed: '+(e&&e.message||e)); } }
-  async function diag(){ var el=document.getElementById('bbset-diag'); if(!el) return; el.style.display='block'; el.textContent='Checking'; try{ var L=await BBPUSH.diagnose(); el.textContent=L.join('\n'); }catch(e){ el.textContent='Diagnostics failed: '+(e&&e.message||e); } }
+  async function diag(){ var el=document.getElementById('bbset-diag'); if(!el) return; el.style.display='block'; el.textContent='Checking, one line per step'; try{ var L=await BBPUSH.diagnose(function(lines){ el.textContent=lines.join('\n')+'\n…'; }); el.textContent=L.join('\n'); }catch(e){ el.textContent='Diagnostics failed: '+(e&&e.message||e); } }
   function signout(){ var f=logoutFn(); close(); if(f) f(); }
   async function reload(){
     try{ if('serviceWorker' in navigator){ var rs=await navigator.serviceWorker.getRegistrations(); for(var i=0;i<rs.length;i++) await rs[i].unregister(); } if(window.caches){ var ks=await caches.keys(); for(var j=0;j<ks.length;j++) await caches.delete(ks[j]); } }catch(e){}
