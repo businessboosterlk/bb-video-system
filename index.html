@@ -6463,3 +6463,99 @@ if('serviceWorker' in navigator){
     : init();
 }());
 </script>
+<!-- @@BB_PUSH_BEGIN@@ -->
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   BB PUSH CLIENT (hub build 2026-09-04). Identical block in every BB app.
+   Turns this installed app into something that can be alerted when work
+   moves: the person taps "Turn on alerts" once, the phone's push address is
+   registered against their team_members row through the bb-push edge
+   function, and from then on the database trigger + queue + sender do the
+   rest with no code in this page involved.
+
+   THREE RULES THAT ARE NOT PREFERENCES
+   1. Permission is asked ONLY after a tap. A page that asks on load gets
+      denied, and a denial is permanent on iPhone.
+   2. On iPhone, push works ONLY when the app is on the Home Screen. A Safari
+      tab gets nothing, ever. So the first thing this shows on iOS-in-a-tab is
+      the install hint, not the permission button.
+   3. This page never reads a push endpoint back. It writes its own and that
+      is all. Endpoints are addresses for other people's phones.
+   Console: BBPUSH.status()  BBPUSH.enable()  BBPUSH.test()
+   ════════════════════════════════════════════════════════════════════════ */
+var BBPUSH=(function(){
+  var APP='video-system';
+  var FN='https://yyviiwnqgphyklcoijyd.supabase.co/functions/v1/bb-push';
+  function name(){ try{ var n=(typeof currentUser!=='undefined'&&currentUser&&currentUser.name); return n?String(n):''; }catch(e){ return ''; } }
+  function sbUrl(){ return SUPABASE_URL; }
+  function sbKey(){ return SUPABASE_ANON_KEY; }
+  var memberId=null, banner=null, tries=0;
+  function isIOS(){ return /iPhone|iPad|iPod/.test(navigator.userAgent); }
+  function standalone(){ return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
+  function supported(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function b64ToU8(b){ var p='='.repeat((4-b.length%4)%4); var s=(b+p).replace(/-/g,'+').replace(/_/g,'/'); var r=atob(s); var a=new Uint8Array(r.length); for(var i=0;i<r.length;i++) a[i]=r.charCodeAt(i); return a; }
+  async function resolveMember(){
+    if(memberId) return memberId;
+    var n=name(); if(!n) return null;
+    var r=await fetch(sbUrl()+'/rest/v1/team_members?select=id&active=eq.true&name=ilike.'+encodeURIComponent(n)+'&limit=1',{headers:{apikey:sbKey(),Authorization:'Bearer '+sbKey()}});
+    var d=await r.json(); memberId=(d&&d[0]&&d[0].id)||null; return memberId;
+  }
+  async function subscribe(){
+    var reg=await navigator.serviceWorker.ready;
+    var kr=await fetch(FN+'?action=public-key'); var k=(await kr.json()).publicKey;
+    var sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k)});
+    var m=await resolveMember(); if(!m) throw new Error('no active team member row named '+name());
+    var j=sub.toJSON();
+    var res=await fetch(FN+'?action=subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team_member_id:m,app:APP,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,ua:navigator.userAgent})});
+    var out=await res.json(); if(!res.ok) throw new Error(out.error||'subscribe failed');
+    try{ localStorage.setItem('bbpush_ok',String(Date.now())); }catch(e){}
+    return out;
+  }
+  function say(t){ try{ if(typeof toast==='function'){ toast(t); return; } }catch(e){} console.log('[BBPUSH]',t); }
+  function hide(){ if(banner){ banner.remove(); banner=null; } }
+  function dismiss(){ try{ localStorage.setItem('bbpush_dismiss',String(Date.now())); }catch(e){} hide(); }
+  function dismissed(){ try{ var t=+localStorage.getItem('bbpush_dismiss')||0; return (Date.now()-t)<7*864e5; }catch(e){ return false; } }
+  async function enable(){
+    var p=await Notification.requestPermission();
+    if(p!=='granted'){ hide(); return false; }
+    await subscribe(); hide(); say('Phone alerts are on'); return true;
+  }
+  function show(kind){
+    if(banner||!document.body) return;
+    banner=document.createElement('div'); banner.id='bbpush-banner'; banner.setAttribute('role','status');
+    banner.style.cssText='position:fixed;left:12px;right:12px;top:calc(var(--sat,0px) + 10px);z-index:99999;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg3,#15171c);color:var(--text,#fff);border:1px solid var(--border,#2a2d35);box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:13px;font-weight:600;line-height:1.3;font-family:inherit';
+    var msg=document.createElement('div'); msg.style.flex='1';
+    var btn=document.createElement('button'); btn.type='button';
+    btn.style.cssText='border:0;border-radius:8px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer;background:var(--accent,#00E5FF);color:#0b1014;white-space:nowrap';
+    var x=document.createElement('button'); x.type='button'; x.textContent='×'; x.setAttribute('aria-label','Not now');
+    x.style.cssText='border:0;background:transparent;color:inherit;opacity:.6;font-size:18px;cursor:pointer;padding:0 4px'; x.onclick=dismiss;
+    if(kind==='install'){
+      msg.textContent='Get phone alerts: add this app to your Home Screen first (Share, then Add to Home Screen).';
+      btn.textContent='OK'; btn.onclick=dismiss;
+    } else {
+      msg.textContent='Get a phone alert when work moves to you.';
+      btn.textContent='Turn on alerts';
+      btn.onclick=function(){ btn.disabled=true; btn.textContent='Turning on'; enable().catch(function(e){ btn.disabled=false; btn.textContent='Turn on alerts'; say('Could not turn on alerts: '+(e&&e.message||e)); }); };
+    }
+    banner.appendChild(msg); banner.appendChild(btn); banner.appendChild(x); document.body.appendChild(banner);
+  }
+  async function boot(){
+    if(!supported()) return;
+    if(!name()){ if(tries++<200) setTimeout(boot,3000); return; }   /* wait for login, up to ten minutes */
+    if(Notification.permission==='denied') return;
+    if(isIOS()&&!standalone()){ if(!dismissed()) show('install'); return; }
+    if(Notification.permission==='granted'){ try{ await subscribe(); }catch(e){ console.warn('[BBPUSH] re-register failed',e); } return; }
+    if(!dismissed()) show('ask');
+  }
+  function status(){ return { app:APP, supported:supported(), permission:('Notification' in window)?Notification.permission:'n/a', ios:isIOS(), standalone:standalone(), user:name(), memberId:memberId }; }
+  async function test(){
+    var m=await resolveMember(); if(!m) throw new Error('no team member row for '+name());
+    var r=await fetch(FN+'?action=test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({team_member_id:m,title:'BB test alert',body:'If you can read this, phone alerts work.',url:location.href})});
+    return r.json();
+  }
+  window.addEventListener('load',function(){ setTimeout(boot,2500); });
+  return { enable:enable, test:test, status:status, boot:boot };
+})();
+</script>
+<!-- @@BB_PUSH_END@@ -->
