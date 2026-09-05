@@ -6943,7 +6943,7 @@ var BBPUSH=(function(){
   function pill(){
     if(!supported()||!document.body) return;
     if(!pillEl){ pillEl=document.createElement('button'); pillEl.type='button'; pillEl.id='bbpush-pill';
-      pillEl.style.cssText='position:fixed;left:12px;bottom:calc(var(--sab,0px) + 12px);z-index:99998;border:1px solid var(--border,#2a2d35);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;background:var(--bg3,#15171c);color:var(--text3,#9aa3ad);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);font-family:inherit';
+      pillEl.style.cssText='position:fixed;left:12px;bottom:calc(var(--sab,0px) + 12px);z-index:99998;border:1px solid var(--border,#2a2d35);border-radius:999px;min-height:44px;display:flex;align-items:center;padding:0 14px;font-size:12px;font-weight:700;background:var(--bg3,#15171c);color:var(--text3,#9aa3ad);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);font-family:inherit';
       pillEl.onclick=async function(){
         if(registered){ pillEl.textContent='Sending test'; try{ var r=await test(); pillEl.textContent=(r&&r.sent)?'Test sent':'Test failed: '+(r&&r.error||'no phone'); }catch(e){ pillEl.textContent='Test failed: '+(e&&e.message||e); } setTimeout(pill,4000); return; }
         if(isIOS()&&!standalone()){ show('install'); return; }
@@ -6951,6 +6951,11 @@ var BBPUSH=(function(){
       };
       document.body.appendChild(pillEl); }
     var p=('Notification' in window)?Notification.permission:'n/a';
+    /* Show only a state a tap can change. 'Blocked' and 'needs install' sat over
+       page content permanently on iOS Safari, where neither can be changed from
+       this page (SMM Workspace found it first). Those states live in Settings. */
+    if(p==='denied'||(isIOS()&&!standalone())){ pillEl.style.display='none'; return; }
+    pillEl.style.display='';
     if(registered){ pillEl.textContent='Alerts on · tap to test'; pillEl.style.color='var(--accent,#00E5FF)'; }
     else if(p==='denied'){ pillEl.textContent='Alerts blocked in Settings'; }
     else if(isIOS()&&!standalone()){ pillEl.textContent='Alerts need Home Screen install'; }
