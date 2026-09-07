@@ -1340,3 +1340,50 @@ from `sessionStorage` at load, so clearing it afterwards was too late and a
 "signed out" run was really signed in, reporting 90 of 90. Clear before the
 load, never after. This is the second time this exact contamination has produced
 a confident wrong answer in one week.
+
+---
+
+## L-VID-030 · "the client page is wrong" was the page being right
+
+**Reported** 7 September: Waverley shows **nine** videos in Add to Drive, so
+August should read 4 of 4 and September 4 of 4.
+
+**It should not, and nothing is broken.** Waverley is **August 2/4, September
+3/4, October 4/4**. The nine are **October's four, finished early**, plus three
+and two. Every title matches its tagged month exactly, checked row by row, so
+the tagging is right and the counting is right.
+
+What is genuinely open: AUG VID 2 waiting in Client Review, AUG VID 4 in
+Changes, SEP VID 1 in Video Head Review, which is Ushane's own queue.
+
+**This is not a Waverley problem. SEVEN clients have the same shape:**
+
+| Client | Unfinished | Already complete |
+|---|---|---|
+| GUIDING STEPS COLLEGE | March 1/4 | May 5/5 |
+| AUTO MUSEUM | May 0/1 | June and July 4/4 |
+| BELLVANTAGE | May 0/2 | July 2/2 |
+| WAVERLEY | August 2/4 | October 4/4 |
+
+**The real fault is VISIBILITY, not arithmetic.** The Clients page shows ONE
+month. The moment a new month starts, a half-finished old one stops being on
+anybody's screen, so the team moves on and the stragglers sit there for months.
+Guiding Steps has had three of four March videos open since March.
+
+**The fix is to make it impossible to miss, not to change any number:**
+- a month strip on every client, `Aug 2/4 BEHIND · Sep 3/4 BEHIND · Oct 4/4`
+- a banner on the Clients page naming every client that finished a later month
+  before an earlier one
+
+**The rule this establishes, and it belongs in every BB system that shows a
+month at a time: a period view must say what it is NOT showing.** A dashboard
+scoped to one month silently hides every earlier month's unfinished work, and
+"we are 4 of 4 this month" reads as healthy while March is still 1 of 4.
+
+**Also built, Thulaib's ask the same day:** Drive Links now filters by pipeline
+stage, and **the stage picks the link type by itself**. A video at Client
+Review or Add to Drive is finished work, so the page switches to Final Videos;
+an early stage switches back to Raw Clips. It says why in one line, and the
+type tabs stay clickable so the guess is never a cage.
+
+90 checks, 0 failed.

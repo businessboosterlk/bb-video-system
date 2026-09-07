@@ -699,6 +699,36 @@ a:hover{text-decoration:underline}
   border-left:3px solid var(--accent);border-radius:10px;padding:11px 14px;margin:0 0 16px;font-size:12.5px;
   color:var(--text-2);line-height:1.5}
 .cli-elsewhere b{color:var(--text)}
+.cli-behind{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);
+  border-left:3px solid var(--red,#ef4444);border-radius:10px;padding:11px 14px;margin:0 0 12px;font-size:12.5px;
+  color:var(--text-2);line-height:1.5}
+.cli-behind b{color:var(--text)}
+.cli-behind svg{flex:none;margin-top:1px;color:var(--red,#ef4444)}
+.cli-behind-list{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:7px}
+.cli-behind-item{font-size:12px;color:var(--text-3)}
+.cli-behind-item b{color:var(--text-2);font-weight:700}
+.cm-strip{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 16px}
+.cm-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border-strong);background:var(--surface-2);
+  border-radius:999px;padding:5px 12px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.cm-pill b{color:var(--text);font-weight:800;letter-spacing:.02em}
+.cm-pill.full{border-color:var(--green);color:var(--green)}
+.cm-pill.full b{color:var(--green)}
+.cm-pill.late{border-color:var(--red,#ef4444)}
+.cm-of{color:var(--text-3);font-size:.9em}
+.cm-flag{margin-left:3px;font-size:10px;font-weight:800;color:var(--red,#ef4444);text-transform:uppercase;letter-spacing:.04em}
+.dl-stages{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
+.dl-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface-2);
+  color:var(--text-2);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;min-height:36px}
+.dl-chip:hover{border-color:var(--accent);color:var(--accent)}
+.dl-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.dl-chip.on .dl-n{color:#fff;opacity:.85}
+.dl-n{font-weight:800;color:var(--text-3);font-variant-numeric:tabular-nums}
+.dl-why{display:flex;gap:8px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:9px;padding:9px 12px;margin:0 0 10px;font-size:12px;
+  color:var(--text-2);line-height:1.45}
+.dl-why b{color:var(--text)}
+.dl-why svg{flex:none;margin-top:1px;color:var(--accent)}
+@media(max-width:640px){.dl-chip{min-height:40px}}
 .cli-elsewhere svg{flex:none;margin-top:1px;color:var(--accent)}
 .bbu-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab,0px));z-index:350;
   display:flex;align-items:center;gap:12px;max-width:min(560px,calc(100vw - 24px));
@@ -3199,20 +3229,96 @@ function openTimeForm(){
 }
 
 // === PAGE: DRIVE LINKS ===
+let driveStage='';
 let driveTab='raw_footage';
+/* EVERY MONTH FOR ONE CLIENT, in one shape. Reuses monthDelivery so this can
+   never disagree with the Clients page or the Month Recap. Read LANDMINES.md
+   L-VID-030 before changing. */
+function clientMonths(clientId){
+  const seen={};
+  allProjects().forEach(function(p){
+    if(Number(p.client_id)!==Number(clientId))return;
+    if(p.target_month==null||p.target_year==null)return;
+    const k=p.target_year+'-'+String(p.target_month).padStart(2,'0');
+    if(!seen[k])seen[k]={yr:p.target_year,mo:parseInt(p.target_month),key:k,total:0,done:0};
+    seen[k].total++;
+    if(isDelivered(p))seen[k].done++;
+  });
+  return Object.keys(seen).sort().map(function(k){return seen[k]});
+}
+/* A month is BEHIND when it is not finished and a LATER month already is.
+   That is the exact shape of the Waverley question: October complete while
+   August still had two open. Seven clients were in that state on 7 September. */
+function clientBehindMonths(clientId){
+  const ms=clientMonths(clientId);
+  const out=[];
+  for(let i=0;i<ms.length;i++){
+    if(ms[i].done>=ms[i].total)continue;
+    for(let j=i+1;j<ms.length;j++){
+      if(ms[j].total>0&&ms[j].done>=ms[j].total){out.push(ms[i]);break;}
+    }
+  }
+  return out;
+}
+function clientMonthStrip(clientId){
+  const ms=clientMonths(clientId);
+  if(!ms.length)return '';
+  const behind=clientBehindMonths(clientId).map(function(m){return m.key});
+  return '<div class="cm-strip">'+ms.map(function(m){
+    const full=m.done>=m.total;
+    const late=behind.indexOf(m.key)>-1;
+    return '<span class="cm-pill'+(full?' full':'')+(late?' late':'')+'">'+
+      '<b>'+MONTHS[m.mo-1].slice(0,3)+'</b> '+m.done+'<span class="cm-of">/'+m.total+'</span>'+
+      (late?'<span class="cm-flag">behind</span>':'')+'</span>';
+  }).join('')+'</div>';
+}
+/* WHICH LINK MATTERS AT THIS STAGE. Once a video has left editing, nobody
+   wants the raw clips: they want the finished cut. So picking a late stage
+   switches the type tab to Final Videos by itself, and picking an early one
+   goes back to Raw Clips. Thulaib's rule, 7 September. */
+const DRIVE_FINAL_STAGES=['video_head_review','team_review','changes','coo_check',
+                          'client_review','client_changes','add_to_drive','posted'];
+function driveWantsFinal(stageKey){return DRIVE_FINAL_STAGES.indexOf(stageKey)>-1}
 function renderDriveLinks(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
   $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
-  const raw=DATA.links.filter(l=>l.tag==='raw_footage');
-  const fin=DATA.links.filter(l=>l.tag==='final_cut');
-  const other=DATA.links.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
-  $('#pageSub').textContent=`${raw.length} raw · ${fin.length} final · ${other.length} other`;
+  /* STAGE FIRST, then type. A link belongs to a project, and the project has a
+     stage, so "show me everything sitting with a client" is a question about
+     the project, not the link. */
+  const inStage=function(l){
+    if(!driveStage)return true;
+    const p=getProject(l.video_project_id);
+    return !!p&&p.current_stage===driveStage;
+  };
+  const pool=DATA.links.filter(inStage);
+  const raw=pool.filter(l=>l.tag==='raw_footage');
+  const fin=pool.filter(l=>l.tag==='final_cut');
+  const other=pool.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
+  const stageCount=function(k){
+    return DATA.links.filter(function(l){const p=getProject(l.video_project_id);return !!p&&p.current_stage===k}).length;
+  };
+  $('#pageSub').textContent=`${raw.length} raw · ${fin.length} final · ${other.length} other`+
+    (driveStage?(' · '+((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)):'');
   const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Project</th><th>Title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=getProject(l.video_project_id);return `<tr class="clickable" data-pid="${l.video_project_id}"><td>${esc(p?.title||'—')}</td><td>${esc(l.label||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Drive Links</div><div class="page-sub">All raw footage and final video links across projects</div></div></div>
+    <div class="dl-stages">
+      <button class="dl-chip${driveStage?'':' on'}" data-stage="">All stages <span class="dl-n">${DATA.links.length}</span></button>
+      ${STAGES.map(st=>{const c=stageCount(st.key);return c?`<button class="dl-chip${driveStage===st.key?' on':''}" data-stage="${st.key}"><span class="stage-dot s-${st.key}"></span>${st.label} <span class="dl-n">${c}</span></button>`:''}).join('')}
+    </div>
+    ${driveStage?`<div class="dl-why">${vicon('alert',13)}<span>Showing <b>${driveWantsFinal(driveStage)?'final videos':'raw clips'}</b>, because a video at <b>${esc((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)}</b> is ${driveWantsFinal(driveStage)?'finished work, not footage':'still being built from footage'}. Tap another tab to override.</span></div>`:''}
     <div class="tabs"><div class="tab ${driveTab==='raw_footage'?'active':''}" data-tab="raw_footage">Raw Clips (${raw.length})</div><div class="tab ${driveTab==='final_cut'?'active':''}" data-tab="final_cut">Final Videos (${fin.length})</div><div class="tab ${driveTab==='other'?'active':''}" data-tab="other">Other (${other.length})</div></div>
     ${renderRows(driveTab==='raw_footage'?raw:driveTab==='final_cut'?fin:other)}
   `;
-  $('#pageContent').onclick=e=>{const t=e.target.closest('[data-tab]');if(t){driveTab=t.dataset.tab;renderDriveLinks()}const r=e.target.closest('[data-pid]');if(r&&e.target.tagName!=='A')openProjectDetail(parseInt(r.dataset.pid))};
+  $('#pageContent').onclick=e=>{
+    const sc=e.target.closest('[data-stage]');
+    if(sc){
+      driveStage=sc.dataset.stage||'';
+      /* The stage decides which link is the useful one, so the person does not
+         have to pick twice. Still overridable: the type tabs stay clickable. */
+      if(driveStage)driveTab=driveWantsFinal(driveStage)?'final_cut':'raw_footage';
+      renderDriveLinks();return;
+    }
+    const t=e.target.closest('[data-tab]');if(t){driveTab=t.dataset.tab;renderDriveLinks()}const r=e.target.closest('[data-pid]');if(r&&e.target.tagName!=='A')openProjectDetail(parseInt(r.dataset.pid))};
 }
 
 // === PAGE: MONTH RECAP ===================================================
@@ -3447,6 +3553,16 @@ function renderClients(){
   });
   /* Newest first and capped. The unfiltered list ran to every month BB has
      ever delivered in, which is noise, not information. */
+  /* WHO LEFT A MONTH BEHIND. Not a counting fault: the count is right and the
+     work is genuinely unfinished. It goes invisible because the page shows one
+     month, so the moment a new month starts nobody looks back. Seven clients
+     were in this state on 7 September, Guiding Steps at March 1 of 4 while May
+     was 5 of 5. */
+  const _behind=[];
+  (DATA.clients||[]).forEach(function(c){
+    const b=clientBehindMonths(c.id);
+    if(b.length)_behind.push({name:c.name,months:b});
+  });
   const _elseOrder=Object.keys(_elsewhere).map(function(k){
     const pr=k.split(' '); const mi=MONTHS.indexOf(pr[0]);
     return {k:k,n:_elsewhere[k],sort:(mi<0?0:parseInt(pr[1]||'0')*12+mi)};
@@ -3456,6 +3572,7 @@ function renderClients(){
   $('#pageSub').textContent=`${rows.length} client${rows.length===1?'':'s'} · ${monthLabel}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Clients</div><div class="page-sub">Video delivery per client · click a row to drill in</div></div>
     <select class="filter-select" id="clientsMonthPick" style="min-width:180px">${monthOpts.map(o=>`<option value="${o.v}" ${o.v===selMonth?'selected':''}>${o.lbl}</option>`).join('')}</select></div>
+    ${_behind.length?`<div class="cli-behind">${vicon('alert',15)}<div><b>${_behind.length} client${_behind.length===1?'':'s'} finished a later month before an earlier one.</b> These months are still open while a month after them is complete, so nobody is looking at them any more.<div class="cli-behind-list">${_behind.slice(0,8).map(b=>`<span class="cli-behind-item"><b>${esc(b.name)}</b> ${b.months.map(m=>MONTHS[m.mo-1].slice(0,3)+' '+m.done+'/'+m.total).join(', ')}</span>`).join('')}${_behind.length>8?`<span class="cli-behind-item">and ${_behind.length-8} more</span>`:''}</div></div></div>`:''}
     ${_elseList.length?`<div class="cli-elsewhere">${vicon('alert',14)}<div><b>Delivered, but counted in another month.</b> A video counts for the month it was tagged for, never the month it was finished. ${esc(_elseList.join(' · '))}. Change the month above to see them.</div></div>`:''}
     ${withTarget.length?`<div class="stat-grid" style="margin-bottom:18px">
       ${statCard('On Target',hitTarget+'/'+withTarget.length,'clients hit monthly goal',hitTarget===withTarget.length?'green':(hitTarget>=withTarget.length/2?'amber':'red'))}
@@ -3738,6 +3855,8 @@ async function saveQuarterlyTargets(clientId,inputs){
   }catch(err){toast('Save failed: '+(err.message||''),'error')}
 }
 
+/* The month strip goes at the TOP of a client, because "is August finished"
+   is the first question anyone opening a client actually has. */
 function openClientDetail(cid){
   const c=DATA.clients.find(x=>x.id===cid);if(!c)return;
   const proj=DATA.projects.filter(p=>p.client_id===cid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -3756,6 +3875,7 @@ function openClientDetail(cid){
     ${recent.length?`<div class="shoots-mini" style="margin-top:10px"><div class="shoots-mini-label">Recent</div>${recent.map(s=>`<div class="shoots-mini-row"><div><strong>${esc(s.title||'Shoot')}</strong><span class="muted fs-11"> · ${esc(s.stage||'')}</span></div><div class="text-3 fs-12">${fmtDate(s.shoot_date)}</div></div>`).join('')}</div>`:''}
   </div>`;
   const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(c.name)}</div><div class="modal-sub">${proj.length} total · ${active.length} active · ${done.length} completed</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
+    ${clientMonthStrip(cid)}
     ${planHtml}
     ${shootsHtml}
     <div class="detail-section"><div class="detail-section-title">Active Projects (${active.length})</div>
