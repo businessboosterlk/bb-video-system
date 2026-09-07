@@ -385,7 +385,7 @@ a:hover{text-decoration:underline}
   .qp-big{font-size:26px}
 }
 .notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red,#ef4444);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;padding:0 5px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)}
-.notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:380px;max-height:540px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 48px var(--shadow-modal);z-index:120;display:flex;flex-direction:column;overflow:hidden}
+.notif-panel{position:fixed;width:380px;max-height:540px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 16px 48px var(--shadow-modal);z-index:10050;display:flex;flex-direction:column;overflow:hidden}
 .notif-head{padding:14px 16px;border-bottom:1px solid var(--border)}
 .notif-title{font-size:14px;font-weight:700;color:var(--text)}
 .notif-sub{font-size:11px;color:var(--text-3);margin-top:2px}
@@ -402,8 +402,10 @@ a:hover{text-decoration:underline}
 .notif-time{font-size:10px;color:var(--text-3);margin-top:3px}
 .notif-foot{padding:8px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
 @media (max-width:768px){
-  .notif-panel{position:fixed;top:64px;left:8px;right:8px;width:auto;max-height:75vh}
-  .notif-bell{width:36px;height:36px}
+  .notif-panel{left:8px;right:8px;width:auto;max-height:75vh}
+  /* 44px is the floor. At 36px in the top corner this was the single most
+     reported control in the system and people could not hit it. */
+  .notif-bell{width:44px;height:44px}
 }
 .field-textarea.img-drop-hot{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .image-attach-btn{padding:7px 12px;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px}
@@ -693,6 +695,11 @@ a:hover{text-decoration:underline}
 .wp-chip.behind{border-color:rgba(239,68,68,.45)}
 .wp-chip-b{color:var(--red);font-weight:800;font-size:10.5px}
 .wp-carry-line+.wp-carry-line{margin-top:3px}
+.cli-elsewhere{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:10px;padding:11px 14px;margin:0 0 16px;font-size:12.5px;
+  color:var(--text-2);line-height:1.5}
+.cli-elsewhere b{color:var(--text)}
+.cli-elsewhere svg{flex:none;margin-top:1px;color:var(--accent)}
 .bbu-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab,0px));z-index:350;
   display:flex;align-items:center;gap:12px;max-width:min(560px,calc(100vw - 24px));
   padding:11px 12px 11px 16px;border-radius:14px;background:var(--surface);border:1px solid var(--border-strong);
@@ -1366,7 +1373,7 @@ function wireImageAttach(hostId,hostTextarea){
       e.preventDefault();zone.classList.remove('img-drop-hot');
       const files=e.dataTransfer?.files||[];
       if(!files.length)return;
-      if(files.length>1){toast('Only one image at a time — using the first','info')}
+      if(files.length>1){toast('Only one image at a time, using the first','info')}
       const f=files[0];
       if(!f.type.startsWith('image/')){toast('Only images can be dropped here','error');return}
       readImageFile(f,hostId);
@@ -1451,6 +1458,23 @@ function timeAgoShort(t){
   const h=Math.floor(m/60); if(h<24)return h+'h ago';
   const d=Math.floor(h/24); return d+'d ago';
 }
+/* Places the panel under the bell. Needed because it now lives on the body,
+   so it can no longer inherit the bell's position. Below 768px the stylesheet
+   pins it to both edges, so leave those alone and only set the top. */
+function notifPlace(){
+  const panel=document.getElementById('notifPanel');
+  const bell=document.getElementById('notifBell');
+  if(!panel||!bell)return;
+  const b=bell.getBoundingClientRect();
+  panel.style.top=Math.round(b.bottom+8)+'px';
+  if(window.innerWidth>768){
+    panel.style.right=Math.round(Math.max(8,window.innerWidth-b.right))+'px';
+    panel.style.left='auto';
+  }else{
+    panel.style.right=''; panel.style.left='';
+  }
+}
+window.addEventListener('resize',function(){notifPlace()});
 function renderNotifications(){
   const wrap=$('#notifWrap'); if(!wrap)return;
   if(!currentUser){wrap.innerHTML='';return}
@@ -1476,7 +1500,12 @@ function toggleNotifPanel(events){
     ${events.length?'<div class="notif-foot"><button class="btn btn-ghost btn-sm" id="notifMarkRead">Mark all as read</button></div>':''}
   </div>`;
   wrap.insertAdjacentHTML('beforeend',html);
+  /* OUT OF THE TOPBAR. backdrop-filter on .topbar creates a stacking context,
+     so anything rendered inside it is trapped there whatever its z-index.
+     Measured: topbar z-index 400 changed nothing, moving to body fixed it. */
   const panel=$('#notifPanel');
+  if(panel&&panel.parentElement!==document.body)document.body.appendChild(panel);
+  notifPlace();
   panel.addEventListener('click',ev=>{
     const item=ev.target.closest('[data-notif-pid]');
     if(item){const pid=parseInt(item.dataset.notifPid);panel.remove();notifMarkAllSeen();renderNotifications();if(typeof openProjectDetail==='function')openProjectDetail(pid);return}
@@ -1914,7 +1943,7 @@ function renderMyDashboard(){
       ${statCard('Streak',streak+(streak===1?' day':' days'),streak>0?'keep it going':'complete one today')}
     </div>
 
-    ${onPaceForBest&&doneThisMonth.length>0?`<div class="attn-panel all-clear" style="margin-bottom:18px"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>You're matching or beating your best month (${bestMonth}) — strong work</div></div>`:''}
+    ${onPaceForBest&&doneThisMonth.length>0?`<div class="attn-panel all-clear" style="margin-bottom:18px"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>You're matching or beating your best month (${bestMonth}), strong work</div></div>`:''}
 
     ${attnCount>0?`<div class="attn-panel" style="margin-bottom:18px">
       <div class="attn-panel-head"><div class="attn-panel-title"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Needs Your Attention</div><span class="attn-panel-count">${attnCount}</span></div>
@@ -1922,7 +1951,7 @@ function renderMyDashboard(){
         ${overdueMine.length?`<div class="attn-block red"><div class="attn-block-label">Overdue (${overdueMine.length})</div>${overdueMine.slice(0,6).map(p=>row(p,fmtDate(p.deadline),'red')).join('')}</div>`:''}
         ${dueTodayMine.length?`<div class="attn-block amber"><div class="attn-block-label">Due Today (${dueTodayMine.length})</div>${dueTodayMine.map(p=>row(p,'TODAY','amber')).join('')}</div>`:''}
       </div>
-    </div>`:`<div class="attn-panel all-clear" style="margin-bottom:18px"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Nothing overdue or due today — you're on top of it</div></div>`}
+    </div>`:`<div class="attn-panel all-clear" style="margin-bottom:18px"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Nothing overdue or due today, you're on top of it</div></div>`}
 
     <div class="two-col">
       <div class="panel">
@@ -2002,16 +2031,16 @@ function renderDashboard(){
     ${attnTotal>0?`<div class="attn-panel">
       <div class="attn-panel-head"><div class="attn-panel-title"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Needs Attention</div><span class="attn-panel-count">${attnTotal} item${attnTotal>1?'s':''}</span></div>
       <div class="attn-grid">
-        ${overdueList.length?`<div class="attn-block red"><div class="attn-block-label">⚠ Overdue (${overdueList.length})</div>${overdueList.slice(0,5).map(p=>attnRow(p,fmtDate(p.deadline),'red')).join('')}${overdueList.length>5?`<div class="attn-more">+${overdueList.length-5} more</div>`:''}</div>`:''}
+        ${overdueList.length?`<div class="attn-block red"><div class="attn-block-label"> Overdue (${overdueList.length})</div>${overdueList.slice(0,5).map(p=>attnRow(p,fmtDate(p.deadline),'red')).join('')}${overdueList.length>5?`<div class="attn-more">+${overdueList.length-5} more</div>`:''}</div>`:''}
         ${dueTodayList.length?`<div class="attn-block amber"><div class="attn-block-label">${vicon('calendar',13)} Due Today (${dueTodayList.length})</div>${dueTodayList.map(p=>attnRow(p,'TODAY','amber')).join('')}</div>`:''}
         ${dueSoonList.length?`<div class="attn-block amber"><div class="attn-block-label">⏳ Due in 48h (${dueSoonList.length})</div>${dueSoonList.slice(0,4).map(p=>attnRow(p,fmtDate(p.deadline),'amber')).join('')}</div>`:''}
         ${stuckList.length?`<div class="attn-block red"><div class="attn-block-label">${vicon('hourglass',13)} Stuck >7 days (${stuckList.length})</div>${stuckList.slice(0,5).map(p=>attnRow(p,timeAgo(p.updated_at||p.created_at),'red')).join('')}${stuckList.length>5?`<div class="attn-more">+${stuckList.length-5} more</div>`:''}</div>`:''}
         ${clientWaitList.length?`<div class="attn-block amber"><div class="attn-block-label">${vicon('send',13)} Client silent >5d (${clientWaitList.length})</div>${clientWaitList.slice(0,4).map(p=>attnRow(p,timeAgo(p.updated_at),'amber')).join('')}</div>`:''}
         ${unassignedList.length?`<div class="attn-block red"><div class="attn-block-label">${vicon('user',13)} No editor assigned (${unassignedList.length})</div>${unassignedList.slice(0,4).map(p=>attnRow(p,'ASSIGN','red')).join('')}</div>`:''}
-        ${untaggedList.length?`<div class="attn-block amber"><div class="attn-block-label">${vicon('tag',13)} No month tagged (${untaggedList.length}) — won't count toward readiness</div>${untaggedList.slice(0,5).map(p=>attnRow(p,'SET MONTH','amber')).join('')}${untaggedList.length>5?`<div class="attn-more">+${untaggedList.length-5} more</div>`:''}</div>`:''}
+        ${untaggedList.length?`<div class="attn-block amber"><div class="attn-block-label">${vicon('tag',13)} No month tagged (${untaggedList.length}), won't count toward readiness</div>${untaggedList.slice(0,5).map(p=>attnRow(p,'SET MONTH','amber')).join('')}${untaggedList.length>5?`<div class="attn-more">+${untaggedList.length-5} more</div>`:''}</div>`:''}
       </div>
-      ${editorOverload.length?`<div class="attn-overload">${vicon('bolt',13)} Workload imbalance: ${editorOverload.map(e=>`<strong>${esc(e.name)}</strong> (${e.count})`).join(', ')} carrying heavy load — consider redistributing</div>`:''}
-    </div>`:`<div class="attn-panel all-clear"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All clear — nothing needs attention right now</div></div>`}
+      ${editorOverload.length?`<div class="attn-overload">${vicon('bolt',13)} Workload imbalance: ${editorOverload.map(e=>`<strong>${esc(e.name)}</strong> (${e.count})`).join(', ')} carrying heavy load, consider redistributing</div>`:''}
+    </div>`:`<div class="attn-panel all-clear"><div class="attn-panel-title" style="color:var(--green)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All clear, nothing needs attention right now</div></div>`}
     <div class="stat-grid">
       ${statCard('Active Projects',active,'in pipeline')}
       ${statCard('Completed',completed,'in Add to Drive',completed>0?'green':'')}
@@ -2088,7 +2117,7 @@ async function savePillarState(s){
   _pillarCache=s;
   try{
     const {error:e1}=await sb.from('daily_pillar_state').upsert({user_name:'USHANE',pillar_date:pillarDateStr(),state:s,updated_at:new Date().toISOString()},{onConflict:'user_name,pillar_date'});
-    if(e1){if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','save',e1);toast('Pillar save failed — see admin','error');}
+    if(e1){if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','save',e1);toast('Pillar save failed, see admin','error');}
     // Sync to CC pillars table so Command Centre Team page reads correct data
     const doneIds=JSON.stringify(Object.keys(s).filter(k=>s[k]));
     const {error:e2}=await sb.from('pillars').upsert({who:'USHANE',done_ids:doneIds,updated_at:new Date().toISOString()},{onConflict:'who'});
@@ -2313,7 +2342,7 @@ function openCardMenu(pid,btn){
   // Create dropdown on body (not inside card) to avoid overflow clipping
   const wrap=document.createElement('div');
   wrap.className='card-menu-dropdown';
-  wrap.innerHTML=`<button data-cm="edit">${vicon('pencil',13)} Edit</button><button data-cm="move">↕ Move stage</button><button data-cm="dup">⎘ Duplicate</button><button data-cm="archive">🗄 Archive</button><button data-cm="delete" class="danger">${vicon('trash',13)} Delete</button>`;
+  wrap.innerHTML=`<button data-cm="edit">${vicon('pencil',13)} Edit</button><button data-cm="move">↕ Move stage</button><button data-cm="dup">⎘ Duplicate</button><button data-cm="archive"> Archive</button><button data-cm="delete" class="danger">${vicon('trash',13)} Delete</button>`;
   document.body.appendChild(wrap);
   // Position near the ⋮ button
   const rect=btn.getBoundingClientRect();
@@ -2712,7 +2741,18 @@ async function moveProject(project,newStage){
     if(error)throw error;
     succeeded=true;
     bbuNote(project, old, newStage);   /* only after the write is real */
-    if(!_bulkRunning)toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`,'success');
+    if(!_bulkRunning){
+      /* NAME THE MONTH. A video counts for the month it is TAGGED for, never
+         the month it was finished, so delivering an October video changes
+         nothing on a September page. That is correct and it was invisible. */
+      let _extra='';
+      if(DELIVERED_STAGES.includes(newStage)){
+        _extra = project.target_month
+          ? ' · counted for '+MONTHS[parseInt(project.target_month)-1]+(project.target_year?' '+project.target_year:'')
+          : ' · NO MONTH SET, so it counts for nobody';
+      }
+      toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`+_extra,'success');
+    }
   }catch(err){
     console.error(err);
     project.current_stage=old;
@@ -2754,7 +2794,7 @@ async function saveProject(id){
   let tm=fd.get('target_month')?parseInt(fd.get('target_month')):null;
   let ty;
   if(tm){const ex=id?getProject(id):null;ty=(ex&&ex.target_year)?ex.target_year:new Date().getFullYear();}
-  else{ tm=new Date().getMonth()+1; ty=new Date().getFullYear(); if(!id)toast('No month picked — defaulted to '+MONTHS[tm-1]+' '+ty,'info'); }
+  else{ tm=new Date().getMonth()+1; ty=new Date().getFullYear(); if(!id)toast('No month picked, defaulted to '+MONTHS[tm-1]+' '+ty,'info'); }
   d.target_month=tm;
   d.target_year=ty;
   try{
@@ -2770,7 +2810,7 @@ async function deleteProject(id){if(!confirm('Delete this project?'))return;try{
 function stageTimingSection(projectId){
   if(!DATA.stageHistory)return '';
   const hist=DATA.stageHistory.filter(h=>h.video_project_id===projectId);
-  if(!hist.length)return '<div class="detail-section"><div class="detail-section-title">Time Tracking</div><div class="link-empty">No stage history yet — timing starts tracking once the project moves between stages</div></div>';
+  if(!hist.length)return '<div class="detail-section"><div class="detail-section-title">Time Tracking</div><div class="link-empty">No stage history yet, timing starts tracking once the project moves between stages</div></div>';
   const editingSecs=stageDurationSecs(projectId,'editing');
   const teamChangesSecs=stageDurationSecs(projectId,'changes');
   const clientChangesSecs=stageDurationSecs(projectId,'client_changes');
@@ -2834,7 +2874,7 @@ async function openProjectDetail(id){
         <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" data-post-comment="${id}">Post Comment</button></div>
       </div>
     </div>
-  </div><div class="modal-footer">${(isAdmin()||isVideoHead())?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-ghost" data-archive="${id}" style="color:var(--red,#ef4444)">🗄 Archive</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
+  </div><div class="modal-footer">${(isAdmin()||isVideoHead())?`<button class="btn btn-ghost" data-dup="${id}">⎘ Duplicate</button><button class="btn btn-ghost" data-archive="${id}" style="color:var(--red,#ef4444)"> Archive</button><button class="btn btn-secondary" data-edit="${id}">Edit Project</button>`:''}<button class="btn btn-primary" data-close>Close</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
   wireImageAttach('cmt-'+id,'#newComment');
   $('#modalRoot').onclick=async e=>{
@@ -2895,7 +2935,7 @@ function renderShootPipeline(){
   };
   const grouped={}; SHOOT_STAGES.forEach(s=>grouped[s.key]=[]); let unmapped=0;
   DATA.shoots.forEach(sh=>{const k=stageResolve(sh.stage||sh.current_stage);if(k==='__unmapped__'){unmapped++;return;}grouped[k].push(sh)});
-  $('#pageSub').textContent=`${DATA.shoots.length} shoots in system`+(unmapped?` · ⚠ ${unmapped} unrecognised stage (not shown)`:'');
+  $('#pageSub').textContent=`${DATA.shoots.length} shoots in system`+(unmapped?` ·  ${unmapped} unrecognised stage (not shown)`:'');
   const tabs=`<div class="shoot-tabs"><button class="shoot-tab ${SHOOT_VIEW==='pipeline'?'active':''}" data-sview="pipeline">Pipeline</button><button class="shoot-tab ${SHOOT_VIEW==='calendar'?'active':''}" data-sview="calendar">Weekly Calendar</button></div>`;
   const shootCard=(s)=>{const cl=getClient(s.client_id);const meta=[s.quarter,s.month,(s.video_count!=null?s.video_count+' vids':null),(s.shoot_date?fmtDate(s.shoot_date):null)].filter(Boolean).join(' · ');return `<div class="card shoot-card" draggable="true" data-shoot-id="${s.id}"><div class="card-client" style="text-transform:uppercase;font-size:11px;letter-spacing:.04em;color:var(--accent)">${esc(cl?.name||'— No client —')}</div><div class="card-title">${esc(s.title||'Shoot')}</div><div class="shoot-card-meta">${esc(meta||'No details')}</div><div class="shoot-card-actions"><button class="btn btn-secondary btn-sm" data-edit-shoot="${s.id}">Edit</button><button class="btn btn-ghost btn-sm shoot-del" data-del-shoot="${s.id}" title="Delete shoot">×</button></div></div>`};
   let body;
@@ -3131,7 +3171,7 @@ function drawTimeTracker(){
     <div class="stat-grid">${statCard('Workflow time this month',secsToHrs(monthlyTotalSec))}${statCard('Active editors',monthlyActiveEditors+'')}${statCard('Avg per editor',secsToHrs(monthlyAvgPerEditor))}</div>
     ${weeklyReportHtml}
     ${Object.keys(perEditor).length?`<div class="panel"><div class="panel-head"><div class="panel-title">Manual logs (this month)</div><div class="text-3 fs-11">From editors who use the + Log Time button</div></div><table class="tbl"><thead><tr><th>Editor</th><th>Logs</th><th>Total</th><th>Avg/log</th></tr></thead><tbody>${Object.entries(perEditor).sort((a,b)=>b[1].sec-a[1].sec).map(([id,v])=>{const m=getMember(parseInt(id));return `<tr><td>${esc(m?.name||'Unknown')}</td><td>${v.count}</td><td>${secsToHrs(v.sec)}</td><td>${secsToHrs(v.sec/v.count)}</td></tr>`}).join('')}</tbody></table></div>`:''}
-    <div class="panel"><div class="panel-head"><div class="panel-title">Recent Logs</div><div class="text-3 fs-11">Manual log entries · ${thisMonth.length} this month</div></div>${logs.length?`<table class="tbl"><thead><tr><th>Project</th><th>Editor</th><th>Stage</th><th>Started</th><th>Duration</th><th>Notes</th></tr></thead><tbody>${logs.slice(0,50).map(l=>{const p=getProject(l.video_project_id);const m=getMember(l.team_member_id);return `<tr><td>${esc(p?.title||'—')}</td><td>${esc(m?.name||'—')}</td><td class="muted">${esc(STAGES.find(s=>s.key===l.stage)?.label||l.stage||'')}</td><td class="muted">${fmtDateTime(l.started_at)}</td><td>${secsToHrs(l.duration_seconds||0)}</td><td class="muted">${esc(l.notes||'')}</td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No manual time logs yet — click "+ Log Time" to add one</div>'}</div>
+    <div class="panel"><div class="panel-head"><div class="panel-title">Recent Logs</div><div class="text-3 fs-11">Manual log entries · ${thisMonth.length} this month</div></div>${logs.length?`<table class="tbl"><thead><tr><th>Project</th><th>Editor</th><th>Stage</th><th>Started</th><th>Duration</th><th>Notes</th></tr></thead><tbody>${logs.slice(0,50).map(l=>{const p=getProject(l.video_project_id);const m=getMember(l.team_member_id);return `<tr><td>${esc(p?.title||'—')}</td><td>${esc(m?.name||'—')}</td><td class="muted">${esc(STAGES.find(s=>s.key===l.stage)?.label||l.stage||'')}</td><td class="muted">${fmtDateTime(l.started_at)}</td><td>${secsToHrs(l.duration_seconds||0)}</td><td class="muted">${esc(l.notes||'')}</td></tr>`}).join('')}</tbody></table>`:'<div class="panel-body text-3" style="text-align:center;font-style:italic">No manual time logs yet, click "+ Log Time" to add one</div>'}</div>
   `;
 }
 function openTimeForm(){
@@ -3392,9 +3432,31 @@ function renderClients(){
   // Summary: how many clients hit target this month
   const withTarget=rows.filter(r=>r.target>0);
   const hitTarget=withTarget.filter(r=>r.postedThisMonth>=r.target).length;
+  /* WHERE THE REST WENT. Delivered videos tagged for OTHER months are not a
+     mistake and not a missing number, they simply belong to another month.
+     Showing them stops the "I delivered it and nothing moved" question. */
+  const _shown=String(selMonth).split('-').map(Number);
+  const _elsewhere={};
+  allProjects().forEach(function(p){
+    if(!isDelivered(p))return;
+    if(p.target_month==null){_elsewhere['no month']=(_elsewhere['no month']||0)+1;return}
+    const py=p.target_year==null?_shown[0]:parseInt(p.target_year);
+    if(py===_shown[0]&&parseInt(p.target_month)===_shown[1])return;
+    const k=MONTHS[parseInt(p.target_month)-1]+' '+py;
+    _elsewhere[k]=(_elsewhere[k]||0)+1;
+  });
+  /* Newest first and capped. The unfiltered list ran to every month BB has
+     ever delivered in, which is noise, not information. */
+  const _elseOrder=Object.keys(_elsewhere).map(function(k){
+    const pr=k.split(' '); const mi=MONTHS.indexOf(pr[0]);
+    return {k:k,n:_elsewhere[k],sort:(mi<0?0:parseInt(pr[1]||'0')*12+mi)};
+  }).sort(function(x,y){return y.sort-x.sort});
+  const _elseList=_elseOrder.slice(0,4).map(function(o){return o.k+': '+o.n});
+  if(_elseOrder.length>4)_elseList.push('and '+(_elseOrder.length-4)+' earlier months');
   $('#pageSub').textContent=`${rows.length} client${rows.length===1?'':'s'} · ${monthLabel}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Clients</div><div class="page-sub">Video delivery per client · click a row to drill in</div></div>
     <select class="filter-select" id="clientsMonthPick" style="min-width:180px">${monthOpts.map(o=>`<option value="${o.v}" ${o.v===selMonth?'selected':''}>${o.lbl}</option>`).join('')}</select></div>
+    ${_elseList.length?`<div class="cli-elsewhere">${vicon('alert',14)}<div><b>Delivered, but counted in another month.</b> A video counts for the month it was tagged for, never the month it was finished. ${esc(_elseList.join(' · '))}. Change the month above to see them.</div></div>`:''}
     ${withTarget.length?`<div class="stat-grid" style="margin-bottom:18px">
       ${statCard('On Target',hitTarget+'/'+withTarget.length,'clients hit monthly goal',hitTarget===withTarget.length?'green':(hitTarget>=withTarget.length/2?'amber':'red'))}
       ${statCard('Videos Posted',rows.reduce((s,r)=>s+r.postedThisMonth,0),'across all clients in '+monthStart.toLocaleDateString('en-GB',{month:'short'}))}
@@ -3616,7 +3678,7 @@ function buildSituationSummary(clientName,monthData){
     if(d.published>=d.contracted&&d.contracted>0){bits.push(`<strong>${d.name}</strong>: done (${d.published}/${d.contracted}).`);return}
     // Past month: distinguish "missed" (videos exist but didn't publish) from "untagged" (no data — can't tell)
     if(past&&d.remaining>0){
-      if(d.tagged===0){bits.push(`<strong>${d.name}</strong>: no videos tagged for this month — can't tell if work was done. ${d.published}/${d.contracted} published.`);return}
+      if(d.tagged===0){bits.push(`<strong>${d.name}</strong>: no videos tagged for this month, can't tell if work was done. ${d.published}/${d.contracted} published.`);return}
       bits.push(`<strong>${d.name}</strong>: missed by ${d.remaining} (${d.published}/${d.contracted} published, ${d.inPipeline} still in pipeline).`);return;
     }
     const parts=[`${d.published}/${d.contracted} published`];
@@ -3847,12 +3909,12 @@ function renderTeamChat(){
           const proj=isProj?getProject(m.video_project_id):null;
           const tagHtml=isProj?`<span class="tag" style="font-size:9px;background:var(--accent-soft);color:var(--accent);margin-left:8px;cursor:pointer" data-jump-pid="${m.video_project_id}">↗ ${esc(proj?.title||'project')}</span>`:'';
           const canManage=!isProj&&!isDeleted&&(isAdmin()||isVideoHead()||(currentUser&&m.author===currentUser.name));
-          const editBtn=canManage?`<button class="chat-act-btn" data-edit-chat="${m.id}" title="Edit message" style="background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:3px 7px;border-radius:5px;line-height:1;opacity:.65;transition:all .15s">✏️</button>`:'';
-          const delBtn=canManage?`<button class="chat-act-btn" data-del-chat="${m.id}" title="Delete message" style="background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:3px 7px;border-radius:5px;line-height:1;opacity:.65;transition:all .15s">🗑</button>`:'';
+          const editBtn=canManage?`<button class="chat-act-btn" data-edit-chat="${m.id}" title="Edit message" style="background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:3px 7px;border-radius:5px;line-height:1;opacity:.65;transition:all .15s">✏</button>`:'';
+          const delBtn=canManage?`<button class="chat-act-btn" data-del-chat="${m.id}" title="Delete message" style="background:none;border:none;color:var(--text-3);font-size:13px;cursor:pointer;padding:3px 7px;border-radius:5px;line-height:1;opacity:.65;transition:all .15s"></button>`:'';
           const editedTag=(!isProj&&m.edited_at)?`<span class="text-3" style="font-size:10px;margin-left:6px;font-style:italic">(edited)</span>`:'';
-          if(isDeleted)return `<div class="comment" style="opacity:0.45;font-style:italic"><div class="comment-head"><div class="comment-author" style="color:var(--text-3)">${esc(m.author||'')}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div><div class="comment-body" style="color:var(--text-3);font-size:12px">🗑 This message was deleted</div></div>`;
+          if(isDeleted)return `<div class="comment" style="opacity:0.45;font-style:italic"><div class="comment-head"><div class="comment-author" style="color:var(--text-3)">${esc(m.author||'')}</div><div class="comment-time">${timeAgo(m.created_at)}</div></div><div class="comment-body" style="color:var(--text-3);font-size:12px"> This message was deleted</div></div>`;
           return `<div class="comment chat-msg" style="${isProj?'border-left:3px solid var(--accent)':''}"><div class="comment-head" style="display:flex;align-items:center;gap:4px"><div class="comment-author">${esc(m.author||'')}${tagHtml}</div><div class="comment-time" style="margin-left:auto">${timeAgo(m.created_at)}${editedTag}</div>${editBtn}${delBtn}</div>${m.body?`<div class="comment-body">${esc(m.body)}</div>`:''}${lazyImgHtml(isProj?'video_project_comments':'video_chat_messages',m.id)}</div>`;
-        }).join(''):'<div class="comment-empty">Nothing yet — start the conversation. Project comments will also appear here.</div>'}</div>
+        }).join(''):'<div class="comment-empty">Nothing yet, start the conversation. Project comments will also appear here.</div>'}</div>
         <div class="comment-form">
           <textarea id="chatBody" class="field-textarea" placeholder="Type a message… (you can paste an image with Cmd+V)" rows="2"></textarea>
           ${imageAttachHtml('chat')}
@@ -3914,7 +3976,7 @@ function renderInspoHub(){
   const items=DATA.inspo||[];
   $('#pageSub').textContent=`${items.length} inspiration${items.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Inspo Hub</div><div class="page-sub">References, trends, concepts the team can pull from</div></div></div>
-    ${items.length?`<div class="inspo-grid">${items.map(i=>`<div class="inspo-card" data-iid="${i.id}"><div class="inspo-thumb" style="${i.thumbnail?`background-image:url('${esc(i.thumbnail)}')`:''}">${!i.thumbnail?'✦':''}</div><div class="inspo-body"><div class="inspo-title">${esc(i.title)}</div><div class="inspo-meta"><span class="tag purple">${esc(i.category||'reference')}</span><span>${timeAgo(i.created_at)}</span></div></div></div>`).join('')}</div>`:'<div class="empty-page"><div class="empty-page-icon">✦</div><div class="empty-page-text">No inspirations yet — start collecting references</div><button class="btn btn-primary" data-action="new">+ Add First Inspo</button></div>'}
+    ${items.length?`<div class="inspo-grid">${items.map(i=>`<div class="inspo-card" data-iid="${i.id}"><div class="inspo-thumb" style="${i.thumbnail?`background-image:url('${esc(i.thumbnail)}')`:''}">${!i.thumbnail?'✦':''}</div><div class="inspo-body"><div class="inspo-title">${esc(i.title)}</div><div class="inspo-meta"><span class="tag purple">${esc(i.category||'reference')}</span><span>${timeAgo(i.created_at)}</span></div></div></div>`).join('')}</div>`:'<div class="empty-page"><div class="empty-page-icon">✦</div><div class="empty-page-text">No inspirations yet, start collecting references</div><button class="btn btn-primary" data-action="new">+ Add First Inspo</button></div>'}
   `;
   $('#pageContent').onclick=e=>{
     if(e.target.closest('[data-action="new"]'))openInspoForm();
@@ -4705,7 +4767,7 @@ function agRenderGrid(){
     ok:      {border:'#22c55e',bg:'rgba(34,197,94,0.04)', glow:'rgba(34,197,94,0.15)', bar:'linear-gradient(90deg,#22c55e,#15803d)',badge:'#22c55e',label:'CLEAR'},
   };
   const cards=Object.entries(groups).sort((a,b)=>{const r={critical:3,warning:2,info:1,ok:0};return (r[b[1].maxSev]||0)-(r[a[1].maxSev]||0);});
-  if(cards.length===0){g.innerHTML='<div style="grid-column:1/-1;color:var(--text-2);font-size:13px;padding:32px 0;text-align:center;">✅ No alerts — everything running smoothly.</div>';return;}
+  if(cards.length===0){g.innerHTML='<div style="grid-column:1/-1;color:var(--text-2);font-size:13px;padding:32px 0;text-align:center;">No alerts, everything running smoothly.</div>';return;}
   g.innerHTML=cards.map(([key,grp])=>{
     const m=_agentMeta(key);
     const cfg=sevCfg[grp.maxSev]||sevCfg.ok;
@@ -4737,7 +4799,7 @@ function agOpenDrawer(key){
   if(!drawer)return;
   title.textContent=m.icon+' '+m.label;
   const sevColor={critical:'#ef4444',warning:'#f59e0b',info:'#3b82f6'};
-  if(!grp.length){body.innerHTML='<div style="color:var(--text-2);font-size:13px;padding:20px 0;text-align:center;">✅ No alerts recorded for this agent.</div>';
+  if(!grp.length){body.innerHTML='<div style="color:var(--text-2);font-size:13px;padding:20px 0;text-align:center;">No alerts recorded for this agent.</div>';
   }else{
     body.innerHTML=grp.map(a=>{
       const col=sevColor[a.severity]||'#64748b';
@@ -4833,11 +4895,11 @@ function cmdFilter(q){
   var pages=(isEditor()?PAGES_EDITOR:PAGES_FULL).filter(p=>p.key!=='inspo');
   var navItems=pages.map(p=>({type:'nav',label:p.label.replace(/[↗]/g,'').trim(),key:p.key,hint:'Go to page'}));
   var actions=[
-    {type:'action',label:'Add Video Project',key:'add_project',icon:'🎬',hint:'Quick action'},
-    {type:'action',label:'Add Task',key:'add_task',icon:'✅',hint:'Quick action'},
-    {type:'action',label:'Add Drive Link',key:'add_drive',icon:'🔗',hint:'Quick action'},
+    {type:'action',label:'Add Video Project',key:'add_project',icon:vicon('camera',15),hint:'Quick action'},
+    {type:'action',label:'Add Task',key:'add_task',icon:vicon('check',15),hint:'Quick action'},
+    {type:'action',label:'Add Drive Link',key:'add_drive',icon:vicon('link',15),hint:'Quick action'},
   ];
-  var clients=(DATA.clients||[]).map(c=>({type:'client',label:c.name,key:c.id,icon:'👥',hint:'View client'}));
+  var clients=(DATA.clients||[]).map(c=>({type:'client',label:c.name,key:c.id,icon:vicon('users',15),hint:'View client'}));
   var all=[...navItems,...actions,...clients];
   if(q){all=all.filter(r=>r.label.toLowerCase().includes(q));}
   _cmdResults=all.slice(0,12);_cmdIdx=0;cmdRenderResults();
@@ -4922,7 +4984,7 @@ function vsCheckinRender(tasks){
   var html='<div id="vsCheckinOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1200;display:flex;align-items:center;justify-content:center;">'+
     '<div style="background:var(--surface);border:1px solid rgba(168,85,247,0.25);border-radius:16px;width:420px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 0 1px rgba(168,85,247,0.08);">'+
       '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.13),rgba(168,85,247,0.04));border-bottom:1px solid rgba(168,85,247,0.13);padding:16px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;">'+
-        '<div style="width:38px;height:38px;background:linear-gradient(135deg,#a855f7,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">✅</div>'+
+        '<div style="width:38px;height:38px;background:linear-gradient(135deg,#a855f7,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">'+vicon('check',18)+'</div>'+
         '<div><div style="font-size:14px;font-weight:700;color:#fff;">Daily Check-In</div><div style="font-size:11px;color:rgba(168,85,247,0.8);margin-top:2px;">'+badge+' overdue task'+(badge!==1?'s':'')+' need your attention</div></div>'+
         '<button onclick="vsCheckinClose(false)" style="margin-left:auto;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.3);font-size:20px;padding:2px 6px;border-radius:4px;" title="Close">×</button>'+
       '</div>'+
@@ -5241,24 +5303,24 @@ function vsUpdateCheckinBadge(){
   'use strict';
   var MAX_ERR=50,_errLog=[],_errCount=0,_open=false;
   var KB=[
-    {keys:['hello','hi','hey','help me','what can you do','sup'],ans:'Hey! 👋 I\'m your <strong>BB Video Assistant</strong>. I know this system inside out and watch for errors in the background.\n\nAsk me anything — or tap a chip below!'},
-    {keys:['help','what can','capabilities','overview'],ans:'<strong>I can help with:</strong>\n\n• <strong>Pipeline stages</strong> — all 13 stages explained\n• <strong>Shoot pipeline</strong> — 7 shoot stages\n• <strong>My tasks</strong> — how task assignment works\n• <strong>Time tracker</strong> — logging time per project\n• <strong>Drive links</strong> — attaching drive links to projects\n• <strong>Clients</strong> — client management\n• <strong>Auto-archive</strong> — when projects get archived\n• <strong>Login</strong> — PINs and roles\n• <strong>Error log</strong> — type "show errors"\n• <strong>Troubleshooting</strong> — when things go wrong'},
-    {keys:['pipeline','stages','pipeline stages','what are the stages','all stages','video stages'],ans:'<strong>🎬 Video Pipeline — 11 Stages:</strong>\n\n1. <strong>Video Shot</strong> — Raw footage received\n2. <strong>Cutting & Color</strong> — Initial cut + color grade\n3. <strong>Rendering</strong> — Export/render in progress\n4. <strong>Editing</strong> — Full edit underway\n5. <strong>Video Head Review</strong> — Ushane reviews\n6. <strong>Team Review</strong> — Team checks the edit\n7. <strong>Changes</strong> — Revision round\n8. <strong>COO Check</strong> — Shiara approves\n9. <strong>Client Review</strong> — With the client for feedback\n10. <strong>Client Changes</strong> — Client wants edits\n11. <strong>Add to Drive</strong> — Final, uploaded to Google Drive ✅\n\nDrag cards between columns to move them. Projects in the final stage (Add to Drive) auto-archive after 72 hours.'},
-    {keys:['shoot','shoot pipeline','shoot stages','filming','shoot schedule'],ans:'<strong>🎥 Shoot Pipeline — 7 Stages:</strong>\n\n1. <strong>Videos Confirmed</strong> — Videos agreed with client\n2. <strong>Script Made</strong> — Script written\n3. <strong>Script Changes</strong> — Client wants script edits\n4. <strong>Final Script</strong> — Script approved ✅\n5. <strong>Get Shoot Date</strong> — Coordinating date\n6. <strong>Date Confirmed</strong> — Shoot date locked in 📅\n7. <strong>Shot</strong> — Shoot completed! 🎬\n\nNavigate to <strong>Shoot Pipeline</strong> in the sidebar. Filter by client using the dropdown.'},
-    {keys:['archive','auto archive','auto-archive','archived','when does it archive'],ans:'<strong>📦 Auto-Archive:</strong>\n\nProjects in the final stage auto-archive after <strong>72 hours</strong>:\n• Add to Drive\n\nArchived projects are hidden from the main pipeline but not deleted. Admins and video heads can view and restore them from the Archive section.'},
-    {keys:['tasks','my tasks','task','task book','task list'],ans:'<strong>✅ Tasks:</strong>\n\nThe <strong>Tasks</strong> page shows tasks assigned to the <strong>video</strong> team.\n\n• Editors see only their own tasks\n• Admins and video head see all video tasks\n• Tick the checkbox to mark a task done\n• Tasks can be linked to specific clients\n\nTasks are shared with BB Command Centre — admins see them from the main system.'},
+    {keys:['hello','hi','hey','help me','what can you do','sup'],ans:'Hey!  I\'m your <strong>BB Video Assistant</strong>. I know this system inside out and watch for errors in the background.\n\nAsk me anything, or tap a chip below!'},
+    {keys:['help','what can','capabilities','overview'],ans:'<strong>I can help with:</strong>\n\n• <strong>Pipeline stages</strong>: all 13 stages explained\n• <strong>Shoot pipeline</strong>: 7 shoot stages\n• <strong>My tasks</strong>: how task assignment works\n• <strong>Time tracker</strong>: logging time per project\n• <strong>Drive links</strong>: attaching drive links to projects\n• <strong>Clients</strong>: client management\n• <strong>Auto-archive</strong>: when projects get archived\n• <strong>Login</strong>: PINs and roles\n• <strong>Error log</strong>: type "show errors"\n• <strong>Troubleshooting</strong>: when things go wrong'},
+    {keys:['pipeline','stages','pipeline stages','what are the stages','all stages','video stages'],ans:'<strong>Video Pipeline, 11 Stages</strong>\n\n1. <strong>Video Shot</strong>: Raw footage received\n2. <strong>Cutting & Color</strong>: Initial cut + color grade\n3. <strong>Rendering</strong>: Export/render in progress\n4. <strong>Editing</strong>: Full edit underway\n5. <strong>Video Head Review</strong>: Ushane reviews\n6. <strong>Team Review</strong>: Team checks the edit\n7. <strong>Changes</strong>: Revision round\n8. <strong>COO Check</strong>: Shiara approves\n9. <strong>Client Review</strong>: With the client for feedback\n10. <strong>Client Changes</strong>: Client wants edits\n11. <strong>Add to Drive</strong>: Final, uploaded to Google Drive \n\nDrag cards between columns to move them. Projects in the final stage (Add to Drive) auto-archive after 72 hours.'},
+    {keys:['shoot','shoot pipeline','shoot stages','filming','shoot schedule'],ans:'<strong>Shoot Pipeline, 7 Stages</strong>\n\n1. <strong>Videos Confirmed</strong>: Videos agreed with client\n2. <strong>Script Made</strong>: Script written\n3. <strong>Script Changes</strong>: Client wants script edits\n4. <strong>Final Script</strong>: Script approved \n5. <strong>Get Shoot Date</strong>: Coordinating date\n6. <strong>Date Confirmed</strong>: Shoot date locked in \n7. <strong>Shot</strong>: Shoot completed! \n\nNavigate to <strong>Shoot Pipeline</strong> in the sidebar. Filter by client using the dropdown.'},
+    {keys:['archive','auto archive','auto-archive','archived','when does it archive'],ans:'<strong> Auto-Archive:</strong>\n\nProjects in the final stage auto-archive after <strong>72 hours</strong>:\n• Add to Drive\n\nArchived projects are hidden from the main pipeline but not deleted. Admins and video heads can view and restore them from the Archive section.'},
+    {keys:['tasks','my tasks','task','task book','task list'],ans:'<strong>Tasks:</strong>\n\nThe <strong>Tasks</strong> page shows tasks assigned to the <strong>video</strong> team.\n\n• Editors see only their own tasks\n• Admins and video head see all video tasks\n• Tick the checkbox to mark a task done\n• Tasks can be linked to specific clients\n\nTasks are shared with BB Command Centre — admins see them from the main system.'},
     {keys:['time','time tracker','log time','my time','time tracking'],ans:'<strong>⏱ Time Tracker:</strong>\n\nLogs time per editor per project.\n\n• The system auto-calculates time from stage transitions\n• You can also add manual time logs\n• Weekly summaries are shown per editor\n• Admins see all editors; editors see only their own time\n\nNavigate to <strong>Time Tracker</strong> in the sidebar.'},
-    {keys:['drive','drive links','google drive','links','file links'],ans:'<strong>📁 Drive Links:</strong>\n\nAttach Google Drive links to any video project.\n\n• Tags: <strong>Raw Footage</strong>, <strong>Final Cut</strong>, <strong>Other</strong>\n• Click a project → open the Drive Links tab\n• Or go to the <strong>Drive Links</strong> page for a full list\n\nFiltered by client — select a client to see their project links.'},
-    {keys:['client','clients','client list','client management'],ans:'<strong>👥 Clients:</strong>\n\nShows all active clients with their monthly video targets.\n\n• Monthly contracted videos vs completed count\n• Progress bar per client\n• Click a client to edit their monthly target\n• Admins and video head see all clients; editors see read-only view'},
-    {keys:['team','team members','editors','who is on the team'],ans:'<strong>👤 Team:</strong>\n\nShows all video team members:\n• <strong>USHANE</strong> — Video Head\n• <strong>RAJEEWA</strong> — Editor\n• <strong>RAMANI</strong> — Editor\n• <strong>SANDUNU</strong> — Editor\n• <strong>NIDWIN</strong> — Editor\n• <strong>THULAIB</strong> — Admin (CEO)\n• <strong>SHIARA</strong> — Admin (COO)\n\nEach member card shows active projects and monthly completions.'},
-    {keys:['login','pin','password','credentials','who can login'],ans:'<strong>🔐 Login PINs:</strong>\n\n• THULAIB — 1031 (Admin)\n• SHIARA — 1006 (Admin)\n• USHANE — 628474 (Video Head)\n• RAJEEWA — 1212 (Editor)\n• RAMANI — 1717 (Editor)\n• SANDUNU — 7364 (Editor)\n• NIDWIN — 5050 (Editor)\n\n<strong>Roles:</strong>\n• Admin + Video Head — see all projects, all pages, can edit anything\n• Editor — sees only their assigned projects'},
-    {keys:['analytics','stats','kpis','reports','turnaround'],ans:'<strong>📊 Analytics:</strong>\n\nShows video production metrics:\n• Posted count per month\n• Per-editor output breakdown\n• Per-client progress\n• Stage bottleneck analysis — which stage takes longest\n• Average turnaround time\n\nNavigate to <strong>Analytics</strong> in the sidebar.'},
-    {keys:['chat','team chat','messaging','chat system'],ans:'<strong>💬 Team Chat:</strong>\n\nIn-app messaging between the video team.\n\n• Filter by client using the dropdown\n• Send text messages and images\n• Hover over a message to delete it (🗑)\n• Deleted messages show "🗑 This message was deleted" — not fully removed\n• Project comments from the pipeline also appear in the chat feed'},
-    {keys:['agents','agent alerts','ai agents','background agents'],ans:'<strong>🤖 Agents Page:</strong>\n\nShows alerts from the BB background agent system.\n\nAgents scan for:\n• Pipeline stalls\n• Overdue projects\n• Missing assignments\n• Deadline warnings\n\nAlerts are stored in the <strong>agent_alerts</strong> table. Click an alert to mark it read. Agents run every 5 minutes automatically.'},
-    {keys:['not working','broken','error','bug','problem','loading','not loading','crash','something wrong'],ans:'<strong>🔧 Troubleshooting:</strong>\n\n1. <strong>Hard refresh</strong> — Cmd+Shift+R (clears cache)\n2. <strong>Check internet</strong> — Supabase needs a connection\n3. <strong>Read the toast</strong> — Red message at bottom explains what broke\n4. <strong>Show errors</strong> — Type it here to see what I caught\n5. <strong>Open console</strong> — Cmd+Option+J in Chrome\n\nStill broken? Screenshot the console and send to Thulaib.'},
+    {keys:['drive','drive links','google drive','links','file links'],ans:'<strong> Drive Links:</strong>\n\nAttach Google Drive links to any video project.\n\n• Tags: <strong>Raw Footage</strong>, <strong>Final Cut</strong>, <strong>Other</strong>\n• Click a project → open the Drive Links tab\n• Or go to the <strong>Drive Links</strong> page for a full list\n\nFiltered by client — select a client to see their project links.'},
+    {keys:['client','clients','client list','client management'],ans:'<strong>Clients:</strong>\n\nShows all active clients with their monthly video targets.\n\n• Monthly contracted videos vs completed count\n• Progress bar per client\n• Click a client to edit their monthly target\n• Admins and video head see all clients; editors see read-only view'},
+    {keys:['team','team members','editors','who is on the team'],ans:'<strong> Team:</strong>\n\nShows all video team members:\n• <strong>USHANE</strong>: Video Head\n• <strong>RAJEEWA</strong>: Editor\n• <strong>RAMANI</strong>: Editor\n• <strong>SANDUNU</strong>: Editor\n• <strong>NIDWIN</strong>: Editor\n• <strong>THULAIB</strong>: Admin (CEO)\n• <strong>SHIARA</strong>: Admin (COO)\n\nEach member card shows active projects and monthly completions.'},
+    {keys:['login','pin','password','credentials','who can login'],ans:'<strong> Login PINs:</strong>\n\n• THULAIB — 1031 (Admin)\n• SHIARA — 1006 (Admin)\n• USHANE — 628474 (Video Head)\n• RAJEEWA — 1212 (Editor)\n• RAMANI — 1717 (Editor)\n• SANDUNU — 7364 (Editor)\n• NIDWIN — 5050 (Editor)\n\n<strong>Roles:</strong>\n• Admin + Video Head — see all projects, all pages, can edit anything\n• Editor — sees only their assigned projects'},
+    {keys:['analytics','stats','kpis','reports','turnaround'],ans:'<strong> Analytics:</strong>\n\nShows video production metrics:\n• Posted count per month\n• Per-editor output breakdown\n• Per-client progress\n• Stage bottleneck analysis — which stage takes longest\n• Average turnaround time\n\nNavigate to <strong>Analytics</strong> in the sidebar.'},
+    {keys:['chat','team chat','messaging','chat system'],ans:'<strong> Team Chat:</strong>\n\nIn-app messaging between the video team.\n\n• Filter by client using the dropdown\n• Send text messages and images\n• Hover over a message to delete it ()\n• Deleted messages show " This message was deleted" — not fully removed\n• Project comments from the pipeline also appear in the chat feed'},
+    {keys:['agents','agent alerts','ai agents','background agents'],ans:'<strong> Agents Page:</strong>\n\nShows alerts from the BB background agent system.\n\nAgents scan for:\n• Pipeline stalls\n• Overdue projects\n• Missing assignments\n• Deadline warnings\n\nAlerts are stored in the <strong>agent_alerts</strong> table. Click an alert to mark it read. Agents run every 5 minutes automatically.'},
+    {keys:['not working','broken','error','bug','problem','loading','not loading','crash','something wrong'],ans:'<strong> Troubleshooting:</strong>\n\n1. <strong>Hard refresh</strong>: Cmd+Shift+R (clears cache)\n2. <strong>Check internet</strong>: Supabase needs a connection\n3. <strong>Read the toast</strong>: Red message at bottom explains what broke\n4. <strong>Show errors</strong>: Type it here to see what I caught\n5. <strong>Open console</strong>: Cmd+Option+J in Chrome\n\nStill broken? Screenshot the console and send to Thulaib.'},
     {keys:['show errors','error log','errors','detected errors','bugs found'],ans:'__SHOW_ERRORS__'},
     {keys:['clear errors','reset errors'],ans:'__CLEAR_ERRORS__'},
-    {keys:['dashboard','home','overview'],ans:'<strong>📊 Dashboard:</strong>\n\nShows the full team overview — admins and video head see this.\n\n• Pillar health indicators\n• Projects needing attention\n• Stage distribution across the pipeline\n• Upcoming deadlines\n• Ushane\'s daily pillars status\n\nEditors see <strong>My Dashboard</strong> — their personal queue, overdue items, and monthly stats.'},
+    {keys:['dashboard','home','overview'],ans:'<strong>Dashboard:</strong>\n\nShows the full team overview. Admins and the video head see this.\n\n• Pillar health indicators\n• Projects needing attention\n• Stage distribution across the pipeline\n• Upcoming deadlines\n• Ushane\'s daily pillars status\n\nEditors see <strong>My Dashboard</strong>: their personal queue, overdue items, and monthly stats.'},
     {keys:['what is this','about','about the system','bb video'],ans:'<strong>BB Video System</strong>\n\nBusiness Booster\'s internal video production management tool.\n\nManages:\n• 13-stage video production pipeline\n• Shoot scheduling\n• Editor time tracking\n• Drive link management\n• Team tasks and chat\n• Client video targets\n\nPowered by Supabase, hosted on GitHub Pages. All data is live and shared across the team in real time.'}
   ];
   function matchKB(q){
@@ -5284,13 +5346,13 @@ function vsUpdateCheckinBadge(){
   function buildAnswer(e){
     if(!e)return fallback();
     if(e.ans==='__SHOW_ERRORS__')return buildErrorReport();
-    if(e.ans==='__CLEAR_ERRORS__'){_errLog=[];_errCount=0;updateBadge();return'<span style="color:#4ade80">✅ Error log cleared.</span>'}
+    if(e.ans==='__CLEAR_ERRORS__'){_errLog=[];_errCount=0;updateBadge();return'<span style="color:#4ade80">Error log cleared.</span>'}
     return e.ans.replace(/\n/g,'<br>');
   }
   function fallback(){return'I\'m not sure about that. Try asking about: <strong style="color:#f97316">pipeline stages</strong>, <strong style="color:#f97316">shoot pipeline</strong>, <strong style="color:#f97316">my tasks</strong>, <strong style="color:#f97316">auto-archive</strong>, or <strong style="color:#f97316">show errors</strong>.'}
   function buildErrorReport(){
-    if(!_errLog.length)return'<span style="color:#4ade80">✅ No errors detected. System running clean!</span>';
-    var html='<strong style="color:#f87171">⚠️ '+_errLog.length+' error(s):</strong><br><br>';
+    if(!_errLog.length)return'<span style="color:#4ade80">No errors detected, the system is running clean.</span>';
+    var html='<strong style="color:#f87171">'+_errLog.length+' error(s):</strong><br><br>';
     _errLog.slice(-8).forEach(function(e){html+='<div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:7px 10px;margin-bottom:5px;font-size:11px"><span style="color:#f87171;font-weight:700">['+e.type+']</span> '+_esc(e.msg)+' <span style="color:#3d4260">('+e.time+')</span></div>'});
     if(_errLog.length>8)html+='<div style="color:#3d4260;font-size:11px;margin-top:4px">...and '+(_errLog.length-8)+' more. Type "clear errors" to reset.</div>';
     return html;
@@ -5300,7 +5362,7 @@ function vsUpdateCheckinBadge(){
     if(_errLog.length>=MAX_ERR)_errLog.shift();
     _errLog.push({type:type,msg:String(msg).slice(0,200),time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})});
     _errCount++;updateBadge();
-    if(_open){var el=document.getElementById('bb-agent-messages');if(el){var d=document.createElement('div');d.className='bb-err-msg';d.innerHTML='⚠️ <strong>'+type+':</strong> '+_esc(msg);el.appendChild(d);el.scrollTop=el.scrollHeight}}
+    if(_open){var el=document.getElementById('bb-agent-messages');if(el){var d=document.createElement('div');d.className='bb-err-msg';d.innerHTML='<strong>'+type+':</strong> '+_esc(msg);el.appendChild(d);el.scrollTop=el.scrollHeight}}
   }
   function updateBadge(){var b=document.getElementById('bb-agent-error-badge');if(!b)return;if(_errCount>0){b.textContent=_errCount>9?'9+':String(_errCount);b.style.display='flex'}else b.style.display='none'}
   var _NOISE=/failed to fetch|networkerror|network request failed|load failed|offline|net::/i;
@@ -5315,8 +5377,8 @@ function vsUpdateCheckinBadge(){
       panel.classList.add('open');
       var msgs=document.getElementById('bb-agent-messages');
       if(msgs&&msgs.children.length===0){
-        _addMsg('Hey! 👋 I\'m your <strong>BB Video Assistant</strong>.<br><br>I know this system inside out and I\'m watching for errors in the background. Ask me anything — or tap a chip below!','bot');
-        if(_errCount>0)setTimeout(function(){_addMsg('⚠️ I\'ve caught <strong style="color:#f87171">'+_errCount+' error(s)</strong> since you loaded. Tap <strong style="color:#f97316">Show Errors</strong> to see them.','bot')},600);
+        _addMsg('Hey!  I\'m your <strong>BB Video Assistant</strong>.<br><br>I know this system inside out and I\'m watching for errors in the background. Ask me anything, or tap a chip below!','bot');
+        if(_errCount>0)setTimeout(function(){_addMsg('I\'ve caught <strong style="color:#f87171">'+_errCount+' error(s)</strong> since you loaded. Tap <strong style="color:#f97316">Show Errors</strong> to see them.','bot')},600);
       }
       var inp=document.getElementById('bb-agent-input');if(inp)setTimeout(function(){inp.focus()},150);
     }else panel.classList.remove('open');
@@ -5333,7 +5395,7 @@ function vsUpdateCheckinBadge(){
   };
   function _addMsg(html,role){var list=document.getElementById('bb-agent-messages');if(!list)return;var w=document.createElement('div');w.className='bb-msg bb-msg-'+(role==='user'?'user':'bot');var b=document.createElement('div');b.className='bb-bubble';if(role==='user')b.textContent=html;else b.innerHTML=html;w.appendChild(b);list.appendChild(w);list.scrollTop=list.scrollHeight;return w}
   function _addTyping(){var list=document.getElementById('bb-agent-messages');if(!list)return null;var w=document.createElement('div');w.className='bb-msg bb-msg-bot';w.innerHTML='<div class="bb-bubble"><span class="bb-typing-dot"></span><span class="bb-typing-dot"></span><span class="bb-typing-dot"></span></div>';list.appendChild(w);list.scrollTop=list.scrollHeight;return w}
-  console.log('[BB Video Agent] loaded — chat + error monitor active');
+  console.log('[BB Video Agent] loaded, chat + error monitor active');
 })();
 </script>
 
@@ -5499,7 +5561,7 @@ function vsUpdateCheckinBadge(){
       document.body.appendChild(el);
     }
     var top=_issues.slice(-3).map(function(i){return (i.table_name?i.table_name+': ':'')+i.message;}).join('  ·  ');
-    el.innerHTML='<span style="font-size:15px">⚠️</span>'+
+    el.innerHTML=''+
       '<span style="flex:1">System issue detected ('+_issues.length+'): '+top+'</span>'+
       '<button id="bbSentinelView" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:6px;padding:4px 10px;font:700 11px Inter;cursor:pointer">Details</button>'+
       '<button id="bbSentinelHide" style="background:none;border:none;color:#fff;opacity:.7;font-size:17px;cursor:pointer;line-height:1">×</button>';
@@ -5554,7 +5616,7 @@ function vsUpdateCheckinBadge(){
             // Retry once; if it still fails it's a connectivity issue, NOT a bug — log quietly, no banner.
             if(res.status===0){
               if(retriesLeft>0){ setTimeout(function(){attempt(retriesLeft-1);}, 5000); return; }
-              report({severity:'info',category:'network',table_name:t.name,message:'read failed (network/offline)',detail:'Transient — the browser could not reach the server. Not a server bug.',quiet:true});
+              report({severity:'info',category:'network',table_name:t.name,message:'read failed (network/offline)',detail:'Transient, the browser could not reach the server. Not a server bug.',quiet:true});
               return;
             }
             // Real server responses ARE bugs worth surfacing.
@@ -5563,7 +5625,7 @@ function vsUpdateCheckinBadge(){
             return;
           }
           if(t.core && res.count===0){
-            report({severity:'warning',category:'empty_core',table_name:t.name,message:'returned 0 rows — likely a permissions (RLS) block',detail:'Core table should never be empty. Check Row Level Security policy for the anon role.'});
+            report({severity:'warning',category:'empty_core',table_name:t.name,message:'returned 0 rows, likely a permissions (RLS) block',detail:'Core table should never be empty. Check Row Level Security policy for the anon role.'});
           }
         });
       }
@@ -6251,8 +6313,28 @@ async function runSelfTest(){
    await new Promise(r=>setTimeout(r,1800));
    const box=document.querySelector('.wp-item-box');
    if(!box){
-    ok('Weekly Plan: a tick box is big enough to tap',false,
-       'NO TICK BOX ON SCREEN, this check proved nothing');
+    /* NO PLAN WRITTEN YET is not the same as BROKEN. On a Monday morning the
+       week is empty and there is nothing to measure. Fall back to the rule
+       itself, which is always checkable: the box carries an ::after overlay
+       that extends the hit area past its drawn size. */
+    const cells=Object.keys(typeof _wpCells!=='undefined'?(_wpCells||{}):{}).length;
+    /* APPSRC is the SCRIPT text only, so a CSS rule can never be found in it.
+       Two earlier versions of this line looked there and reported the rule
+       missing while it sat in the stylesheet. Ask the browser instead: build
+       the real element and read what ::after actually computes to. */
+    const probe=document.createElement('span');
+    probe.className='wp-item-box';
+    probe.style.position='absolute'; probe.style.left='-9999px';
+    document.body.appendChild(probe);
+    const ins=getComputedStyle(probe,'::after').inset||getComputedStyle(probe,'::after').top;
+    const pad=Math.abs(parseFloat(ins)||0);
+    probe.remove();
+    const ruleOk=pad>=10;
+    ok('Weekly Plan: a tick box is big enough to tap',cells===0&&ruleOk,
+       cells===0?('no plan written for this week yet, so the RULE was measured instead: '+
+                  (ruleOk?('the tap overlay extends '+pad+'px past the box on every side')
+                        :'THE OVERLAY RULE IS GONE, a finger will miss the box'))
+                :(cells+' cells loaded but no tick box rendered, that is a real fault'));
     try{ navTo(wasPage); }catch(e){} return;
    }
    /* Measure the REAL hit area, not the drawn size. The box is deliberately
@@ -6526,6 +6608,67 @@ async function runSelfTest(){
    ok('Undo: there is a permanent way to reach it',
       typeof bbuUndo==='function'&&/data-action="undo"/.test(renderPipeline.toString()),
       'Pipeline button, the bar, and Ctrl+Z');
+  })();
+
+  /* ── H18 · the notification panel can actually be seen ───────────────── */
+  (function(){
+   /* .topbar has backdrop-filter, which CREATES A STACKING CONTEXT. Anything
+      rendered inside it is trapped there whatever its z-index, which is why
+      raising the number from 120 did nothing and moving the panel to body
+      fixed it. If a future edit puts the panel back inside the topbar, this
+      fails. */
+   /* The move lives in toggleNotifPanel, not renderNotifications. The first
+      version of this check read the wrong function and failed while the fix
+      was working: a check pointed at the wrong surface is worse than none. */
+   const src=(typeof toggleNotifPanel==='function')?toggleNotifPanel.toString():'';
+   ok('Alerts: the panel is not trapped inside the top bar',
+      /body\.appendChild\(panel\)/.test(src)&&/notifPlace/.test(src),
+      /body\.appendChild\(panel\)/.test(src)?'moved to body and placed from the bell'
+        :'the panel is back inside .topbar, whose backdrop-filter traps it');
+   const bell=document.getElementById('notifBell');
+   if(bell){
+     const r=bell.getBoundingClientRect();
+     const big=Math.min(r.width,r.height)>=44||window.innerWidth>768;
+     ok('Alerts: the bell is a real tap target on a phone',big,
+        Math.round(r.width)+'x'+Math.round(r.height)+' at '+window.innerWidth+'px wide');
+   }
+   /* The month a delivery counts for must be SAID, or "I delivered it and
+      nothing moved" comes back every month. */
+   ok('Clients: a delivery says which month it counted for',
+      /counted for/.test(typeof moveProject==='function'?moveProject.toString():''),
+      'the move toast names the month');
+   ok('Clients: deliveries in other months are shown, never hidden',
+      /cli-elsewhere/.test(typeof renderClients==='function'?renderClients.toString():''),
+      'the Clients page lists what landed in other months');
+  })();
+
+  /* ── H19 · house style, enforced in the app ──────────────────────────── */
+  (function(){
+   /* The em dash ban and the no-emoji-as-icons rule are HARD RULES, and until
+      now nothing in this system checked either. 19 em dashes and 14 emoji were
+      sitting in copy people read every day. A rule that lives only in a
+      document is a hope: this is the check. APPSRC excludes the harness block
+      so these very lines cannot trip it. */
+   const src=(typeof APPSRC==='string')?APPSRC:'';
+   /* LINE BY LINE, and comments do not count. The first version ran the regex
+      over the whole file at once, so a quote on one line matched a dash inside
+      a code comment twenty lines later and it reported 20 phantom hits. */
+   const lines=src.split('\n');
+   const dashes=[];
+   let scanned=0;
+   for(const ln of lines){
+     const t=ln.trim();
+     if(t.startsWith('//')||t.startsWith('/*')||t.startsWith('*'))continue;
+     scanned++;
+     const m=ln.match(/['"`][^'"`\n]{0,160}?[a-z0-9)] \u2014 [a-z0-9]/g);
+     if(m)dashes.push(...m);
+   }
+   ok('Copy: no em dashes in anything a person reads',dashes.length===0,
+      dashes.length?('found '+dashes.length+', first: '+dashes[0].slice(0,60))
+                   :scanned+' non-comment lines scanned, all clean');
+   const emoji=(src.match(/[\u{1F300}-\u{1FAFF}\u2705\u274C\u26A0]/gu)||[]);
+   ok('Copy: no emoji used as an icon',emoji.length===0,
+      emoji.length?('found '+emoji.length+': '+[...new Set(emoji)].join(' ')):'stroke icons only, '+src.length+' characters checked');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */

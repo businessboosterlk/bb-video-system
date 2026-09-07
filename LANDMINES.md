@@ -1227,3 +1227,57 @@ with no month. It counts towards nothing and looks like a test row.
 Editing owned by someone who left on 14 August. This was also the first live
 proof of `bb_notify_on_reassign`: one alert, "2 items moved to you", debounced
 from two updates into one.
+
+---
+
+## L-VID-028 · three reported faults, three different real causes
+
+**1 · The notification panel hid behind the page. It was never a z-index number.**
+`.topbar` carries `backdrop-filter`, and **a backdrop-filter creates a stacking
+context**. The panel lived inside the topbar, so its `z-index:120` was scoped to
+that context, the topbar itself was `position:static; z-index:auto`, and every
+later element in the document painted over it. **Raising the number could never
+have worked, and it was measured: setting the topbar to z-index 400 changed
+nothing.** Moving the panel to `document.body` fixed it on the first try, so it
+is now a child of body, positioned from the bell's own rect.
+
+**The rule: when a child will not rise above its neighbours, look at the
+ANCESTORS for a stacking context, not at the child's z-index.** `backdrop-filter`,
+`filter`, `transform`, `opacity` below 1, `will-change` and `contain` all create
+one. The BB glass topbar is on every system, so this bug is portable.
+
+**2 · The bell could not be tapped on a phone.** It was **36 by 36** in the
+mobile block, under the 44px floor bb-app-foundations has required since
+9 August, in the hardest corner of a screen to hit. Nothing was covering it:
+measured with `elementFromPoint`, the bell WAS the top element. It was simply
+too small. Now 44.
+
+**3 · "Add to Drive does not increase the client's bar" is not a bug.** A video
+counts for the month it is TAGGED for, never the month it was finished
+(L-VID-003, and that rule stays). Waverley has nine delivered videos: three
+tagged September, four October, two August. The Clients page shows September,
+counts three, and is right. **The fault was that the system never SAID so.**
+The move toast now names the month a delivery counted for, and the Clients page
+lists what landed in other months. Fifty delivered videos are tagged July.
+
+**Also found while scanning, both standing house rules with nothing enforcing
+them:** 19 em dashes and 14 emoji used as icons in copy the team reads daily.
+Both are now zero, and **both now have a check** (H19). `guard.py` does not test
+either, and the em dash rule has been in CLAUDE.md the whole time. A rule that
+lives only in a document is a hope.
+
+**Three of my own checks were wrong when first written, and each failed loudly
+rather than passing quietly, which is the only reason they were caught:**
+- one read `renderNotifications` when the code lives in `toggleNotifPanel`
+- one ran a regex over the whole file at once, so a quote on one line matched a
+  dash in a comment twenty lines later: 20 phantom hits
+- one looked for a CSS rule inside `APPSRC`, which is **script text only** and
+  can never contain CSS. It now builds the real element and reads what `::after`
+  computes to, which is the actual surface
+
+**And one honest-failure improvement.** The tick-box check reported "NO TICK BOX
+ON SCREEN, this check proved nothing" every Monday, because no plan is written
+yet. It now tells "no plan this week" apart from "broken" and measures the rule
+instead. **A check that cannot see its subject must say which of the two it is.**
+
+90 checks, 0 failing.
