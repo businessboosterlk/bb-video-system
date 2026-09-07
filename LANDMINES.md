@@ -1387,3 +1387,41 @@ an early stage switches back to Raw Clips. It says why in one line, and the
 type tabs stay clickable so the guess is never a cage.
 
 90 checks, 0 failed.
+
+---
+
+## L-VID-031 · the column said lines and counted days
+
+**Asked** 7 September: "on the Month Recap, what does Plan lines done mean?"
+
+It meant **days**, not lines. The header read **Plan lines done** while
+`rcAddPlan` counted `cells`, and a cell is one person for one day. So a day with
+three of four lines finished scored **zero**, and a person who had ticked most
+of their week could read `0 of 5`.
+
+It was correct when it was written, because a whole day was the only thing that
+could be marked done. The tick boxes (L-VID-024) gave every LINE its own state
+in August, and this reader was never updated. **That is
+`format-change-update-every-reader` again, in the same file, five days later.**
+
+Now it counts real items through `wpItems`, the one parser, and shows the days
+figure beside it rather than instead of it:
+
+    Plan lines done
+    0 of 8 · 0/5 days closed
+
+**A NaN I introduced fixing it, caught only by reading the rendered table.**
+`m.people[nm]` is filled by the VIDEO pass first, so anybody who delivered a
+video already existed **without** the new `lines` fields, and `++` on undefined
+gives NaN. `p.lines ? ... : '—'` is falsy for NaN, so **RAJEEWA's entire plan
+column silently went blank** while KAVISH, who had no videos and so was created
+fresh, looked fine. Any field added to a shared accumulator must be defaulted
+where the object may ALREADY exist, not only where it is created.
+
+**And a reading trap worth keeping.** The recap first showed 7 lines and 4 days
+against a database holding 8 and 5. Nothing was wrong: the team was editing the
+plan while the page held a fetch from load. **Before calling a count short,
+re-fetch.** On a live shared board the screen is always a photograph, never the
+thing itself.
+
+90 checks, 0 failed.

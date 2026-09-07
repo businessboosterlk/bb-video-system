@@ -715,6 +715,8 @@ a:hover{text-decoration:underline}
 .cm-pill.full b{color:var(--green)}
 .cm-pill.late{border-color:var(--red,#ef4444)}
 .cm-of{color:var(--text-3);font-size:.9em}
+.rc-days{color:var(--text-3);font-size:.85em}
+.rc-sub{font-size:9px;font-weight:600;color:var(--text-3);text-transform:none;letter-spacing:0;margin-top:2px}
 .cm-flag{margin-left:3px;font-size:10px;font-weight:800;color:var(--red,#ef4444);text-transform:uppercase;letter-spacing:.04em}
 .dl-stages{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
 .dl-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface-2);
@@ -3370,8 +3372,23 @@ function rcMonth(yr,mo,clientId){
 function rcAddPlan(m,cells){
   cells.filter(c=>String(c.content||'').trim()).forEach(c=>{
     const nm=String(c.editor_name||'').toUpperCase();
-    if(!m.people[nm])m.people[nm]={name:nm,done:0,open:0,clients:new Set(),cells:0,cellsDone:0,cuts:0,cutJobs:0};
-    const P=m.people[nm];P.cells++;if(c.status==='done')P.cellsDone++;
+    if(!m.people[nm])m.people[nm]={name:nm,done:0,open:0,clients:new Set(),cells:0,cellsDone:0,lines:0,linesDone:0,cuts:0,cutJobs:0};
+    const P=m.people[nm];
+    /* The people map is filled by the VIDEO pass first, so a person who
+       delivered a video already exists WITHOUT these fields, and ++ on
+       undefined gives NaN. RAJEEWA's whole plan column went blank that way.
+       Anything added to this object later must default here too. */
+    if(P.lines===undefined){P.lines=0;P.linesDone=0;}
+    if(P.cells===undefined){P.cells=0;P.cellsDone=0;}
+    if(P.cuts===undefined){P.cuts=0;P.cutJobs=0;}
+    P.cells++;if(c.status==='done')P.cellsDone++;
+    /* LINES, not days. The column is headed "Plan lines done" and counted whole
+       DAYS: a day with three of four lines finished scored zero. Since the tick
+       boxes went in (L-VID-024) every line carries its own state, so read the
+       items through the one parser instead of the cell's status flag. */
+    wpItems(c.content).forEach(function(it){
+      P.lines++; if(it.fin)P.linesDone++;
+    });
     String(c.content).split(/\n/).forEach(line=>{const cut=parseCutLine(line);
       if(!cut)return;P.cutJobs++;if(cut.n!=null)P.cuts+=cut.n;});
   });
@@ -3459,7 +3476,7 @@ async function renderRecap(){
     </div>
 
     <div class="panel"><div class="panel-head"><div class="panel-title">Workload by person</div><div class="text-3 fs-11">${planErr?'weekly plan could not be read':'videos and weekly plan, both months'}</div></div>
-      <table class="tbl"><thead><tr><th>Person</th><th>Delivered</th><th>${esc(prevLbl)}</th><th>Change</th><th>Still open</th><th>Clients</th><th>Plan lines done</th><th>Cutting</th></tr></thead><tbody>
+      <table class="tbl"><thead><tr><th>Person</th><th>Delivered</th><th>${esc(prevLbl)}</th><th>Change</th><th>Still open</th><th>Clients</th><th>Plan lines done<div class="rc-sub">of every line written for them</div></th><th>Cutting</th></tr></thead><tbody>
       ${ppl.map(p=>{const was=(B.people[p.name]||{done:0,cells:0,cellsDone:0}).done;const d=p.done-was;
         return `<tr>
         <td><strong>${esc(p.name)}</strong></td>
@@ -3468,7 +3485,7 @@ async function renderRecap(){
         <td>${d===0?'<span class="muted">level</span>':`<span style="color:${d>0?'var(--green)':'var(--amber)'};font-weight:700">${d>0?'↑':'↓'} ${Math.abs(d)}</span>`}</td>
         <td class="muted">${p.open}</td>
         <td class="muted">${p.clients.size}</td>
-        <td class="muted">${p.cells?p.cellsDone+' of '+p.cells:'—'}</td>
+        <td class="muted">${p.lines?p.linesDone+' of '+p.lines+'<span class="rc-days"> · '+p.cellsDone+'/'+p.cells+' days closed</span>':'—'}</td>
         <td class="muted">${p.cutJobs?(p.cuts?(p.cuts+' videos'):(p.cutJobs+' job'+(p.cutJobs===1?'':'s')+', not counted')):'—'}</td>
       </tr>`}).join('')||'<tr><td colspan="8" class="muted">Nothing recorded for this month</td></tr>'}
       </tbody></table>
