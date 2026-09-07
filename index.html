@@ -5952,6 +5952,25 @@ BBF.start();BBF.hintKeyboards();
 async function runSelfTest(){
  const R=[];
  const ok=(name,pass,detail)=>{R.push({name:name,pass:!!pass,detail:String(detail==null?'':detail).slice(0,220)});};
+ /* COULD NOT RUN. Not a pass, because it examined nothing. Not a failure,
+    because nothing is broken. An audit ran this harness signed out and got 13
+    FAILED, all false, which is how a harness teaches people to ignore it. */
+ const blind=(name,why)=>{R.push({name:name,pass:false,skipped:true,detail:String(why==null?'':why).slice(0,220)});};
+ /* SIGNED OUT means no rows, and no rows means the data checks below are
+    looking at an empty room. They must say so rather than accusing five real
+    people of having no database row, which is what an audit caught them doing. */
+ const signedIn=(typeof currentUser!=='undefined'&&!!currentUser);
+ const noRows=!((DATA&&DATA.teamMembers)||[]).length;
+ const cannotSee=!signedIn||noRows;
+ const why=!signedIn?'nobody is signed in, so the app loaded no rows'
+                    :'no team members loaded, so there was nothing to check';
+ /* Same three arguments as ok(), so a data check reads identically whether it
+    can run or not. blind() takes two, and passing a boolean as its reason is
+    exactly the kind of quiet wrong answer this whole change exists to stop. */
+ const okData=(name,pass,detail)=>{
+   if(cannotSee)blind(name,why);
+   else ok(name,pass,detail);
+ };
  const cs=getComputedStyle;
  const snapPage=(typeof currentPage!=='undefined')?currentPage:'dashboard';
  try{
@@ -5963,7 +5982,7 @@ async function runSelfTest(){
   const idSeen={};document.querySelectorAll('[id]').forEach(el=>idSeen[el.id]=(idSeen[el.id]||0)+1);
   const idDupes=Object.keys(idSeen).filter(k=>idSeen[k]>1);
   ok('Boot: no duplicate DOM ids',idDupes.length===0,idDupes.slice(0,5).join(', ')||'clean');
-  ok('Boot: data actually loaded',(DATA.projects||[]).length>0&&(DATA.clients||[]).length>0,
+  okData('Boot: data actually loaded',(DATA.projects||[]).length>0&&(DATA.clients||[]).length>0,
      (DATA.projects||[]).length+' projects, '+(DATA.clients||[]).length+' clients');
 
   /* ── B · THE ONE MONTH RULE (L-VID-003) ─────────────────────────────── */
@@ -5980,8 +5999,7 @@ async function runSelfTest(){
    /* archived MUST still count: archiving clears the board, it does not undo a
       delivery, and a month's number must not move because someone tidied up */
    const arch=allProjects().filter(p=>p.is_archived&&isDelivered(p)&&p.target_month);
-   if(!arch.length){ok('Month: archived deliveries still count',false,
-     'NO ARCHIVED DELIVERY FOUND, this check proved nothing');return;}
+   if(!arch.length){blind('Month: archived deliveries still count','NO ARCHIVED DELIVERY FOUND, this check proved nothing');return;}
    const a=arch[0];
    const got=monthDelivery(a.client_id,a.target_year||new Date().getFullYear(),a.target_month);
    ok('Month: archived deliveries still count',got.delivered>0,
@@ -5994,8 +6012,7 @@ async function runSelfTest(){
   ok('Images: the sweep is exposed so a check can drive it',typeof window.bbLazySweep==='function');
   (function(){
    const k=[...IMG_HAS][0];
-   if(!k){ok('Images: a row with an image renders a placeholder',false,
-     'NO ROW WITH AN IMAGE, this check proved nothing');return;}
+   if(!k){blind('Images: a row with an image renders a placeholder','NO ROW WITH AN IMAGE, this check proved nothing');return;}
    const t=k.split(':')[0],id=k.split(':')[1];
    const html=lazyImgHtml(t,id);
    ok('Images: a row with an image renders a placeholder, not the image',
@@ -6019,8 +6036,8 @@ async function runSelfTest(){
    ok('Shell: the page paints the status bar strip',!!document.querySelector('.statusfill'));
    ok('Shell: it is installable',!!document.querySelector('link[rel=manifest]'));
    const bar=document.querySelector('.topbar');
-   if(!bar){ok('Shell: chrome moves down for a notch',false,'NO .topbar FOUND, check proved nothing');
-            ok('Shell: and leaves no gap without one',false,'not proven');return;}
+   if(!bar){blind('Shell: chrome moves down for a notch','NO .topbar FOUND, check proved nothing');
+            blind('Shell: and leaves no gap without one','not proven');return;}
    /* env() cannot be read or faked from JS, which is exactly WHY the inset is
       stored in an overridable variable. Push it and assert the chrome moved. */
    root.style.setProperty('--sat','59px');
@@ -6039,9 +6056,16 @@ async function runSelfTest(){
    ok('App: the page does not pull to refresh',cs(document.body).overscrollBehaviorY==='none',
       cs(document.body).overscrollBehaviorY);
    const b=document.querySelector('.nav-item');
-   ok('App: no blue flash on tap',!!b&&/rgba\(0, 0, 0, 0\)|transparent/.test(cs(b).webkitTapHighlightColor),
-      b?cs(b).webkitTapHighlightColor:'NO .nav-item FOUND, check proved nothing');
-   ok('App: chrome does not select on drag',!!b&&cs(b).userSelect==='none',b?cs(b).userSelect:'no .nav-item');
+   /* The sidebar does not exist until somebody signs in, so with no nav item
+      there is nothing to measure. Saying so beats accusing the app. */
+   if(!b){
+     blind('App: no blue flash on tap','the sidebar is not built until sign-in, so there was no nav item to measure');
+     blind('App: chrome does not select on drag','the sidebar is not built until sign-in, so there was no nav item to measure');
+   }else{
+     ok('App: no blue flash on tap',/rgba\(0, 0, 0, 0\)|transparent/.test(cs(b).webkitTapHighlightColor),
+        cs(b).webkitTapHighlightColor);
+     ok('App: chrome does not select on drag',cs(b).userSelect==='none',cs(b).userSelect);
+   }
    if(matchMedia('(pointer:coarse)').matches){
     const small=[];
     document.querySelectorAll('input,select,textarea').forEach(el=>{
@@ -6073,9 +6097,8 @@ async function runSelfTest(){
    }
    const all=[].slice.call(document.querySelectorAll(BBF.ovs));
    if(!all.length){
-    ok('App: the page behind an open sheet is frozen',false,
-       'COULD NOT OPEN ANY OVERLAY ('+BBF.ovs+'), so this check proved nothing');
-    ok('App: the page behind an open sheet is out of reach',false,'not proven');return;}
+    blind('App: the page behind an open sheet is frozen','COULD NOT OPEN ANY OVERLAY ('+BBF.ovs+'), so this check proved nothing');
+    blind('App: the page behind an open sheet is out of reach','not proven');return;}
    for(let i=0;i<all.length&&!frozen;i++){
     const ov=all[i];
     const had={on:ov.classList.contains('on'),open:ov.classList.contains('open')};
@@ -6151,8 +6174,7 @@ async function runSelfTest(){
      the check FORCES an island and measures. */
   (function(){
    const bar=document.querySelector('.topbar');
-   if(!bar){ok('Chrome: nothing in the top bar sits on its edge',false,
-     'NO .topbar FOUND, this check proved nothing');return;}
+   if(!bar){blind('Chrome: nothing in the top bar sits on its edge','NO .topbar FOUND, this check proved nothing');return;}
    const root=document.documentElement;
    const had=root.style.getPropertyValue('--sat');
    root.style.setProperty('--sat','59px');
@@ -6242,8 +6264,7 @@ async function runSelfTest(){
      [].slice.call(c.querySelectorAll('[data-pid]')).map(x=>x.getAttribute('data-pid')).join(','));
    const before=readOrder();
    if(!before.length||!before.join('')){
-    ok('Pipeline: a silent repaint leaves every card where it was',false,
-       'NO CARDS ON THE BOARD, this check proved nothing');
+    blind('Pipeline: a silent repaint leaves every card where it was','NO CARDS ON THE BOARD, this check proved nothing');
    }else{
     const col=(DATA.projects||[]).filter(p=>p.current_stage==='client_review');
     const victim=col.length?col[col.length-1]:null;
@@ -6270,8 +6291,7 @@ async function runSelfTest(){
     const r=await fetch(SUPABASE_URL+'/rest/v1/weekly_plan_cells?select=week_start&order=week_start.desc&limit=200',
       {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
     const rows=r.ok?await r.json():[];
-    if(!rows.length){ok('Weekly Plan: past weeks still load',false,
-      'NO weekly_plan_cells ROWS AT ALL, this check proved nothing');return;}
+    if(!rows.length){blind('Weekly Plan: past weeks still load','NO weekly_plan_cells ROWS AT ALL, this check proved nothing');return;}
     /* Prove it by LOADING that week, not by recomputing a date. The first
        version of this check did the arithmetic itself and got it wrong in
        exactly the way it was written to catch: it took a stored SUNDAY, asked
@@ -6317,7 +6337,15 @@ async function runSelfTest(){
        week is empty and there is nothing to measure. Fall back to the rule
        itself, which is always checkable: the box carries an ::after overlay
        that extends the hit area past its drawn size. */
-    const cells=Object.keys(typeof _wpCells!=='undefined'?(_wpCells||{}):{}).length;
+    /* Rows in memory are NOT the same as a rendered grid. Signed out, an anon
+       read can fill _wpCells while no page is drawn, and the first version of
+       this branch called that "a real fault". It is not: it is another case of
+       the check not being able to see. */
+    /* The grid can render with NO editor rows: signed out, wpVisibleEditors()
+       returns an empty list, so the table exists and holds nothing. A table
+       with no rows is still nothing to measure. */
+    const gridUp=!!document.querySelector('.wp-grid-table')&&!!document.querySelector('.wp-editor-row');
+    const cells=gridUp?Object.keys(typeof _wpCells!=='undefined'?(_wpCells||{}):{}).length:0;
     /* Read the RULE as authored, from the stylesheet.
        Two earlier versions of this line got it wrong and both failed loudly.
        The first looked inside APPSRC, which is script text and can never hold
@@ -6338,11 +6366,18 @@ async function runSelfTest(){
       }
     }catch(e){}
     const ruleOk=pad>=10;
-    ok('Weekly Plan: a tick box is big enough to tap',cells===0&&ruleOk,
-       cells===0?('no plan written for this week yet, so the RULE was measured instead: '+
-                  (ruleOk?('the tap overlay extends '+pad+'px past the box on every side')
-                        :'THE OVERLAY RULE IS GONE, a finger will miss the box'))
-                :(cells+' cells loaded but no tick box rendered, that is a real fault'));
+    if(!gridUp){
+      blind('Weekly Plan: a tick box is big enough to tap',
+            'the Weekly Plan is not on screen'+(ruleOk?', though the tap overlay rule is present at '+pad+'px':', AND THE OVERLAY RULE IS MISSING'));
+    }else if(cells===0){
+      ok('Weekly Plan: a tick box is big enough to tap',ruleOk,
+         'no plan written for this week yet, so the RULE was measured instead: '+
+         (ruleOk?('the tap overlay extends '+pad+'px past the box on every side')
+               :'THE OVERLAY RULE IS GONE, a finger will miss the box'));
+    }else{
+      ok('Weekly Plan: a tick box is big enough to tap',false,
+         cells+' cells loaded and the grid is up, but no tick box rendered, that is a real fault');
+    }
     try{ navTo(wasPage); }catch(e){} return;
    }
    /* Measure the REAL hit area, not the drawn size. The box is deliberately
@@ -6379,7 +6414,7 @@ async function runSelfTest(){
       two people who had left stayed in every assignment dropdown. The filter
       looked right and could not work. A flag you never SELECT is a flag you do
       not have. */
-   ok('Team: the active flag is actually fetched',
+   okData('Team: the active flag is actually fetched',
       (DATA.teamMembers||[]).some(m=>m.active!==undefined),
       'without it every leaver reads as still here');
    const gone=(DATA.teamMembers||[]).filter(m=>m.active===false).map(m=>m.name);
@@ -6435,7 +6470,7 @@ async function runSelfTest(){
    const need=USERS.filter(u=>u.role==='editor'||u.role==='video_head');
    const names=(DATA.teamMembers||[]).map(m=>String(m.name||'').toUpperCase());
    const missing=need.filter(u=>names.indexOf(String(u.name).toUpperCase())===-1).map(u=>u.name);
-   ok('Access: every editor login can actually be assigned work',missing.length===0,
+   okData('Access: every editor login can actually be assigned work',missing.length===0,
       missing.length?('no team_members row for '+missing.join(', ')+', their board will be empty')
                     :(need.length+' editor logins, all resolvable'));
   })();
@@ -6471,7 +6506,7 @@ async function runSelfTest(){
       pillar was measuring a spread against people outside the department. */
    const all=activeMembers().length, vid=videoMembers().length;
    const strays=activeMembers().filter(m=>!isVideoRole(m.role)).map(m=>m.name);
-   ok('Team: only video people are listed',vid>0&&vid<=all,
+   okData('Team: only video people are listed',vid>0&&vid<=all,
       vid+' of '+all+' members are video'+(strays.length?', excluded '+strays.join(', '):''));
    /* The Weekly Plan grid is a hardcoded list of names. It has to stay level
       with the roster or a new hire gets a login, a board and no row to plan in.
@@ -6479,7 +6514,7 @@ async function runSelfTest(){
    const roster=videoMembers().map(m=>String(m.name||'').toUpperCase());
    const noRow=(typeof WP_EDITORS!=='undefined')?WP_EDITORS.filter(x=>roster.indexOf(x)===-1):[];
    const noPlan=(typeof WP_EDITORS!=='undefined')?roster.filter(x=>WP_EDITORS.indexOf(x)===-1):[];
-   ok('Team: the Weekly Plan grid matches the video roster',
+   okData('Team: the Weekly Plan grid matches the video roster',
       noRow.length===0&&noPlan.length===0,
       (noRow.length?'on the plan but not in team_members: '+noRow.join(', ')+'. ':'')+
       (noPlan.length?'in team_members but not on the plan: '+noPlan.join(', ')+'.':'')||
@@ -6702,15 +6737,23 @@ async function runSelfTest(){
   try{navTo(snapPage);}catch(e){}
  }
 
- const failed=R.filter(r=>!r.pass);
+ const skipped=R.filter(r=>r.skipped);
+ const failed=R.filter(r=>!r.pass&&!r.skipped);
+ const passed=R.filter(r=>r.pass);
  const pass=failed.length===0;
+ /* A skip is REPORTED, never hidden and never counted as a pass. Green means
+    nothing is broken; it does not mean everything was examined. */
+ const line=passed.length+' passed, '+failed.length+' failed'+
+            (skipped.length?', '+skipped.length+' could not run':'');
  window.__ST_REPORTING=true;
- console.log('%c BB VIDEO SELF-TEST  '+(pass?'ALL GREEN':failed.length+' FAILED')+'  '+R.length+' checks',
-             'background:'+(pass?'#16a34a':'#dc2626')+';color:#fff;padding:3px 8px;border-radius:4px;font-weight:700');
- console.table(R.map(r=>({check:r.name,result:r.pass?'PASS':'FAIL',detail:r.detail})));
- if(!pass)console.warn('FAILED:\n'+failed.map(f=>'  - '+f.name+(f.detail?('  ['+f.detail+']'):'')).join('\n'));
+ console.log('%c BB VIDEO SELF-TEST  '+(pass?'NOTHING BROKEN':failed.length+' FAILED')+'  '+line,
+             'background:'+(pass?(skipped.length?'#b45309':'#16a34a'):'#dc2626')+';color:#fff;padding:3px 8px;border-radius:4px;font-weight:700');
+ console.table(R.map(r=>({check:r.name,result:r.skipped?'COULD NOT RUN':(r.pass?'PASS':'FAIL'),detail:r.detail})));
+ if(failed.length)console.warn('FAILED:\n'+failed.map(f=>'  - '+f.name+(f.detail?('  ['+f.detail+']'):'')).join('\n'));
+ if(skipped.length)console.info('COULD NOT RUN (nothing is broken, there was nothing to look at):\n'+
+   skipped.map(f=>'  - '+f.name+(f.detail?('  ['+f.detail+']'):'')).join('\n'));
  window.__ST_REPORTING=false;
- return {pass:pass,failed:failed.length,total:R.length,results:R};
+ return {pass:pass,failed:failed.length,skipped:skipped.length,passed:passed.length,total:R.length,results:R};
 }
 window.runSelfTest=runSelfTest;
 if(location.search.indexOf('selftest')>-1){

@@ -1281,3 +1281,62 @@ yet. It now tells "no plan this week" apart from "broken" and measures the rule
 instead. **A check that cannot see its subject must say which of the two it is.**
 
 90 checks, 0 failing.
+
+---
+
+## L-VID-029 · a harness that cries wolf is worse than no harness
+
+**Found by an outside audit on 7 September 2026**, not by me. It ran this
+harness **signed out** and got **13 FAILED of 88**. Every one was false. Nothing
+was broken. The checks simply had no data to look at.
+
+The worst one was mine:
+
+> "Access: every editor login can actually be assigned work.
+>  **no team_members row for USHANE, RAJEEWA, RAMANI, BAVITH, KAVISH,
+>  their board will be empty**"
+
+All five exist and are active. The harness had loaded zero rows because nobody
+was signed in. That check exists to catch exactly the Bavith and Kavish fault,
+and it accused five real people of it while everything was fine.
+
+**Eight of the thirteen admitted it in their own text**: "this check proved
+nothing", "NO CARDS ON THE BOARD", "not proven". They were still counted, shown
+and coloured as FAILURES.
+
+**Two rules were in conflict and both are right.**
+
+| | |
+|---|---|
+| A check that examined nothing must NEVER be green | `checks-must-watch-the-right-surface` |
+| A check that cries wolf teaches people to ignore it | this audit |
+
+Two states cannot hold both. **Three can:**
+
+- **PASS** looked, and it was fine
+- **FAIL** looked, and it is broken. The only state that alarms
+- **COULD NOT RUN** did not look, and says why. Never green, never alarming
+
+`blind(name, why)` sits beside `ok()`, `okData()` wraps the five checks that
+need a signed-in session, and the verdict reads **"75 passed, 0 failed, 13 could
+not run"**. A skip is always reported and never counted as a pass, so green
+means nothing is broken, not that everything was examined.
+
+**Proven both ways.** Signed out: 88 checks, **0 failed, 13 could not run**.
+Signed in: 90 checks, **90 passed, 0 could not run**.
+
+**Three traps found while fixing it, all the same shape: having rows is not
+having a surface.**
+- The sidebar does not exist until sign-in, so two app-foundations checks were
+  measuring a nav item that was never built.
+- `_wpCells` can hold rows from an anon read while no grid is drawn, so my first
+  fix called that "a real fault".
+- The grid can render with **no editor rows at all**, because signed out
+  `wpVisibleEditors()` returns an empty list. A table with no rows is still
+  nothing to measure.
+
+**And a testing trap that cost two wrong readings.** The tab restored a session
+from `sessionStorage` at load, so clearing it afterwards was too late and a
+"signed out" run was really signed in, reporting 90 of 90. Clear before the
+load, never after. This is the second time this exact contamination has produced
+a confident wrong answer in one week.
