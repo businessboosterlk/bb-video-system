@@ -1123,3 +1123,107 @@ undo, or the button would push its own opposite and never finish.
 
 **Proven live:** JUL VID 4 moved team_review to changes at 14:50:14 and back at
 14:50:18, both rows in the history, card where it started.
+
+---
+
+## L-VID-026 · the notification map, and the column that made it possible
+
+**Built 5 September 2026** on Thulaib's spec. The Video System had **two**
+notification rules covering twelve stages. Ten stages told nobody, including
+`changes` and `client_changes`, so when a client asked for changes the editor
+who had to make them was never told.
+
+**The blocker was not the rules. It was that "the head" could not be said.**
+`team_members.role` marks Ushane as `video_head` and nothing else. Farhath reads
+`Graphic Designer` like any designer, and both SMMs read `Social Media Manager`.
+Three of BB's four heads were invisible to the database.
+
+**Thulaib approved `is_head boolean`. This shipped `head_of text` instead**, the
+same one column, because a boolean says somebody is a head and cannot say head
+of WHAT. A video card has to find the video head, not the graphic one. Non-null
+means head, and the value names the department. Flagged to him rather than
+swapped quietly.
+
+Second column, `bb_notify_rules.notify_roles text[]`, with the literal token
+**`head`** resolving to the head of that card's own department. So no rule
+names a person, and a change of head needs no rule change. Every existing rule
+defaults to `'{}'` and behaves exactly as before.
+
+**The map now live, proven on a real card and rolled back:**
+
+| Moves to | Who is told |
+|---|---|
+| Video Shot | the head |
+| Editing | the editor |
+| Video Head Review, Team Review | the head |
+| Changes | the editor and the head |
+| COO Check | **Shiara** and the head |
+| Client Review | the head, **the owning SMM**, Thulaib |
+| Client Changes | the editor, the head, the SMM |
+| Add to Drive | the editor, the head, the SMM, Thulaib |
+
+`cutting_color_grading`, `rendering` and `posted` alert nobody **on purpose**:
+Ushane cuts himself, rendering is a machine step and posting happens outside BB.
+A silent stage is a decision on paper, never an oversight.
+
+**The bug inside the build.** The pre-existing `client_review` rule had
+`notify_client_smm = false`, so the single most important line in the whole spec
+(Shiara passes it, the SMM sends it) reached the head and Thulaib but **not the
+person who actually sends it**. Caught only because the proof printed the
+resolved names per stage instead of reporting that rules had been inserted.
+**Print who a rule RESOLVES TO, never that it exists.**
+
+**Weekly Plan completions.** v2 of `bb_notify_on_plan` opened with a self-edit
+guard that returned early, so ticking your own line told nobody. Completions now
+run on their own path that fires on a self-tick and alerts the video head, while
+additions keep the guard. A `[2/3]` part mark stays silent: progress is not
+completion, and telling the head about every increment is how a channel gets
+muted. Proven: self-tick alerts, part mark does not, a second completion folds
+into the same alert, and the head ticking his own line alerts nobody.
+
+**`bb_notify_stuck_work` split by department.** It sent one 08:00 push carrying
+both video and graphic counts to Thulaib and Ushane, so the video head was told
+about graphic jobs every morning. Two messages now, heads resolved through
+`head_of`. **The first proof printed "1 graphic have waited"**: a grammar
+mistake in a notification reads as a machine talking, which is how people stop
+reading them. Fixed before it ever sent.
+
+**Already done by another chat, do not rebuild:** `bb_notify_on_reassign` on
+both video and graphic, with the guard that suppresses the alert when the stage
+moved in the same update so nobody gets two pushes for one action. That closed
+the biggest hole in the video system while this was being written.
+
+---
+
+## L-VID-027 · the data cleanup, 5 September 2026
+
+Three changes on Thulaib's yes, all reversible, all proven by a number rather
+than a claim.
+
+**66 stage-history rows MERGED, never deleted.** A run of consecutive rows in
+the same stage for one project is one visit recorded several times. The earliest
+row of each run keeps the summed seconds and the last exit. Proof: **105,158
+hours before, 105,158 hours after**, 2,710 rows down to 2,644, and **zero**
+consecutive same-stage rows left. Backup in
+`video_stage_history_backup_20260905`, so one insert undoes it.
+
+**28 duplicate copies stopped counting.** Five clients read over contract
+because a duplicate of each video also sat in Add to Drive. `inTargetMonth()`
+returns false when `target_month` is null, so clearing the month removes a copy
+from every count **while the row, its stage and all its history stay exactly
+where they are**. Nothing was deleted or restaged. Backup in
+`video_dupe_month_backup_20260905`. Double-counted deliveries left: **0**.
+
+**Which copy survives is not obvious and the obvious rule is wrong.** The
+surviving copy is the one with the MOST stage history, because that is the one
+the team actually worked. On 21 August "delete the higher id" was checked
+against the data and found **backwards in 18 pairs out of 19**. Never choose
+between duplicates by id.
+
+**One pre-existing oddity, not caused by this:** a delivered row titled "HH"
+with no month. It counts towards nothing and looks like a test row.
+
+**Two HIRE PANTHER videos reassigned from NIDWIN to USHANE**, both sat in
+Editing owned by someone who left on 14 August. This was also the first live
+proof of `bb_notify_on_reassign`: one alert, "2 items moved to you", debounced
+from two updates into one.
