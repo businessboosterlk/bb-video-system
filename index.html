@@ -6318,17 +6318,25 @@ async function runSelfTest(){
        itself, which is always checkable: the box carries an ::after overlay
        that extends the hit area past its drawn size. */
     const cells=Object.keys(typeof _wpCells!=='undefined'?(_wpCells||{}):{}).length;
-    /* APPSRC is the SCRIPT text only, so a CSS rule can never be found in it.
-       Two earlier versions of this line looked there and reported the rule
-       missing while it sat in the stylesheet. Ask the browser instead: build
-       the real element and read what ::after actually computes to. */
-    const probe=document.createElement('span');
-    probe.className='wp-item-box';
-    probe.style.position='absolute'; probe.style.left='-9999px';
-    document.body.appendChild(probe);
-    const ins=getComputedStyle(probe,'::after').inset||getComputedStyle(probe,'::after').top;
-    const pad=Math.abs(parseFloat(ins)||0);
-    probe.remove();
+    /* Read the RULE as authored, from the stylesheet.
+       Two earlier versions of this line got it wrong and both failed loudly.
+       The first looked inside APPSRC, which is script text and can never hold
+       CSS. The second built a probe element and read the computed ::after, but
+       on a zero-size element the shorthand resolves to a mixture
+       (8.5px -14px -14px 8.5px) and the reading is meaningless.
+       The stylesheet is the surface that actually answers the question. */
+    let pad=0;
+    try{
+      for(const sheet of document.styleSheets){
+        let rules; try{ rules=sheet.cssRules; }catch(e){ continue; }
+        for(const rule of (rules||[])){
+          if(rule.selectorText&&/\.wp-item-box::after/.test(rule.selectorText)){
+            const m=String(rule.style.cssText).match(/inset:\s*(-?\d+(?:\.\d+)?)px/);
+            if(m)pad=Math.abs(parseFloat(m[1]));
+          }
+        }
+      }
+    }catch(e){}
     const ruleOk=pad>=10;
     ok('Weekly Plan: a tick box is big enough to tap',cells===0&&ruleOk,
        cells===0?('no plan written for this week yet, so the RULE was measured instead: '+
