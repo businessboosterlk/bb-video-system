@@ -730,6 +730,12 @@ a:hover{text-decoration:underline}
   color:var(--text-2);line-height:1.45}
 .dl-why b{color:var(--text)}
 .dl-why svg{flex:none;margin-top:1px;color:var(--accent)}
+/* The client first and smallest, because the video head scanning this list is
+   asking "whose is this" before "which video is this". */
+.dl-client{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+.dl-title{font-weight:600;color:var(--text);line-height:1.35}
+.dl-stagetag{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:10.5px;font-weight:700;
+  color:var(--text-3);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:2px 9px}
 @media(max-width:640px){.dl-chip{min-height:40px}}
 .cli-elsewhere svg{flex:none;margin-top:1px;color:var(--accent)}
 .bbu-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab,0px));z-index:350;
@@ -3301,7 +3307,8 @@ function renderDriveLinks(){
   };
   $('#pageSub').textContent=`${raw.length} raw · ${fin.length} final · ${other.length} other`+
     (driveStage?(' · '+((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)):'');
-  const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Project</th><th>Title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=getProject(l.video_project_id);return `<tr class="clickable" data-pid="${l.video_project_id}"><td>${esc(p?.title||'—')}</td><td>${esc(l.label||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
+  const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Client and project</th><th>Link title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=getProject(l.video_project_id);const cl=p?getClient(p.client_id):null;const st=p?(STAGES.find(x=>x.key===p.current_stage)||{}):null;
+      return `<tr class="clickable" data-pid="${l.video_project_id}"><td><div class="dl-client">${esc(cl?cl.name:'no client')}</div><div class="dl-title">${esc(p?.title||'—')}</div>${(!driveStage&&st&&st.label)?`<span class="dl-stagetag"><span class="stage-dot s-${p.current_stage}"></span>${esc(st.label)}</span>`:''}</td><td>${esc(l.label||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Drive Links</div><div class="page-sub">All raw footage and final video links across projects</div></div></div>
     <div class="dl-stages">
       <button class="dl-chip${driveStage?'':' on'}" data-stage="">All stages <span class="dl-n">${DATA.links.length}</span></button>
