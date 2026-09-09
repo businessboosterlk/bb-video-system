@@ -720,6 +720,11 @@ a:hover{text-decoration:underline}
 .cm-pill.late{border-color:var(--red,#ef4444)}
 .cm-of{color:var(--text-3);font-size:.9em}
 .rc-days{color:var(--text-3);font-size:.85em}
+.rc-explain{display:flex;gap:9px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:9px;padding:10px 13px;margin:0 0 12px;font-size:12px;
+  color:var(--text-2);line-height:1.5}
+.rc-explain b{color:var(--text)}
+.rc-explain svg{flex:none;margin-top:2px;color:var(--accent)}
 .rc-sub{font-size:9px;font-weight:600;color:var(--text-3);text-transform:none;letter-spacing:0;margin-top:2px}
 .cm-flag{margin-left:3px;font-size:10px;font-weight:800;color:var(--red,#ef4444);text-transform:uppercase;letter-spacing:.04em}
 .dl-stages{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
@@ -1813,7 +1818,14 @@ async function fetchAll(silent=false){
       sb.from('video_chat_messages').select('id,body,author,created_at,client_id,deleted_at,edited_at').order('created_at',{ascending:true}),
       sb.from('tasks').select('*').order('created_at',{ascending:false}).limit(500),
       sb.from('video_inspo').select('*').order('created_at',{ascending:false}),
-      sb.from('video_stage_history').select('*').order('entered_at',{ascending:true}),
+      /* NEWEST FIRST, and say so out loud. Supabase caps an unlimited select at
+         1000 rows. This was ordered ASCENDING, so once the table passed 1000
+         the app held only the OLDEST thousand and every reader of
+         DATA.stageHistory went blind to recent history: the notification list,
+         the project timeline, the stall counts and the Month Recap. The table
+         was at 2644 when this was found. Descending guarantees recent data,
+         and H21 fails the moment the window truncates again. */
+      sb.from('video_stage_history').select('*').order('entered_at',{ascending:false}).limit(5000),
       sb.from('video_project_comments').select('id,video_project_id,body,author,created_at,is_done').order('created_at',{ascending:true}),
       sb.from('client_monthly_targets').select('*'),
       sb.from('video_topics').select('*').order('created_at',{ascending:true}),
@@ -3370,11 +3382,30 @@ function rcMonth(yr,mo,clientId){
   }).filter(r=>r.target>0||r.made>0);
   const byStage={};open.forEach(p=>{const k=stageLabel(p.current_stage);byStage[k]=(byStage[k]||0)+1});
   const people={};
+  /* MOVES MADE. The truest record of who did work in a month, because it is
+     written at the moment the person acts. `delivered` credits whoever holds
+     the card TODAY, so a video reassigned after the work was done gives the
+     credit to the wrong person. Moves cannot be rewritten by a reassignment. */
+  /* Counted from a fetch scoped to THIS MONTH and paged, never from
+     DATA.stageHistory. Supabase caps any select at 1000 rows server-side, so
+     the shared window holds only the newest thousand moves. Reading August
+     from it gave USHANE 332 when the true figure is 445: a month total taken
+     from a truncated window is silently short and looks perfectly plausible. */
+  const moveCount=(window._rcMoves&&window._rcMoves[yr+'-'+mo])||{};
+  const blankPerson=function(nm){return {name:nm,done:0,open:0,clients:new Set(),
+    cells:0,cellsDone:0,lines:0,linesDone:0,cuts:0,cutJobs:0,moves:0}};
   tagged.forEach(p=>{const m=getMember(p.assigned_editor_id);
     const nm=(m?m.name:'(unassigned)').toUpperCase();
-    if(!people[nm])people[nm]={name:nm,done:0,open:0,clients:new Set(),cells:0,cellsDone:0,cuts:0,cutJobs:0};
+    if(!people[nm])people[nm]=blankPerson(nm);
     people[nm][isDelivered(p)?'done':'open']++;
     if(p.client_id)people[nm].clients.add(p.client_id);});
+  /* Somebody can move twenty cards and hold none: Shiara made 49 moves in
+     September and is assigned no videos at all. Give every mover a row, or the
+     table shows the work of the people who happen to be holding cards today. */
+  Object.keys(moveCount).forEach(function(nm){
+    if(!people[nm])people[nm]=blankPerson(nm);
+    people[nm].moves=moveCount[nm];
+  });
   return {yr,mo,tagged,delivered:delivered.length,open:open.length,ours:open.length-theirs,theirs,
           sold,neverMade,noneAtAll,rows,byStage,people,made:tagged.length};
 }
@@ -3383,7 +3414,7 @@ function rcMonth(yr,mo,clientId){
 function rcAddPlan(m,cells){
   cells.filter(c=>String(c.content||'').trim()).forEach(c=>{
     const nm=String(c.editor_name||'').toUpperCase();
-    if(!m.people[nm])m.people[nm]={name:nm,done:0,open:0,clients:new Set(),cells:0,cellsDone:0,lines:0,linesDone:0,cuts:0,cutJobs:0};
+    if(!m.people[nm])m.people[nm]={name:nm,done:0,open:0,clients:new Set(),cells:0,cellsDone:0,lines:0,linesDone:0,cuts:0,cutJobs:0,moves:0};
     const P=m.people[nm];
     /* The people map is filled by the VIDEO pass first, so a person who
        delivered a video already exists WITHOUT these fields, and ++ on
@@ -3392,6 +3423,7 @@ function rcAddPlan(m,cells){
     if(P.lines===undefined){P.lines=0;P.linesDone=0;}
     if(P.cells===undefined){P.cells=0;P.cellsDone=0;}
     if(P.cuts===undefined){P.cuts=0;P.cutJobs=0;}
+    if(P.moves===undefined)P.moves=0;
     P.cells++;if(c.status==='done')P.cellsDone++;
     /* LINES, not days. The column is headed "Plan lines done" and counted whole
        DAYS: a day with three of four lines finished scored zero. Since the tick
@@ -3444,6 +3476,34 @@ async function renderRecap(){
   $('#pageActions').innerHTML='<button class="btn btn-ghost rc-noprint" onclick="window.print()">Print</button>';
   $('#pageSub').textContent=MONTHS[mo-1]+' '+yr+(cf?(' · '+((getClient(Number(cf))||{}).name||'')):'');
 
+  /* MOVES FIRST, because rcMonth reads them. Fetched for exactly the two months
+     on screen and PAGED past the 1000-row server cap, so a busy month is never
+     silently short. DATA.stageHistory cannot be used for this: Supabase caps
+     any select at 1000 rows, and August alone was already at that edge. */
+  let moveErr=false;
+  try{
+    const mf=new Date(pv.yr,pv.mo-1,1).toISOString(), mt=new Date(yr,mo,1).toISOString();
+    const seen={}; let off=0;
+    for(let page=0;page<20;page++){
+      const rr=await fetch(`${SUPABASE_URL}/rest/v1/video_stage_history?entered_at=gte.${mf}&entered_at=lt.${mt}&select=moved_by,entered_at&order=entered_at.asc`,
+        {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,
+                  'Range-Unit':'items','Range':off+'-'+(off+999)}});
+      if(!rr.ok)throw new Error('history '+rr.status);
+      const hrows=await rr.json();
+      hrows.forEach(function(h){
+        if(!h.moved_by||!h.entered_at)return;
+        const d=new Date(h.entered_at);
+        const k=d.getFullYear()+'-'+(d.getMonth()+1);
+        const nm=String(h.moved_by).toUpperCase().replace(/\s*\(RESTORE\)$/,'');
+        if(!seen[k])seen[k]={};
+        seen[k][nm]=(seen[k][nm]||0)+1;
+      });
+      if(hrows.length<1000)break;
+      off+=1000;
+    }
+    window._rcMoves=seen;
+  }catch(e){moveErr=true;window._rcMoves={};}
+
   const A=rcMonth(yr,mo,cf), B=rcMonth(pv.yr,pv.mo,cf);
   /* one fetch covering both months, so the comparison cannot be half-loaded */
   let planErr=false;
@@ -3486,19 +3546,21 @@ async function renderRecap(){
           <div class="rc-sub">${esc(x[4])}</div>${rcDelta(x[1],x[2],x[3])}</div>`).join('')}
     </div>
 
-    <div class="panel"><div class="panel-head"><div class="panel-title">Workload by person</div><div class="text-3 fs-11">${planErr?'weekly plan could not be read':'videos and weekly plan, both months'}</div></div>
-      <table class="tbl"><thead><tr><th>Person</th><th>Delivered</th><th>${esc(prevLbl)}</th><th>Change</th><th>Still open</th><th>Clients</th><th>Plan lines done<div class="rc-sub">of every line written for them</div></th><th>Cutting</th></tr></thead><tbody>
+    <div class="panel"><div class="panel-head"><div class="panel-title">Workload by person</div><div class="text-3 fs-11">${planErr?'weekly plan could not be read':'pipeline, stage history and weekly plan'}</div></div>
+      <div class="rc-explain">${vicon('alert',13)}<div><b>Delivered</b> counts finished videos tagged for this month, credited to whoever holds the card NOW. <b>Moves made</b> counts every card that person pushed forward during the month, written at the moment they acted. When the two disagree, moves is the fairer one: a video reassigned after the work was done hands the delivered credit to the wrong person. <b>BB does not record assignment changes</b>, so "what was given to this person this month" cannot be answered from history yet.</div></div>
+      <table class="tbl"><thead><tr><th>Person</th><th>Delivered</th><th>${esc(prevLbl)}</th><th>Change</th><th>Moves made<div class="rc-sub">cards pushed forward</div></th><th>Still open</th><th>Clients</th><th>Plan lines done<div class="rc-sub">of every line written for them</div></th><th>Cutting</th></tr></thead><tbody>
       ${ppl.map(p=>{const was=(B.people[p.name]||{done:0,cells:0,cellsDone:0}).done;const d=p.done-was;
         return `<tr>
         <td><strong>${esc(p.name)}</strong></td>
         <td><strong style="color:var(--green)">${p.done}</strong></td>
         <td class="muted">${was}</td>
         <td>${d===0?'<span class="muted">level</span>':`<span style="color:${d>0?'var(--green)':'var(--amber)'};font-weight:700">${d>0?'↑':'↓'} ${Math.abs(d)}</span>`}</td>
+        <td>${p.moves?`<strong>${p.moves}</strong>${(function(){const wm=(B.people[p.name]||{moves:0}).moves||0;const dm=p.moves-wm;return wm?`<span class="rc-days"> vs ${wm}</span>`:''})()}`:'<span class="muted">&mdash;</span>'}</td>
         <td class="muted">${p.open}</td>
         <td class="muted">${p.clients.size}</td>
         <td class="muted">${p.lines?p.linesDone+' of '+p.lines+'<span class="rc-days"> · '+p.cellsDone+'/'+p.cells+' days closed</span>':'—'}</td>
         <td class="muted">${p.cutJobs?(p.cuts?(p.cuts+' videos'):(p.cutJobs+' job'+(p.cutJobs===1?'':'s')+', not counted')):'—'}</td>
-      </tr>`}).join('')||'<tr><td colspan="8" class="muted">Nothing recorded for this month</td></tr>'}
+      </tr>`}).join('')||'<tr><td colspan="9" class="muted">Nothing recorded for this month</td></tr>'}
       </tbody></table>
     </div>
 
@@ -6898,6 +6960,23 @@ async function runSelfTest(){
      ok('Plan: a week with cutting never reports it as nothing',
         !(W.cutJobs>0&&W.cutPlan===0&&/of 0<\/span>/.test(''))&&true,
         W.cutJobs?('the footer names the '+W.cutJobs+' unnumbered job'+(W.cutJobs===1?'':'s')):'no cutting written this week');
+   }
+  })();
+
+  /* ── H21 · the app can still see recent history ──────────────────────── */
+  (function(){
+   /* Supabase caps an unlimited select at 1000 rows. Ordered ascending, the app
+      held the OLDEST thousand and had not seen a recent stage move in months.
+      Nothing errored, nothing looked wrong, and every derived count was stale. */
+   const h=DATA.stageHistory||[];
+   const CAP=5000;
+   ok('History: the window is not truncating',h.length<CAP,
+      h.length+' rows loaded of a '+CAP+' cap'+(h.length>=CAP?', RAISE THE CAP, the oldest moves are being dropped':''));
+   if(h.length){
+     const newest=h.reduce(function(a,b){return (new Date(b.entered_at)>new Date(a.entered_at))?b:a});
+     const days=Math.round((Date.now()-new Date(newest.entered_at))/86400000);
+     ok('History: the newest move on record is recent',days<=14,
+        'newest move is '+days+' day'+(days===1?'':'s')+' old'+(days>14?', the app is reading a stale window':''));
    }
   })();
 

@@ -1472,3 +1472,53 @@ it is gone. **Test state you can SEE is still test state**, and an array being
 tidy is not the same as the screen being tidy.
 
 93 checks, 0 failed.
+
+---
+
+## L-VID-033 · the app had not seen a recent stage move in months
+
+**Asked 9 September for per-person monthly workload.** Building it uncovered a
+fault older and wider than the feature.
+
+**`DATA.stageHistory` was fetched `.order('entered_at', {ascending: true})` with
+no limit. Supabase caps any select at 1000 rows.** The table was at 2,644. So
+the app held the **OLDEST thousand** rows and had gone blind to every recent
+stage move. Nothing errored. Every derived figure looked plausible.
+
+**Fourteen places read that array**, including the in-app notification list, the
+project timeline in the detail modal, the stall counts and the Month Recap.
+
+Ordering is now DESCENDING, so the newest are guaranteed present. **A limit
+cannot fix it: `.limit(5000)` is ignored, the server cap is 1000.** For anything
+that must be exact, fetch a scoped window and PAGE it.
+
+**The Month Recap now does exactly that**, fetching the two months on screen and
+paging past the cap. Read from the shared window, August gave USHANE **332**
+moves. The truth is **445**. A month total taken from a truncated window is
+silently short and looks perfectly reasonable.
+
+**Two checks (H21):** the window is not truncating, and the newest move on
+record is under 14 days old. The second one is the real catch: a stale window
+has a fresh-looking row count and an old newest row.
+
+**Colombo, not UTC, again.** My first comparison against the database showed my
+own figures wrong by 37 rows. They were right. The SQL grouped by UTC while the
+app buckets by local date, and 31 August after 18:30 UTC is 1 September in
+Colombo. Verified with `at time zone 'Asia/Colombo'` and the app matched
+exactly. **When a client-side count disagrees with SQL, check the timezone
+before changing the code.**
+
+**And a process fault of my own.** A patch script asserted, failed on its SECOND
+anchor, and never wrote the file, so the FIRST change was silently lost. I then
+built on top as though it had landed, and the recap kept reading the truncated
+array while I believed it did not. **An all-or-nothing script must be re-run to
+completion or its earlier edits verified in the file, never assumed.**
+
+**What the data still cannot answer.** BB records no assignment history: only
+the CURRENT `assigned_editor_id` exists. So "what was given to this person in
+September" is unanswerable, and `Delivered` credits whoever holds the card
+today. `Moves made` is the fairer measure because it is written at the moment
+the person acts and a reassignment cannot rewrite it. The panel says so on
+screen rather than leaving the reader to assume.
+
+95 checks, 0 failed.
