@@ -1522,3 +1522,82 @@ the person acts and a reassignment cannot rewrite it. The panel says so on
 screen rather than leaving the reader to assume.
 
 95 checks, 0 failed.
+
+---
+
+## L-VID-034 · the bug reporter was blind while one blip read as fifteen faults
+
+**The Bug Catcher pass, 9 September 2026.** Four items, all four in this app,
+plus the three open rows they were built to explain.
+
+**The reporter could not see.** An outside script loaded without
+`crossorigin="anonymous"` is opaque to the page: the browser refuses to hand
+over the file, the line or the stack, and `window.onerror` receives the two
+words **"Script error."** and nothing else. Three rows in the log, 11 August,
+4 September and 5 September, all from real people on the live URL. Not one
+of them can ever be diagnosed. **The reporter was not broken. It was blind.
+Blind reads exactly like working.** Five of the eight open rows across the whole
+estate were that same string, from four different apps.
+
+The block is `guard.py` **L-017**, and it is a FAIL, not a warning: an outside
+script tag with no `crossorigin`, and separately a script an `onerror` handler
+BUILDS in code from an outside URL. That second half matters. This app's tag
+falls back to unpkg when jsdelivr is down, so without it the reporter was
+correct until the CDN failed and blind exactly when it mattered. **Proven by
+running the guard on the pre-fix file: 2 FAIL. Post-fix: PASS.** Harness check
+K1 fails if the page ever loads an external script it cannot read errors from.
+It also fails if it finds no external script at all, because a check that
+passes by finding nothing is worse than no check.
+
+**One dropped connection was writing fifteen rows.** The Sentinel pings all
+fifteen tables in `TABLES` at boot. The dedupe key carried the table name, so
+one blip logged once per table and the log read as a storm. **Proven from the
+data, not from the code: fifteen `network` rows from one person between
+20:36:27.939 and 20:36:27.998 on 20 July, one per entry in the list.**
+Transient classes now key on app plus category alone. Real server answers keep
+the table name, because which table lost its anon grant is the whole diagnosis.
+**Proven live: fifteen simulated blips produce 1 row, fifteen simulated 401s
+still produce 15.**
+
+**A developer's preview looked like a live fault.** Two open rows in the estate
+are somebody's localhost. Each one cost a person time deciding whether a
+real phone was broken. The Sentinel now stops at the console when
+`location.hostname` is localhost, 127.0.0.1, ::1, 0.0.0.0 or the protocol is
+`file:`. It never stops a deliberate report: a person pressing Send in Settings
+always reaches the log, because that is a decision, not weather.
+
+**The app now marks its own homework.** Once per person per day it runs the
+harness and writes one row to `bb_harness_runs`. Nobody is shown the result and
+nothing is blocked on it. A red check on Bavith's phone is invisible to everyone
+else, and **a day with no rows at all is itself the signal**.
+
+**Three faults of my own inside that one feature, each of which would have
+shipped as a green claim:**
+
+1. **`failed_names` is a `text[]`, and I sent a joined string.** PostgREST
+   answered 400. `fetch` does not throw on a 400 so the `catch` swallowed it.
+   The run reported success and the table stayed empty. **I read the table back
+   and my row was not in it.** A writer that cannot fail out loud is a writer
+   nobody can trust: it now warns in the console and lifts the day's stamp so
+   the next open retries.
+2. **My date fallback built a calendar day from `toISOString()`.** The harness
+   caught it: check H5 exists for exactly that and it went red the moment my
+   code landed. Before 05:30 in Colombo a UTC day is yesterday. The fallback is
+   now the app's own `localDateStr`.
+3. **The harness NAVIGATES**, walking the Pipeline and the Weekly Plan and back,
+   about four seconds. Run silently on open that is a board jumping around on
+   its own, which is a bug report, not a check. The page now dims and says
+   "Running the daily system check". That is not the report, which nobody is
+   ever shown, it is the courtesy of saying why the screen moved.
+
+**Also found, not mine to fix.** `system_bug_log` accepts an anonymous `PATCH`:
+anyone holding the public key can mark any bug resolved or rewrite its evidence.
+A `DELETE` is correctly refused. The Graphic System chat owns the security
+posture, so this is written down and handed over, not changed here.
+
+**Five checks, all functional, none reading source text.** K1 external scripts,
+K2 the local-preview flag agrees with the hostname, K3 two tables one blip give
+one key while two 401s give two, K4 the Report card actually renders its box,
+K5 a second run today is refused.
+
+101 checks at 375px, 100 at desktop, 0 failed, 0 could not run.

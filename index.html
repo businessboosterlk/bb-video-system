@@ -51,7 +51,7 @@ window.__ST_LOG=[];
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';document.head.appendChild(s)"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';document.head.appendChild(s)"></script>
 <style>
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -5724,21 +5724,46 @@ function vsUpdateCheckinBadge(){
   var _seen={};        // dedupe key -> last-logged timestamp (ms)
   var _issues=[];      // current-session issues for the banner
   var DEDUPE_MS=10*60*1000;
+  /* A preview on somebody's own machine is not a live fault. Two of the eight
+     open rows in the estate today are a developer's localhost, and each one
+     cost a person time deciding whether a real phone was broken. */
+  var BBLOCAL=/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname)||location.protocol==='file:';
+  window.bbIsLocalPreview=BBLOCAL;
 
   function cu(){try{return (typeof currentUser!=='undefined')?currentUser:null;}catch(e){return null;}}
   function who(){var u=cu();return (u&&u.name)||'anon';}
   function isAdminViewer(){var u=cu();var r=(u&&u.role||'').toLowerCase();return r==='admin'||r==='video_head';}
 
+  /* WEATHER IS NOT A BUG, AND ONE BLIP IS NOT FIFTEEN.
+     One dropped connection fails every table in TABLES at once. With the table
+     name in the dedupe key that wrote one row per table, so the log read as a
+     storm. Proven from the data on 20 July 2026: fifteen `network` rows from
+     one person between 20:36:27.939 and 20:36:27.998, one per entry in the
+     list. Transient classes therefore key on app plus category alone, so a
+     blip is one row for ten minutes no matter how many tables it touched.
+     Real server answers keep the table name, because which table lost its
+     anon grant is the whole diagnosis. */
+  function bbKey(issue){
+    var cat=issue.category||'';
+    if(cat==='network')return APP+'|'+cat;
+    return cat+'|'+(issue.table_name||'')+'|'+(issue.message||'').slice(0,120);
+  }
+  window.bbSentinelKey=bbKey;
+
   // Write an issue to the central bug log (deduped + rate-limited so we never spam the DB)
   function report(issue){
     try{
-      var key=(issue.category||'')+'|'+(issue.table_name||'')+'|'+(issue.message||'').slice(0,120);
+      var key=bbKey(issue);
       var now=Date.now();
       if(_seen[key]&&(now-_seen[key])<DEDUPE_MS)return;   // already logged recently
       _seen[key]=now;
       _issues.push(issue);
       // console first — always visible to a developer
       console.error('[BB Sentinel]',issue.category,issue.table_name||'',issue.message,issue.detail||'');
+      /* Local preview: it reaches the console, where the developer is already
+         looking, and it never reaches the shared log, where it looks exactly
+         like a real person's phone failing. */
+      if(BBLOCAL){ if(!issue.quiet)renderBanner(); return; }
       // persist to system_bug_log via raw REST (independent of the app's sb client)
       fetch(SB_URL+'/rest/v1/system_bug_log',{
         method:'POST',
@@ -6980,7 +7005,69 @@ async function runSelfTest(){
    }
   })();
 
-  /* ── I · no horizontal scroll ────────────────────────────────────────── */
+  /* ── K · the bug catcher, added 9 September 2026 ────────────── */
+  /* Every one of these is FUNCTIONAL. The estate's own audit caught three
+     checks in this file reading the source text instead of the behaviour, and
+     a regex over a whole file matched a dash in a comment twenty lines away.
+     A check has to touch the thing it is guarding. */
+  (function(){
+   /* K1. Without crossorigin the browser hands us the two words "Script
+      error." with no file, no line and no stack. Three unfixable rows in the
+      log are exactly that. */
+   const ext=[...document.querySelectorAll('script[src]')]
+     .filter(s=>{ try{ return new URL(s.src,location.href).origin!==location.origin; }catch(e){ return false; } });
+   const bare=ext.filter(s=>!s.crossOrigin).map(s=>s.src.split('/').slice(2,3)[0]);
+   ok('Bug catcher: every outside script can report its own errors',
+      ext.length>0&&bare.length===0,
+      ext.length?(bare.length?('no crossorigin on '+bare.join(', ')):(ext.length+' external, all anonymous')):'FAIL: found no external script to check');
+  })();
+  (function(){
+   /* K2. A developer's preview must never look like a live fault. */
+   const flagged=(typeof window.bbIsLocalPreview==='boolean');
+   const host=location.hostname;
+   const shouldBe=/^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(host)||location.protocol==='file:';
+   ok('Bug catcher: a local preview is known to be local',
+      flagged&&window.bbIsLocalPreview===shouldBe,
+      flagged?(host+' reads as '+(window.bbIsLocalPreview?'preview':'live')):'the sentinel never set the flag');
+  })();
+  (function(){
+   /* K3. One blip must be one row. Two tables, one category: same key. */
+   const k=window.bbSentinelKey;
+   if(typeof k!=='function'){ ok('Bug catcher: one connection blip logs one row, not one per table',false,'bbSentinelKey is not exposed'); return; }
+   const net=k({category:'network',table_name:'clients',message:'read failed (network/offline)'})
+           ===k({category:'network',table_name:'tasks',message:'read failed (network/offline)'});
+   const real=k({category:'db_permission',table_name:'clients',message:'read failed (HTTP 401)'})
+            !==k({category:'db_permission',table_name:'tasks',message:'read failed (HTTP 401)'});
+   ok('Bug catcher: one connection blip logs one row, not one per table',
+      net&&real, net?(real?'network collapses, permissions stay per table':'FAIL: a 401 no longer names its table'):'FAIL: two tables still write two rows');
+  })();
+  (function(){
+   /* K4. The person's own door into the log. */
+   const wired=(typeof BBSET==='object'&&typeof BBSET.sendReport==='function');
+   let box=null;
+   if(wired){ try{ BBSET.open(); box=document.getElementById('bbset-report'); BBSET.close(); }catch(e){} }
+   ok('Bug catcher: a person can report what they saw, from Settings',
+      wired&&!!box, wired?(box?'text box and Send are live':'the card did not render'):'BBSET.sendReport is missing');
+  })();
+  (function(){
+   /* K5. Once per person per day. A second run the same day writes nothing,
+      which is the difference between a signal and a flood. */
+   const fns=(typeof window.bbDailyCheck==='function'&&typeof window.bbDailyCheckDue==='function'&&typeof window.bbDailyCheckKey==='function');
+   let onceOnly=false;
+   if(fns){
+     try{
+       const k=window.bbDailyCheckKey(), keep=localStorage.getItem(k);
+       const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Colombo'});
+       localStorage.setItem(k,day);
+       onceOnly=(window.bbDailyCheckDue()===false);
+       if(keep===null)localStorage.removeItem(k); else localStorage.setItem(k,keep);
+     }catch(e){}
+   }
+   ok('Bug catcher: the daily check writes one row per person per day',
+      fns&&onceOnly, fns?(onceOnly?'a second run today is refused':'FAIL: it would run again today'):'the daily check block is missing');
+  })();
+
+  /* ── I · no horizontal scroll ──────────────────────────── */
   ok('Layout: the page does not scroll sideways',
      document.documentElement.scrollWidth<=window.innerWidth+1,
      document.documentElement.scrollWidth+' vs '+window.innerWidth);
@@ -7026,6 +7113,121 @@ if(location.search.indexOf('selftest')>-1){
  window.addEventListener('load',function(){setTimeout(function(){runSelfTest();},4000);});
 }
 </script>
+
+<!-- @@BBV_DAILYCHECK_BEGIN@@ -->
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   THE DAILY CHECK. Once per person per day this app runs its own harness and
+   writes ONE row to bb_harness_runs. Nobody is shown the result and nothing
+   is ever blocked on it.
+
+   Why a row and not a banner: a red check on Bavith's phone is invisible to
+   everyone else, and the whole estate's problem has never been detection, it
+   has been the shout. A row means the hub sees it within the hour. A DAY WITH
+   NO ROWS AT ALL is itself the signal, because it means nobody opened the app
+   or the writer stopped working.
+
+   Never on a local preview, for the same reason the bug log skips one.
+   The date is Colombo's, not the browser's and not UTC: a run at 06:00 here is
+   00:30 UTC the same day and 31 August after 18:30 UTC is already 1 September
+   in this office. That mistake cost 37 rows of disagreement on 9 September.
+   ════════════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  var APP='video-system';
+  /* The fallback is the app's OWN local-date helper, never toISOString. A
+     calendar day built from UTC is wrong in this office every morning before
+     05:30, and the harness has a check that catches exactly that. It caught
+     this line. */
+  function today(){ try{ return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Colombo'}); }catch(e){ try{ return localDateStr(new Date()); }catch(e2){ return ''; } } }
+  function who(){ try{ return (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||'anon'; }catch(e){ return 'anon'; } }
+  function key(){ return 'bbDailyCheck:'+APP+':'+who(); }
+  function stamp(){ try{ return localStorage.getItem(key()); }catch(e){ return null; } }
+  function due(){ return who()!=='anon' && stamp()!==today(); }
+  window.bbDailyCheckKey=key;
+  window.bbDailyCheckDue=due;
+
+  async function run(force){
+    if(!force&&!due())return null;
+    /* The automatic path never runs on a preview. A DELIBERATE call with force
+       does, because the only way to prove a writer works is to make it write. */
+    if(window.bbIsLocalPreview&&!force)return null;
+    if(typeof runSelfTest!=='function')return null;
+    /* THE HARNESS NAVIGATES. It walks the Pipeline and the Weekly Plan and
+       comes back, and it takes about four seconds. Left unexplained that is a
+       board jumping around on its own, which is a bug report, not a check. So
+       the page dims and says what it is doing. That is not the report, which
+       nobody is ever shown, it is the courtesy of saying why the screen moved. */
+    var veil=cover();
+    var v=null;
+    try{ v=await runSelfTest(); }catch(e){ uncover(veil); return null; }
+    uncover(veil);
+    if(!v)return null;
+    /* Stamp BEFORE the POST, so nothing in this page load can run it twice.
+       If the write definitively fails the stamp is lifted again below and the
+       NEXT open retries. A blip must never turn the app red: L-DEV-005. */
+    try{ localStorage.setItem(key(),today()); }catch(e){}
+    /* failed_names is a text ARRAY, not a joined string. The first version of
+       this sent 'a | b | c', PostgREST answered 400, the catch swallowed it and
+       the run reported success while the table stayed empty. fetch does not
+       throw on a 400 either, so nothing anywhere would have said a word.
+       A writer that cannot fail out loud is a writer nobody can trust. */
+    var names=(v.results||[]).filter(function(r){return !r.pass&&!r.skipped;}).map(function(r){return String(r.name).slice(0,180);});
+    try{
+      var res=await fetch(SUPABASE_URL+'/rest/v1/bb_harness_runs',{
+        method:'POST',
+        headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({
+          app:APP, checks:v.total, failed:v.failed, failed_names:names,
+          width:(window.innerWidth||document.documentElement.clientWidth||(screen&&screen.width)||0),
+          user_name:who(), url:location.href.slice(0,300)
+        })
+      });
+      if(!res||!res.ok){
+        /* Say it in the console and let today's stamp go, so the next open
+           tries again rather than recording a day that never happened. */
+        console.warn('[BB daily check] not written: HTTP '+(res?res.status:'0'),res?await res.text():'');
+        try{ localStorage.removeItem(key()); }catch(e){}
+      }
+    }catch(e){ try{ localStorage.removeItem(key()); }catch(e2){} }
+    return v;
+  }
+  window.bbDailyCheck=run;
+
+  function cover(){
+    try{
+      var host=document.getElementById('pageContent');
+      if(host){ host.style.transition='opacity .25s'; host.style.opacity='.4'; host.style.pointerEvents='none'; }
+      var pill=document.createElement('div');
+      pill.id='bbDailyCheckPill';
+      pill.textContent='Running the daily system check';
+      pill.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + var(--sab,0px));z-index:99998;'+
+        'background:var(--surface-2,#1a1a26);border:1px solid var(--border,#2a2a3a);color:var(--text-2,#a0a0b8);'+
+        'font:600 12px Inter,system-ui,sans-serif;padding:9px 15px;border-radius:99px;box-shadow:0 8px 26px rgba(0,0,0,.4);pointer-events:none';
+      document.body.appendChild(pill);
+      return {host:host,pill:pill};
+    }catch(e){ return null; }
+  }
+  function uncover(v){
+    try{
+      if(!v)return;
+      if(v.host){ v.host.style.opacity=''; v.host.style.pointerEvents=''; }
+      if(v.pill&&v.pill.parentNode)v.pill.parentNode.removeChild(v.pill);
+    }catch(e){}
+  }
+
+  /* Wait for a person, then leave a gap so the board is drawn and the day's
+     data is in before the harness looks at it. */
+  var tries=0;
+  function wait(){
+    tries++;
+    if(due()){ setTimeout(function(){run(false);},6000); return; }
+    if(tries<60) setTimeout(wait,1000);
+  }
+  window.addEventListener('load',function(){ setTimeout(wait,3000); });
+})();
+</script>
+<!-- @@BBV_DAILYCHECK_END@@ -->
 
 <script>
 /* The shell tool copies a service worker and never registers it, so the app
@@ -7458,7 +7660,7 @@ var BBPUSH=(function(){
    nav item, so it inherits that app's look without a line of app CSS.
    ════════════════════════════════════════════════════════════════════════ */
 var BBSET=(function(){
-  var APP_LABEL='Video System', ACCENT='#a855f7';
+  var APP_LABEL='Video System', APP_SLUG='video-system', ACCENT='#a855f7';
   var GEAR='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
   var sheet=null, back=null;
   function standalone(){ return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
@@ -7475,6 +7677,10 @@ var BBSET=(function(){
     html+=card('Phone alerts', row('Status',alertsLine)+row('Quiet hours','9pm to 7am, held until 7am')+'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'+alertsBtns+btn('Run diagnostics','BBSET.diag()',false)+'</div><pre id="bbset-diag" style="display:none;white-space:pre-wrap;font-size:11px;line-height:1.5;margin:10px 0 0;padding:10px;border-radius:8px;background:var(--bg,#0c0d10);color:var(--text,#fff)"></pre>'+(st.lastError?'<div style="margin-top:8px;font-size:11px;color:#f87171">'+st.lastError+'</div>':''));
     html+=card('Installed as an app', row('This device', standalone()?'Yes':'No, running in the browser')+(!standalone()?'<div style="margin-top:8px;font-size:12px;color:var(--text3,#9aa3ad)">'+(isIOS()?'Share, then Add to Home Screen. Alerts only work from the installed app.':'Use your browser menu, then Add to Home screen.')+'</div>':''));
     html+=card('Account', row('Signed in as', st.user||'Not signed in')+(logoutFn()?'<div style="margin-top:12px">'+btn('Sign out','BBSET.signout()',false)+'</div>':''));
+    html+=card('Report a problem', '<div style="font-size:12px;color:var(--text3,#9aa3ad);margin-bottom:9px">Say what you saw. It goes straight to the people who fix it, with the page you were on.</div>'+
+      '<textarea id="bbset-report" rows="3" placeholder="What happened and what were you doing?" style="width:100%;box-sizing:border-box;background:var(--bg,#0c0d10);color:var(--text,#fff);border:1px solid var(--border,#2a2d35);border-radius:10px;padding:10px;font-family:inherit;font-size:16px;line-height:1.45;resize:vertical"></textarea>'+
+      '<div id="bbset-report-msg" style="font-size:11.5px;color:var(--text3,#9aa3ad);margin-top:7px;min-height:15px"></div>'+
+      '<div style="margin-top:6px">'+btn('Send','BBSET.sendReport()',true)+'</div>');
     html+=card('App', row('Build', document.lastModified||'')+'<div style="margin-top:12px">'+btn('Reload latest version','BBSET.reload()',false)+'</div>');
     sheet.innerHTML=html;
   }
@@ -7494,6 +7700,42 @@ var BBSET=(function(){
   async function enable(){ try{ await BBPUSH.enable(); }catch(e){} render(); }
   async function test(){ try{ var r=await BBPUSH.test(); alert(r&&r.sent?'Test sent. Check your phone.':'Nothing sent: '+(r&&r.error||'no phone registered')); }catch(e){ alert('Test failed: '+(e&&e.message||e)); } }
   async function diag(){ var el=document.getElementById('bbset-diag'); if(!el) return; el.style.display='block'; el.textContent='Checking, one line per step'; try{ var L=await BBPUSH.diagnose(function(lines){ el.textContent=lines.join('\n')+'\n…'; }); el.textContent=L.join('\n'); }catch(e){ el.textContent='Diagnostics failed: '+(e&&e.message||e); } }
+  /* Resolved from whatever the host app calls them, so this block stays the
+     same file in all six apps and only APP_SLUG changes. L-SMM-021 is the push
+     block drifting between apps, and it drifted because each chat edited its
+     own copy. */
+  function sbConf(){
+    var u=(typeof SUPABASE_URL!=='undefined'&&SUPABASE_URL)||(typeof SB_URL!=='undefined'&&SB_URL)||null;
+    var k=(typeof SUPABASE_ANON_KEY!=='undefined'&&SUPABASE_ANON_KEY)||(typeof SB_KEY!=='undefined'&&SB_KEY)||null;
+    return (u&&k)?{u:u,k:k}:null;
+  }
+  function whoami(){
+    try{ var s=(typeof BBPUSH!=='undefined'&&BBPUSH.status)?BBPUSH.status():{}; if(s&&s.user) return s.user; }catch(e){}
+    try{ if(typeof currentUser!=='undefined'&&currentUser&&currentUser.name) return currentUser.name; }catch(e){}
+    return 'unknown';
+  }
+  async function sendReport(){
+    var el=document.getElementById('bbset-report'), msg=document.getElementById('bbset-report-msg');
+    if(!el||!msg) return;
+    var text=(el.value||'').trim();
+    if(text.length<5){ msg.style.color='#f87171'; msg.textContent='Write a line or two first, then send.'; return; }
+    var c=sbConf();
+    if(!c){ msg.style.color='#f87171'; msg.textContent='Could not reach the log from this page.'; return; }
+    msg.style.color='var(--text3,#9aa3ad)'; msg.textContent='Sending';
+    try{
+      var r=await fetch(c.u+'/rest/v1/system_bug_log',{
+        method:'POST',
+        headers:{'apikey':c.k,'Authorization':'Bearer '+c.k,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({
+          app:APP_SLUG, severity:'info', category:'user_report',
+          message:text.slice(0,500), detail:'', user_name:whoami(),
+          url:location.href.slice(0,300), user_agent:(navigator.userAgent||'').slice(0,300)
+        })
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      el.value=''; msg.style.color='#4ade80'; msg.textContent='Sent. Thank you, somebody will look at it.';
+    }catch(e){ msg.style.color='#f87171'; msg.textContent='Did not send: '+((e&&e.message)||e)+'. Try again when you have signal.'; }
+  }
   function signout(){ var f=logoutFn(); close(); if(f) f(); }
   async function reload(){
     try{ if('serviceWorker' in navigator){ var rs=await navigator.serviceWorker.getRegistrations(); for(var i=0;i<rs.length;i++) await rs[i].unregister(); } if(window.caches){ var ks=await caches.keys(); for(var j=0;j<ks.length;j++) await caches.delete(ks[j]); } }catch(e){}
@@ -7518,7 +7760,7 @@ var BBSET=(function(){
   }
   var tries=0; function boot(){ if(!inject() && tries++<60) setTimeout(boot,2000); }
   window.addEventListener('load',function(){ setTimeout(boot,1500); });
-  return { open:open, close:close, enable:enable, test:test, signout:signout, reload:reload, inject:inject, diag:diag };
+  return { open:open, close:close, enable:enable, test:test, signout:signout, reload:reload, inject:inject, diag:diag, sendReport:sendReport };
 })();
 </script>
 <!-- @@BB_SETTINGS_END@@ -->
