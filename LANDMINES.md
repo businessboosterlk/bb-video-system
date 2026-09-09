@@ -1425,3 +1425,50 @@ re-fetch.** On a live shared board the screen is always a photograph, never the
 thing itself.
 
 90 checks, 0 failed.
+
+---
+
+## L-VID-032 · "0 of 0" while five cutting jobs were planned
+
+**Asked 9 September: is the Weekly Plan summary right?** Four of the five
+figures were exact, checked against the database row by row:
+
+| On screen | Database |
+|---|---|
+| Needs cutting **128** | 128 topics at `shot` |
+| Cut, ready to edit **0** | 0 topics at `cut` |
+| In our hands **42** | 42 projects in our stages |
+| Waiting on others **51** | 51 projects with a reviewer or client |
+| Edited this week **2 of 24** | counted by hand: 24 video lines planned, 2 ticked |
+
+The three boxes are also mutually exclusive and exhaustive: 42 + 51 + 131
+delivered = 224, the whole live board.
+
+**The fifth was wrong in the way that matters. "CUT & GRADED 0 of 0" while
+FIVE cutting jobs were written for the week and Ushane had already ticked one.**
+
+Both zeroes were arithmetically correct. `parseCutLine` only yields a number
+when the line carries a bracket, and this week nobody wrote one: "CUT AND GRADE
+CLOVE", "CUT AND GRADE TTM", "LEON CUT AND GRADE". So no VIDEO count could be
+made, `cutPlan` was 0, and the honest arithmetic printed a sentence that reads
+**"no cutting was planned"** to every human who sees it.
+
+**Jobs and videos are two different quantities.** A cutting line always counts
+as one job; it only counts as videos when somebody writes the number. The
+footer now reports `CUT & GRADED 1 of 5 jobs` and names the gap underneath:
+*five cutting jobs carry no number, so no video count can be made from them.*
+
+**The rule, which is the same one as L-VID-030 in a different costume: when a
+number cannot be computed, say that, never print zero.** A zero is a claim
+about the world. "Not countable" is a claim about the data. They look identical
+on screen and mean opposite things.
+
+**And a fault in my own harness, seen only because I looked at the screen.**
+The undo check calls `bbuRecord()` with two fake cards, then empties the stack
+array. `bbuRecord` also DRAWS the bar, so every self-test left a phantom
+**"2 cards back out of Team Review"** sitting over the Weekly Plan, offering an
+Undo for two cards that never existed. The check now clears the bar and asserts
+it is gone. **Test state you can SEE is still test state**, and an array being
+tidy is not the same as the screen being tidy.
+
+93 checks, 0 failed.
