@@ -51,7 +51,7 @@ window.__ST_LOG=[];
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';document.head.appendChild(s)"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';document.head.appendChild(s)"></script>
 <style>
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1039,7 +1039,8 @@ function cuttingFromCells(cells){
       if(!people[who])people[who]={total:0,unknown:0,entries:0,byClient:{},done:0};
       const rec=people[who];
       rec.entries++;
-      if(c.status==='done')rec.done++;
+      /* the LINE's tick, not the day's status: same fault as the carry panel */
+      if(/^\s*\[(x|X)\]/.test(line))rec.done++;
       if(p.n==null){rec.unknown++;}
       // A line naming two clients splits nothing: we cannot know the split, so
       // the videos are attributed once and the clients are both listed.
@@ -4351,7 +4352,40 @@ async function wpFetchWeek(monday){
 }
 /* UNRESOLVED means: has content, and is not DONE. Delayed is not done, which is
    Thulaib's rule and the whole point of the carry-over panel. */
-function wpIsUnresolved(c){return !!(c&&String(c.content||'').trim())&&c.status!=='done'}
+/* THE PANEL READ THE DAY, THE TICKS LIVE ON THE LINE. Fixed 14 September.
+   Since the tick boxes (L-VID-024) "done" is a [x] on each line, but this rule
+   still asked whether the whole DAY carried the Done status. Ramani's five
+   days were every line ticked and still said Delayed from the old button, so
+   the panel listed them and then printed "nothing left", because there was
+   nothing left. A line is carried when IT is not finished, whatever the day
+   says. Delayed is still not done: an unticked line on a Delayed day carries.
+   A line saying somebody was away is not work, so it never carries.
+   One legacy case: a day marked Done before ticks existed has no tick marks
+   at all, and it stays resolved. */
+function wpIsAbsence(text){return /\b(NOT AVAILABLE|ON LEAVE|LEAVE|HOLIDAY|ABSENT|DAY OFF|SICK)\b/i.test(String(text||''))}
+function wpCarryLeft(content){return wpItems(content).filter(function(it){return !it.fin&&!wpIsAbsence(it.text)})}
+function wpIsUnresolved(c){
+  if(!c||!String(c.content||'').trim())return false;
+  if(c.status==='done'&&!/^\s*\[/m.test(String(c.content||'')))return false;
+  return wpCarryLeft(c.content).length>0;
+}
+/* Splits a day into what MOVES and what STAYS. Finished work stays in the
+   week it was finished in, because that is where the recap counts it. A part
+   done line splits: "[2/3] 3 CF" leaves "[x] 2 CF" behind and carries "1 CF".
+   Before this, Move and Drop deleted the whole day, so a ticked "1 TTM" sitting
+   under an unfinished "3 LEON" was erased from last week and from the Month
+   Recap by a button that said it was only dealing with the unfinished part. */
+function wpCarrySplit(content){
+  const left=[],keep=[];
+  wpItems(content).forEach(function(it){
+    if(it.fin||wpIsAbsence(it.text)){keep.push(it);return;}
+    if(it.planned>1&&it.done>0){
+      left.push(wpSetNumber(it.text,it.planned-it.done));
+      keep.push({text:wpSetNumber(it.text,it.done),kind:it.kind,n:it.done,code:it.code,planned:it.done,done:it.done,fin:true});
+    }else left.push(it.text);
+  });
+  return {left:left.join('\n'),keep:wpItemsToText(keep)};
+}
 let _wpCarry=[];        /* last week's unresolved cells, for the panel */
 let _wpCarryKey=null;   /* the week_start key those cells live under */
 /* ITEMS. One line = one client's work for that person that day.
@@ -4543,23 +4577,23 @@ function wpGridRender(){
       <span class="wp-carry-title">${vicon('alert',16)} Last week is not finished</span>
       <span class="wp-carry-count">${_wpCarry.length}</span>
     </div>
-    <div class="wp-carry-sub">These were planned last week and never marked done. Move them into this week, mark them done, or drop them. Only Done counts as finished.</div>
+    <div class="wp-carry-sub">Lines from last week that were never ticked. <b>Move</b> puts what is left on today and keeps anything ticked in last week. <b>Done</b> ticks it as finished. <b>Drop</b> removes only the unticked lines, for work that was cancelled.</div>
     ${_wpCarry.map(c=>`<div class="wp-carry-row">
       <div class="wp-carry-who">${esc(c.editor_name||'')}</div>
       <div class="wp-carry-day">${WP_DAYS_SHORT[(c.day_of_week||1)-1]||''}</div>
-      <div class="wp-carry-txt">${wpItems(c.content).filter(function(it){return !it.fin}).map(function(it){
+      <div class="wp-carry-txt">${wpCarryLeft(c.content).map(function(it){
         /* what is LEFT, in the words that will move: "1 CF" not "[2/3] 3 CF" */
         const left=(it.planned>1&&it.done>0)?wpSetNumber(it.text,it.planned-it.done):it.text;
         return `<div class="wp-carry-line">${esc(left)}${(it.planned>1&&it.done>0)?`<span class="wp-of"> left of ${it.planned}</span>`:''}</div>`;
       }).join('')||'<span class="wp-cell-empty">nothing left</span>'}</div>
       <div class="wp-carry-acts">
-        <button class="wp-carry-btn move" onclick="wpCarryAct(${c.id},'move')">${vicon('send',12)} Move to this week</button>
+        <button class="wp-carry-btn move" onclick="wpCarryAct(${c.id},'move')">${vicon('send',12)} Move to today</button>
         <button class="wp-carry-btn done" onclick="wpCarryAct(${c.id},'done')">${vicon('check',12)} Done</button>
         <button class="wp-carry-btn drop" onclick="wpCarryAct(${c.id},'drop')">${vicon('trash',12)} Drop</button>
       </div>
     </div>`).join('')}
     <div class="wp-carry-all">
-      <button class="wp-carry-btn move" onclick="wpCarryAll('move')">${vicon('send',12)} Move all ${_wpCarry.length} into this week</button>
+      <button class="wp-carry-btn move" onclick="wpCarryAll('move')">${vicon('send',12)} Move all ${_wpCarry.length} onto today</button>
       <button class="wp-carry-btn done" onclick="wpCarryAll('done')">${vicon('check',12)} Mark all done</button>
     </div>
   </div>`;
@@ -4749,46 +4783,68 @@ async function wpCarryAct(id,action,silent){
   if(!c)return;
   const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
   const who=(currentUser&&currentUser.name)||null;
+  const now=new Date().toISOString();
+  const cellUrl=`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`;
+  /* A write that fails must say so. fetch does not throw on a 400. */
+  const send=async function(url,opts){const r=await fetch(url,opts);if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,120));return r;};
+  const split=wpCarrySplit(c.content);
+  /* What stays behind in last week: the ticked lines, or nothing at all. */
+  const settle=async function(){
+    if(split.keep.trim())await send(cellUrl,{method:'PATCH',headers,body:JSON.stringify({content:split.keep,status:'done',updated_by:who,updated_at:now})});
+    else await send(cellUrl,{method:'DELETE',headers});
+  };
   try{
     if(action==='done'){
-      await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'PATCH',headers,
-        body:JSON.stringify({status:'done',updated_by:who,updated_at:new Date().toISOString()})});
+      const all=wpItems(c.content).map(function(it){return Object.assign({},it,{done:it.planned,fin:true})});
+      await send(cellUrl,{method:'PATCH',headers,body:JSON.stringify({content:wpItemsToText(all),status:'done',updated_by:who,updated_at:now})});
     }else if(action==='drop'){
-      await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'DELETE',headers});
+      await settle();
     }else if(action==='move'){
+      /* TODAY, not the same weekday. Friday's leftovers used to land on THIS
+         Friday, four days away, so Ushane was retyping them onto Monday by
+         hand. Unfinished work is due now. A weekend lands it on Monday. */
       const ws=_wpKeyInUse||localDateStr(wpWeekStart);
-      const target=_wpCells[c.editor_name+'-'+c.day_of_week];
-      /* Only what is unfinished comes forward, and a part-done line comes
-         forward as its remainder: "3 CF" with 2 done carries as "1 CF". Done
-         lines stay in last week where they belong. */
-      const text=wpItems(c.content).filter(function(it){return !it.fin})
-        .map(function(it){return (it.planned>1&&it.done>0)?wpSetNumber(it.text,it.planned-it.done):it.text}).join('\n').trim();
-      if(!text){await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'DELETE',headers});if(!silent){toast('Nothing left to move','success');await wpGridLoad();}return;}
-      if(target){
-        const merged=String(target.content||'').trim();
-        await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${target.id}`,{method:'PATCH',headers,
-          body:JSON.stringify({content:merged?(merged+'\n'+text):text,updated_by:who,updated_at:new Date().toISOString()})});
-      }else{
-        await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells`,{method:'POST',headers,
-          body:JSON.stringify({week_start:ws,editor_name:c.editor_name,day_of_week:c.day_of_week,
-            content:text,status:'pending',updated_by:who,updated_at:new Date().toISOString()})});
+      const wd=new Date().getDay();
+      const day=(wd>=1&&wd<=5)?wd:1;
+      const key=c.editor_name+'-'+day;
+      const target=_wpCells[key];
+      const have=target?wpItems(target.content).map(function(it){return it.text.toUpperCase()}):[];
+      /* A line he already retyped onto today is not added twice. */
+      const text=split.left.split('\n').filter(function(l){return l.trim()&&have.indexOf(l.trim().toUpperCase())===-1}).join('\n');
+      if(text){
+        let r;
+        if(target){
+          const merged=String(target.content||'').trim();
+          r=await send(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${target.id}`,{method:'PATCH',headers,
+            body:JSON.stringify({content:merged?(merged+'\n'+text):text,updated_by:who,updated_at:now})});
+        }else{
+          r=await send(`${SUPABASE_URL}/rest/v1/weekly_plan_cells`,{method:'POST',headers,
+            body:JSON.stringify({week_start:ws,editor_name:c.editor_name,day_of_week:day,content:text,status:'pending',updated_by:who,updated_at:now})});
+        }
+        /* Move all sends several of one person's days to the SAME cell today.
+           Without refreshing the local copy the second merge is built on the
+           content from before the first, and silently overwrites it. */
+        try{const rows=await r.json();if(rows&&rows[0])_wpCells[key]=rows[0];}catch(_){}
       }
-      await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`,{method:'DELETE',headers});
+      await settle();
     }
-    if(!silent){toast(action==='move'?'Moved into this week':(action==='done'?'Marked done':'Dropped'),'success');await wpGridLoad();}
+    if(!silent){toast(action==='move'?'Moved onto today':(action==='done'?'Marked done':'Dropped the unticked lines'),'success');await wpGridLoad();}
   }catch(err){
-    if(!silent)toast('Could not update: '+(err.message||''),'error');
+    toast('Could not update: '+(err.message||''),'error');
     if(window.bbReportDbError)window.bbReportDbError('weekly_plan_cells',action,err);
+    if(silent)throw err;
   }
 }
 async function wpCarryAll(action){
   const list=_wpCarry.slice();
   if(!list.length)return;
   if(!confirm(action==='move'
-    ? `Move all ${list.length} unfinished items into this week?`
+    ? `Move all ${list.length} onto today? Anything ticked stays in last week.`
     : `Mark all ${list.length} unfinished items as done?`))return;
-  for(const c of list){ await wpCarryAct(c.id,action,true); }
-  toast(action==='move'?`Moved ${list.length} into this week`:`Marked ${list.length} done`,'success');
+  let n=0;
+  try{ for(const c of list){ await wpCarryAct(c.id,action,true); n++; } }
+  catch(e){ toast(`Stopped after ${n} of ${list.length}: `+(e.message||''),'error'); await wpGridLoad(); return; }
+  toast(action==='move'?`Moved ${n} onto today`:`Marked ${n} done`,'success');
   await wpGridLoad();
 }
 window.wpCarryAct=wpCarryAct;window.wpCarryAll=wpCarryAll;
@@ -6544,6 +6600,19 @@ async function runSelfTest(){
       wpIsUnresolved({content:'   ',status:'pending'})===false,'blank cells ignored');
    ok('Weekly Plan: the three carry-over actions exist',
       typeof wpCarryAct==='function'&&typeof wpCarryAll==='function');
+   /* 14 September. Ramani's whole week was ticked and still carried, because
+      the rule read the day's Delayed status instead of the ticks. */
+   ok('Weekly Plan: a day with every line ticked is never carried',
+      wpIsUnresolved({content:'[x] 2 CF\n[x] 1 CLOVE',status:'delayed'})===false,
+      'ticked lines on a Delayed day stay resolved');
+   ok('Weekly Plan: an unticked line on a Delayed day still carries',
+      wpIsUnresolved({content:'3 LEON\n[x] 1 TTM',status:'delayed'})===true,'delayed is not done');
+   ok('Weekly Plan: somebody being away is never carried as work',
+      wpIsUnresolved({content:'NOT AVAILABLE',status:'pending'})===false,'absence is not a task');
+   const sp=wpCarrySplit('3 LEON\n[x] 1 TTM'), pp=wpCarrySplit('[2/3] 3 CF');
+   ok('Weekly Plan: Move and Drop never erase a ticked line',
+      sp.left==='3 LEON'&&sp.keep==='[x] 1 TTM'&&pp.left==='1 CF'&&pp.keep==='[x] 2 CF',
+      'left "'+sp.left+'" keep "'+sp.keep+'" / part done left "'+pp.left+'" keep "'+pp.keep+'"');
   })();
 
   /* ── H9 · the Weekly Plan items are usable with a finger ─────────────── */

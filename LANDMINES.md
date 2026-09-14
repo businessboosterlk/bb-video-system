@@ -1522,3 +1522,42 @@ the person acts and a reassignment cannot rewrite it. The panel says so on
 screen rather than leaving the reader to assume.
 
 95 checks, 0 failed.
+
+---
+
+## L-VID-035 · Last week is not finished listed finished work, then Drop and Move erased it
+
+**Reported 14 September 2026** from a screenshot: 11 rows under "Last week is
+not finished" although Ushane had ticked almost everything.
+
+**Root cause, proven from the rows.** Since the tick boxes (L-VID-024) "done"
+lives on each LINE as `[x]`. `wpIsUnresolved` still asked whether the whole
+DAY carried `status='done'`. Ramani's five days were `[x] NOT AVAILABLE` with
+the old Delayed status, so the panel listed them and printed "nothing left",
+because nothing was left. **Same class as L-VID-024's own note: a format change
+must update every READER.** A second reader had the same fault: the cutting
+roll-up counted a cut as done from the day's status.
+
+**Three more faults behind the same buttons, found by reading them:**
+
+1. **Move and Drop DELETED the whole day.** The comment said "Done lines stay in
+   last week where they belong" and the next line deleted the row. Rajeewa's
+   Friday was `3 LEON` plus a ticked `1 TTM`: either button would have erased
+   the finished TTM from last week and from the Month Recap.
+2. **Move landed Friday's leftovers on THIS Friday.** Ushane was retyping them
+   onto Monday by hand, which the rows show (Bavith's `2 CLOVE`).
+3. **Move all could overwrite itself.** Several of one person's days merging
+   into one cell were each built from the content before the previous merge.
+   Harmless while targets were per weekday, fatal the moment they share one.
+
+**The block.** `wpCarryLeft` (unticked, not an absence) decides what carries,
+`wpCarrySplit` decides what moves and what stays. Both buttons settle last
+week by keeping the ticked lines with the day marked done. Move lands on today,
+skips a line already typed there and refreshes the local copy after each write.
+Done ticks every line so the grid and the recap agree with the panel. A failed
+write now throws instead of toasting success.
+
+**Proven.** Real last week: 11 rows became 6. A throwaway 2030 week: `[x] 1 TTM`
+and `[x] 2 CF` stayed, `3 LEON` was not doubled, three days merged into one
+cell with nothing lost, every test row deleted. Four checks; with the old rule
+put back, two go red. 99 checks, 0 failed.
