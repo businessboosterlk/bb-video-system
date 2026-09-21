@@ -1561,3 +1561,62 @@ write now throws instead of toasting success.
 and `[x] 2 CF` stayed, `3 LEON` was not doubled, three days merged into one
 cell with nothing lost, every test row deleted. Four checks; with the old rule
 put back, two go red. 99 checks, 0 failed.
+
+---
+
+## L-VID-036 · a dropped connection wore a red alarm while the evidence never left the laptop
+
+**Seen 21 September 2026, 21:38.** A red bar: "System issue detected (4):
+daily_pillar_state: load failed" three times over.
+
+**Nothing was broken.** Anon can read the table (HTTP 200), there is exactly one
+row for Ushane for the day, saved at 17:30. No duplicate person plus date
+pair exists anywhere in 91 rows. The browser simply could not reach the server
+for a moment, most likely a laptop waking with the page open.
+
+**Fault one: a transport failure was dressed as a database fault.** Chrome says
+"Failed to fetch", Safari says "Load failed" and supabase-js hands both back in
+the same shape as a real answer from Postgres. `bbReportDbError` reported every
+one as `db_write`, which is loud and raises the bar. The Sentinel's own table
+checks have always treated that as weather and logged it quietly. Two doors,
+two different verdicts on the same event. A reply carrying a Postgres code such
+as 42501 still raises the bar, because that IS the server answering.
+
+**Fault two: quiet issues were still counted on the bar.** They were pushed into
+the issues list before the quiet flag was read, so one real fault dragged three
+connection blips onto the screen. The count read four.
+
+**Fault three, and the one that matters: NOT ONE of the four reached
+`system_bug_log`.** The estate has logged nothing real since 9 September. The
+write path is fine, proven by an insert that returned 201. The reason is
+circular: the fault WAS a lost connection, and the report was posted over that
+same lost connection, with `.catch(function(){})` on the end. **This is the 9
+September lesson repeating one layer down: silence reads exactly like health.**
+There is now an OUTBOX. A row that cannot be sent is kept in `localStorage`, at
+most 20, and flushed on the next open. Proven end to end: with every POST to the
+log forced to fail, the row was held, and when the line was restored it arrived
+as row 103.
+
+**Fault four: the pillar loader had no retry**, so a screen that reloads itself
+reported four times in an evening. It now tries again after 4 seconds and only a
+second failure is worth a word.
+
+**And what the harness found while it was open, none of it caused by the above:**
+
+- **KAVISH was set inactive with two open videos still in his name**, #420 and
+  #383. Nothing said so. He stopped appearing and the work stopped appearing
+  with him. New check, and it is RED until somebody reassigns them.
+- **The Weekly Plan grid was a hardcoded list of five names** and still offered
+  KAVISH a column. It is now derived from the roster, plus anyone holding work
+  in the week on screen so history is never erased. Grid rows went 5 to 4.
+- **One check was wrong, not the app.** "cutting jobs are counted" asserted
+  jobs >= videos, which assumes a job never holds more than one video. "CUT AND
+  GRADE BELL (4)" is one job carrying four, so a true week of 3 jobs and 7
+  videos read as a failure. Third time a check in this file has accused the app
+  of the checker's own mistake. It now asserts what is true: videos cannot exist
+  without a job.
+
+**Proven.** Guard PASS. Both new checks go red when the old behaviour is put
+back. Click path on the bar: appears, Details opens, panel closes, bar survives,
+× dismisses, a later blip does not resurrect it, plan cells still take a click.
+102 checks, 1 failed, and that one is the two videos waiting to be reassigned.

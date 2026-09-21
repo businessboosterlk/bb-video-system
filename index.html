@@ -2160,12 +2160,20 @@ const USHANE_PILLARS=[
 ];
 let _pillarCache={};
 function pillarDateStr(){return localDateStr()}
+/* ONE RETRY BEFORE ANYBODY IS TOLD. This screen reloads itself, so a laptop
+   waking from sleep failed here four times in an evening and raised a red bar
+   each time while nothing was wrong: the row for the day was saved at 17:30 and
+   is still there. The Sentinel retries its own table checks once for exactly
+   this reason. Only a second failure is worth a word. */
 async function loadPillarState(){
-  try{
-    const {data,error}=await sb.from('daily_pillar_state').select('state').eq('user_name','USHANE').eq('pillar_date',pillarDateStr()).maybeSingle();
-    if(error&&window.bbReportDbError)window.bbReportDbError('daily_pillar_state','load',error);
-    _pillarCache=data?.state||{};
-  }catch(e){_pillarCache={};if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','load',e);}
+  const attempt=async function(){
+    try{ return await sb.from('daily_pillar_state').select('state').eq('user_name','USHANE').eq('pillar_date',pillarDateStr()).maybeSingle(); }
+    catch(e){ return {data:null,error:e}; }
+  };
+  let r=await attempt();
+  if(r.error){ await new Promise(function(f){setTimeout(f,4000)}); r=await attempt(); }
+  if(r.error&&window.bbReportDbError)window.bbReportDbError('daily_pillar_state','load',r.error);
+  _pillarCache=(r.data&&r.data.state)||{};
   return _pillarCache;
 }
 async function savePillarState(s){
@@ -4286,7 +4294,28 @@ window.openStageMenu=openStageMenu;
 // ═══════════════════════════════════════
 // WEEKLY PLAN
 // ═══════════════════════════════════════
-const WP_EDITORS = ['USHANE','RAJEEWA','RAMANI','BAVITH','KAVISH'];
+/* THE GRID WAS A HARDCODED LIST OF FIVE NAMES, and on 21 September it still
+   held KAVISH a day after he was set inactive, so the plan offered a column
+   nobody could fill. The harness check for exactly this went red and that is
+   how it was found. The list is now DERIVED from the roster, and anyone with
+   work written in the week on screen stays visible, so a person leaving never
+   erases the week they worked. The constant survives as the fallback for a
+   signed-out page, where there is no roster to read. */
+const WP_EDITORS = ['USHANE','RAJEEWA','RAMANI','BAVITH'];
+function wpEditors(){
+  let out=[];
+  try{ out=videoMembers().map(function(m){return String(m.name||'').toUpperCase()}); }catch(e){ out=[]; }
+  if(!out.length)return WP_EDITORS.slice();
+  try{
+    Object.keys(_wpCells||{}).forEach(function(k){
+      const c=_wpCells[k];
+      if(!c||!String(c.content||'').trim())return;
+      const nm=String(c.editor_name||'').toUpperCase();
+      if(nm&&out.indexOf(nm)===-1)out.push(nm);
+    });
+  }catch(e){}
+  return out;
+}
 const WP_DAYS_FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
 const WP_DAYS_SHORT = ['MON','TUE','WED','THU','FRI'];
 let wpWeekStart = null;
@@ -4295,9 +4324,10 @@ let _wpCurStatus = 'pending';
 
 function wpCanEdit(){const r=(currentUser?.role||'').toLowerCase();return r==='admin'||r==='video_head';}
 function wpVisibleEditors(){
-  if(wpCanEdit())return WP_EDITORS;
+  const all=wpEditors();
+  if(wpCanEdit())return all;
   const name=(currentUser?.name||'').toUpperCase();
-  return WP_EDITORS.includes(name)?[name]:[];
+  return all.indexOf(name)>-1?[name]:[];
 }
 /* WHAT KIND OF LINE IS THIS. Read LANDMINES.md L-VID-024 before changing.
      video   "3 CF", "LEON 8", "1 HAYMAN VIDEO"   a bare number before or after
@@ -4425,7 +4455,7 @@ function wpWeekStats(){
   const day=[null,blank(),blank(),blank(),blank(),blank()];
   const per={};
   const today=new Date();today.setHours(0,0,0,0);
-  WP_EDITORS.forEach(function(ed){
+  wpEditors().forEach(function(ed){
     per[ed]=blank();
     for(let d=1;d<=5;d++){
       const c=_wpCells[ed+'-'+d];if(!c)continue;
@@ -4676,7 +4706,7 @@ function wpGridRender(){
 function wpStripHtml(WS,visible){
   if(!isAdmin())return '';
   const W=WS.week;
-  const names=(visible||WP_EDITORS).filter(function(ed){const p=WS.per[ed];return p&&(p.vidPlan||p.cutPlan||p.shoots||p.open)});
+  const names=(visible||wpEditors()).filter(function(ed){const p=WS.per[ed];return p&&(p.vidPlan||p.cutPlan||p.shoots||p.open)});
   const chips=names.map(function(ed){const p=WS.per[ed];
     const bits=[];
     if(p.vidPlan)bits.push(`<b>${p.vidDone}</b>/${p.vidPlan}`);
@@ -5786,41 +5816,84 @@ function vsUpdateCheckinBadge(){
   function isAdminViewer(){var u=cu();var r=(u&&u.role||'').toLowerCase();return r==='admin'||r==='video_head';}
 
   // Write an issue to the central bug log (deduped + rate-limited so we never spam the DB)
+  /* THE OUTBOX. On 21 September four faults were raised on Thulaib's screen and
+     NOT ONE reached system_bug_log, because the fault was a lost connection and
+     the report was posted over that same lost connection. The estate's own
+     lesson from 9 September is that silence reads exactly like health. A row
+     that cannot be sent is now kept on the device and sent on the next open. */
+  var OUTBOX='bbSentinelOutbox';
+  function outRead(){try{return JSON.parse(localStorage.getItem(OUTBOX)||'[]')}catch(e){return []}}
+  function outWrite(a){try{localStorage.setItem(OUTBOX,JSON.stringify(a.slice(-20)))}catch(e){}}
+  function outAdd(row){var a=outRead();a.push(row);outWrite(a);}
+  function postRow(row){
+    return fetch(SB_URL+'/rest/v1/system_bug_log',{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify(row)
+    }).then(function(r){ if(!r||!r.ok) throw new Error('HTTP '+(r?r.status:0)); return true; });
+  }
+  function outFlush(){
+    var a=outRead(); if(!a.length)return;
+    outWrite([]);                                  /* take them, then put back only what still fails */
+    a.forEach(function(row){ postRow(row).catch(function(){ outAdd(row); }); });
+  }
+  window.bbSentinelOutbox={read:outRead,write:outWrite,add:outAdd,flush:outFlush};
+
   function report(issue){
     try{
       var key=(issue.category||'')+'|'+(issue.table_name||'')+'|'+(issue.message||'').slice(0,120);
       var now=Date.now();
       if(_seen[key]&&(now-_seen[key])<DEDUPE_MS)return;   // already logged recently
       _seen[key]=now;
-      _issues.push(issue);
+      /* A quiet issue is weather. It belongs in the log, never in a red bar
+         that says something is broken. Before this it was pushed anyway, so
+         the next real fault dragged three connection blips onto the screen
+         with it and the count read four when one thing was wrong. */
+      if(!issue.quiet)_issues.push(issue);
       // console first — always visible to a developer
       console.error('[BB Sentinel]',issue.category,issue.table_name||'',issue.message,issue.detail||'');
       // persist to system_bug_log via raw REST (independent of the app's sb client)
-      fetch(SB_URL+'/rest/v1/system_bug_log',{
-        method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-        body:JSON.stringify({
-          app:APP,
-          severity:issue.severity||'error',
-          category:issue.category||null,
-          table_name:issue.table_name||null,
-          message:(issue.message||'').slice(0,500),
-          detail:(issue.detail||'').slice(0,2000),
-          user_name:who(),
-          url:location.href.slice(0,300),
-          user_agent:(navigator.userAgent||'').slice(0,300)
-        })
-      }).catch(function(){});
+      var row={
+        app:APP,
+        severity:issue.severity||'error',
+        category:issue.category||null,
+        table_name:issue.table_name||null,
+        message:(issue.message||'').slice(0,500),
+        detail:(issue.detail||'').slice(0,2000),
+        user_name:who(),
+        url:location.href.slice(0,300),
+        user_agent:(navigator.userAgent||'').slice(0,300)
+      };
+      postRow(row).catch(function(){ outAdd(row); });
       // Transient connectivity issues (offline/blip) log quietly — they're NOT bugs,
       // so they must never raise the red banner and alarm staff.
       if(!issue.quiet)renderBanner();
     }catch(e){/* sentinel must never throw */}
   }
   // expose so app code can surface its own caught errors instead of swallowing them
+  /* WEATHER, NOT A FAULT. Chrome says "Failed to fetch", Safari says
+     "Load failed" and supabase-js hands both through as though the database had
+     answered. It had not: nothing reached it. The Sentinel's own table checks
+     have always treated that as transient and quiet. This door did not, so one
+     dropped connection put a red "System issue detected" bar over the app and
+     named a table that was never at fault. A real answer from Postgres carries
+     a code like 42501 and still raises the bar. */
+  var NET_RE=/failed to fetch|load failed|networkerror|network request failed|network error|fetch failed|timeout|timed out|aborted|err_internet|err_network|offline/i;
+  function looksTransient(msg,err){
+    if(NET_RE.test(String(msg||'')))return true;
+    if(err&&typeof err==='object'&&'code' in err&&!err.code)return true;  /* supabase-js: empty code means it never reached the server */
+    return (typeof navigator!=='undefined'&&navigator.onLine===false);
+  }
+  window.bbLooksTransient=looksTransient;
   window.bbReportDbError=function(table,op,err){
     if(!err)return;
     var msg=(err.message||err.msg||(typeof err==='string'?err:JSON.stringify(err))||'unknown');
     var code=err.code?(' ['+err.code+']'):'';
+    if(looksTransient(msg,err)){
+      report({severity:'info',category:'network',table_name:table,message:op+' failed (network/offline)',
+              detail:'Transient, the browser could not reach the server. Not a server bug. '+msg,quiet:true});
+      return;
+    }
     report({severity:'error',category:'db_write',table_name:table,message:op+' failed'+code,detail:msg});
   };
   window.bbSentinelReport=report;
@@ -5838,7 +5911,7 @@ function vsUpdateCheckinBadge(){
     }
     var top=_issues.slice(-3).map(function(i){return (i.table_name?i.table_name+': ':'')+i.message;}).join('  ·  ');
     el.innerHTML=''+
-      '<span style="flex:1">System issue detected ('+_issues.length+'): '+top+'</span>'+
+      '<span style="flex:1">Something is not working ('+_issues.length+'). Your work is saved. '+top+'</span>'+
       '<button id="bbSentinelView" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:6px;padding:4px 10px;font:700 11px Inter;cursor:pointer">Details</button>'+
       '<button id="bbSentinelHide" style="background:none;border:none;color:#fff;opacity:.7;font-size:17px;cursor:pointer;line-height:1">×</button>';
     document.getElementById('bbSentinelHide').onclick=function(){el.remove();};
@@ -5930,7 +6003,7 @@ function vsUpdateCheckinBadge(){
   var _tries=0;
   function waitAndRun(){
     _tries++;
-    if(cu()){ setTimeout(checkHealth,500); return; }
+    if(cu()){ setTimeout(checkHealth,500); setTimeout(outFlush,1500); return; }
     if(_tries<40) setTimeout(waitAndRun,500);   // up to ~20s
   }
   if(document.readyState==='complete') waitAndRun();
@@ -6801,8 +6874,14 @@ async function runSelfTest(){
       with the roster or a new hire gets a login, a board and no row to plan in.
       This is how BAVITH and KAVISH were caught the first time. */
    const roster=videoMembers().map(m=>String(m.name||'').toUpperCase());
-   const noRow=(typeof WP_EDITORS!=='undefined')?WP_EDITORS.filter(x=>roster.indexOf(x)===-1):[];
-   const noPlan=(typeof WP_EDITORS!=='undefined')?roster.filter(x=>WP_EDITORS.indexOf(x)===-1):[];
+   /* Reads the list the GRID actually draws, not the constant behind it, so a
+      name kept on screen because it has work this week is not a failure. */
+   const grid=(typeof wpEditors==='function')?wpEditors():[];
+   const withWork={};
+   try{Object.keys(_wpCells||{}).forEach(function(k){const c=_wpCells[k];
+     if(c&&String(c.content||'').trim())withWork[String(c.editor_name||'').toUpperCase()]=1;});}catch(e){}
+   const noRow=grid.filter(x=>roster.indexOf(x)===-1&&!withWork[x]);
+   const noPlan=roster.filter(x=>grid.indexOf(x)===-1);
    okData('Team: the Weekly Plan grid matches the video roster',
       noRow.length===0&&noPlan.length===0,
       (noRow.length?'on the plan but not in team_members: '+noRow.join(', ')+'. ':'')+
@@ -7023,9 +7102,14 @@ async function runSelfTest(){
       'unnumbered cutting parses as a job carrying no video count');
    if(typeof wpWeekStats==='function'&&wpWeekStart){
      const W=wpWeekStats().week;
+     /* THE CHECK WAS WRONG, NOT THE APP. It asserted jobs >= videos, which
+        assumes a job never holds more than one video. "CUT AND GRADE BELL (4)"
+        is one job carrying four, so a true week of 3 jobs and 7 videos read as
+        a failure. Third time a check in this file has accused the app of its
+        own mistake. What is actually true: videos cannot exist without a job. */
      ok('Plan: cutting jobs are counted even when videos cannot be',
-        W.cutJobs>=W.cutPlan||W.cutPlan===0,
-        W.cutJobs+' cutting job'+(W.cutJobs===1?'':'s')+' this week, '+W.cutPlan+' of them carry a number');
+        W.cutPlan===0||W.cutJobs>0,
+        W.cutJobs+' cutting job'+(W.cutJobs===1?'':'s')+' this week carrying '+W.cutPlan+' video'+(W.cutPlan===1?'':'s'));
      ok('Plan: a week with cutting never reports it as nothing',
         !(W.cutJobs>0&&W.cutPlan===0&&/of 0<\/span>/.test(''))&&true,
         W.cutJobs?('the footer names the '+W.cutJobs+' unnumbered job'+(W.cutJobs===1?'':'s')):'no cutting written this week');
@@ -7047,6 +7131,47 @@ async function runSelfTest(){
      ok('History: the newest move on record is recent',days<=14,
         'newest move is '+days+' day'+(days===1?'':'s')+' old'+(days>14?', the app is reading a stale window':''));
    }
+  })();
+
+  /* ── L · nobody who has left is still holding work ──────────────────── */
+  (function(){
+   /* KAVISH was set inactive on 21 September with two open videos still in his
+      name. Nothing anywhere said so: he simply stopped appearing, and the work
+      stopped appearing with him. A card in a leaver's name is a card nobody is
+      doing. */
+   const live=(DATA.teamMembers||[]).filter(m=>m.active===false).map(m=>({id:Number(m.id),name:m.name}));
+   const byId={}; live.forEach(m=>byId[m.id]=m.name);
+   const stranded=(DATA.projects||[]).filter(p=>p.assigned_editor_id!=null&&byId[Number(p.assigned_editor_id)]&&!DELIVERED_STAGES.includes(p.current_stage));
+   okData('Team: no open video is left in the name of somebody inactive',
+      stranded.length===0,
+      stranded.length?(stranded.length+' to reassign: '+stranded.map(p=>'#'+p.id+' '+byId[Number(p.assigned_editor_id)]).join(', ')):'every open card is with somebody active');
+  })();
+
+  /* ── K · a blip is not a bug, and an offline fault is not lost ───────── */
+  (function(){
+   const t=window.bbLooksTransient;
+   if(typeof t!=='function'){ok('Sentinel: a dropped connection is not called a database fault',false,'bbLooksTransient is missing');}
+   else ok('Sentinel: a dropped connection is not called a database fault',
+      t('Failed to fetch')===true&&t('Load failed')===true&&t('TypeError: NetworkError')===true&&
+      t('permission denied for table clients',{code:'42501'})===false&&
+      t('duplicate key value violates unique constraint',{code:'23505'})===false,
+      'fetch failures are weather, a Postgres code is a fault');
+  })();
+  (function(){
+   /* The fault that happens offline cannot be posted over the connection that
+      just died. It is kept and sent on the next open. */
+   const ob=window.bbSentinelOutbox;
+   if(!ob||typeof ob.add!=='function'){ok('Sentinel: a fault raised offline is kept and sent later',false,'no outbox');return;}
+   const keep=ob.read();
+   let held=false;
+   try{
+     ob.write([]);
+     ob.add({app:'video-system',message:'HARNESS outbox probe'});
+     held=ob.read().length===1&&ob.read()[0].message==='HARNESS outbox probe';
+   }catch(e){}
+   ob.write(keep);
+   ok('Sentinel: a fault raised offline is kept and sent later',
+      held&&ob.read().length===keep.length,held?'held on the device, then restored':'FAIL: the row was not kept');
   })();
 
   /* ── I · no horizontal scroll ────────────────────────────────────────── */
