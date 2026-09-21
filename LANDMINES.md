@@ -1586,14 +1586,14 @@ as 42501 still raises the bar, because that IS the server answering.
 the issues list before the quiet flag was read, so one real fault dragged three
 connection blips onto the screen. The count read four.
 
-**Fault three, and the one that matters: NOT ONE of the four reached
+**Fault three, the one that matters: NOT ONE of the four reached
 `system_bug_log`.** The estate has logged nothing real since 9 September. The
 write path is fine, proven by an insert that returned 201. The reason is
-circular: the fault WAS a lost connection, and the report was posted over that
+circular: the fault WAS a lost connection. The report was posted over that
 same lost connection, with `.catch(function(){})` on the end. **This is the 9
 September lesson repeating one layer down: silence reads exactly like health.**
 There is now an OUTBOX. A row that cannot be sent is kept in `localStorage`, at
-most 20, and flushed on the next open. Proven end to end: with every POST to the
+most 20, then flushed on the next open. Proven end to end: with every POST to the
 log forced to fail, the row was held, and when the line was restored it arrived
 as row 103.
 
