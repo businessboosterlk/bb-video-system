@@ -936,6 +936,15 @@ const USERS = [
      (they are not assigned work and H11 exempts them) but does mean she appears
      in no people list in any BB system. Flagged to Thulaib. */
   { name: 'TIANA',   pin: '7029', role: 'admin', alt: ['TIYANA','THIANA'] },
+  /* Added 2026-09-24 on Thulaib's ask: two new video editors. `editor` is the
+     right role, not an assumption: they do the work and see only what is
+     assigned to them. team_members rows 27 and 28 went in the same day with
+     role `editor` and active true, because a login with no roster row signs in
+     perfectly and sees an EMPTY board, which is how BAVITH and KAVISH were
+     caught the first time. THE PINS ARE TEMPORARY. Change them here and tell
+     the two of them. */
+  { name: 'MATHUSHAN', pin: '5064', role: 'editor', alt: ['MADHUSHAN','MATHUSAN'] },
+  { name: 'THARUSHA',  pin: '8351', role: 'editor', alt: ['THARUSHAN','TARUSHA'] },
 ];
 const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
