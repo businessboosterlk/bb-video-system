@@ -802,6 +802,9 @@ a:hover{text-decoration:underline}
 .wp-sum-bank .wp-sum-total{color:var(--green)}
 .wp-sum-sub{font-size:11px;color:var(--text-3);margin:2px 0 12px}
 .wp-sum-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:7px 0;border-top:1px dashed var(--border)}
+.wp-sum-row[role="button"]{cursor:pointer;border-radius:6px;margin:0 -6px;padding:7px 6px}
+.wp-sum-row[role="button"]:hover{background:var(--surface-2)}
+.wp-sum-note{font-size:11.5px;color:var(--text-3);line-height:1.5;margin:-4px 0 14px;padding:9px 12px;border:1px dashed var(--border);border-radius:10px}
 .wp-sum-row strong{font-size:14px;font-weight:800}
 .wp-sum-empty{font-size:12px;color:var(--text-3);font-style:italic;padding:8px 0}
 @media(max-width:720px){.wp-summary{grid-template-columns:1fr}}
@@ -4545,6 +4548,64 @@ async function wpGridLoad(){
   wpGridRender();
 }
 
+/* Which stages feed which box. Every open stage is in EXACTLY one box, and
+   Add to Drive is finished so it is in none. The harness proves both. */
+const WP_BOXES={
+  cut:  ['video_shot'],
+  ready:['rendering'],
+  hands:['cutting_color_grading','editing','changes'],
+  wait: ['video_head_review','team_review','coo_check','client_review','client_changes']
+};
+/* TOPICS THE PIPELINE CANNOT SEE YET. For each client and month: footage in
+   hand is every topic ticked Shot, Cut or Edited. Cards are every pipeline card
+   tagged that month, delivered and archived ones included. Footage minus cards
+   is what has been filmed and has no card yet. Of that, topics ticked Cut are
+   ready to edit and the rest still need cutting.
+   ONLY this month and last month count. A topic ticked Shot in April with no
+   card is not footage waiting on Ushane, it is a list nobody tidied, and it is
+   reported underneath as NOT COUNTED rather than hidden. Clients who have left
+   are never counted. */
+function wpTopicBacklog(){
+  const out={shot:{},cut:{},staleN:0,goneN:0,oldest:'',sinceLabel:''};
+  const now=new Date();
+  const since=new Date(now.getFullYear(),now.getMonth()-1,1);
+  const sinceKey=since.getFullYear()*100+since.getMonth()+1;
+  out.sinceLabel=MONTHS[since.getMonth()].slice(0,3)+' '+since.getFullYear();
+  const cards={};
+  allProjects().forEach(function(p){
+    if(p.target_month==null||p.target_year==null)return;
+    const k=p.client_id+'|'+p.target_year+'|'+parseInt(p.target_month);
+    cards[k]=(cards[k]||0)+1;
+  });
+  const g={};
+  (DATA.videoTopics||[]).forEach(function(t){
+    if(t.target_month==null||t.target_year==null)return;
+    const k=t.client_id+'|'+t.target_year+'|'+parseInt(t.target_month);
+    if(!g[k])g[k]={cid:t.client_id,ym:t.target_year*100+parseInt(t.target_month),shot:0,cut:0,edited:0};
+    if(t.status==='shot'||t.status==='cut'||t.status==='edited')g[k][t.status]++;
+  });
+  let oldestYm=0;
+  Object.keys(g).forEach(function(k){
+    const x=g[k];
+    const noCard=Math.max(0,x.shot+x.cut+x.edited-(cards[k]||0));
+    if(!noCard)return;
+    const cl=getClient(x.cid);
+    if(!cl||(cl.status&&cl.status!=='active')){out.goneN+=noCard;return;}
+    if(x.ym<sinceKey){out.staleN+=noCard;if(!oldestYm||x.ym<oldestYm)oldestYm=x.ym;return;}
+    const cutN=Math.min(noCard,x.cut), shotN=noCard-cutN;
+    const add=function(side,n){if(!n)return;if(!side[cl.id])side[cl.id]={cid:cl.id,name:cl.name,n:0};side[cl.id].n+=n;};
+    add(out.shot,shotN); add(out.cut,cutN);
+  });
+  if(oldestYm)out.oldest=MONTHS[(oldestYm%100)-1].slice(0,3)+' '+Math.floor(oldestYm/100);
+  return out;
+}
+/* A box row opens the pipeline with exactly the cards it counted. */
+function wpOpenBox(cid,stages){
+  FILTERS.pipeline=Object.assign({},FILTERS.pipeline,{search:'',client:String(cid),editor:'',priority:'',month:'',stage:stages});
+  navTo('pipeline');
+}
+window.wpOpenBox=wpOpenBox;
+
 function wpGridRender(){
   const board=document.getElementById('wpBoard');
   if(!board)return;
@@ -4566,20 +4627,39 @@ function wpGridRender(){
     // counted every unfinished project, so 48 videos parked with reviewers and
     // clients were reported as being edited when only 5 were in our hands.
     // BB_HANDS = our team is working on it. WAITING = it is with someone else.
-    const BB_HANDS=['video_shot','cutting_color_grading','rendering','editing','changes'];
-    const WAITING=['video_head_review','team_review','coo_check','client_review','client_changes'];
-    const byClient=(list,keyFn)=>{const o={};list.forEach(x=>{const k=keyFn(x);if(k==null)return;const cl=getClient(k.cid);const nm=cl?cl.name:'(No client)';o[nm]=(o[nm]||0)+1});return Object.entries(o).sort((a,b)=>b[1]-a[1])};
-    const projRows=(stages)=>byClient((DATA.projects||[]).filter(p=>stages.includes(p.current_stage)),p=>({cid:p.client_id}));
-    const topicRows=(st)=>byClient((DATA.videoTopics||[]).filter(t=>t.status===st),t=>({cid:t.client_id}));
-    const cutRows=topicRows('shot');            // shot, not cut yet: Ushane's queue
-    const readyRows=topicRows('cut');           // cut and handed over
-    const workRows=projRows(BB_HANDS);
-    const waitRows=projRows(WAITING);
-    const tot=rs=>rs.reduce((s,r)=>s+r[1],0);
-    const box=(cls,icon,title,sub,rows,empty)=>`<div class="wp-sum-col ${cls}">
+    /* THE FOUR BOXES READ THE PIPELINE. Rewritten 28 September 2026.
+       Needs cutting read 244. It counted every video TOPIC ever ticked "shot"
+       in the client pages, April onwards, and a topic never moves again once
+       its video has a card: 184 of the 244 already had a card, most of them on
+       Drive. Only 2 topics had ever been ticked "cut". The pipeline has known
+       the answer all along, because a card is BORN at Video Shot (178 of 179
+       cards made since August). So each open card now lands in exactly ONE box
+       by its stage, and topics only add what the pipeline cannot see yet:
+       footage shot this month or last month that has no card. See
+       wpTopicBacklog and LANDMINES.md L-VID-037. */
+    const B=WP_BOXES;
+    const byClient=(list)=>{const o={};list.forEach(p=>{const cl=getClient(p.client_id);const k=cl?cl.id:0;
+      if(!o[k])o[k]={cid:k,name:cl?cl.name:'(No client)',n:0};o[k].n++});return o};
+    const merge=(a,b)=>{Object.keys(b).forEach(k=>{if(!a[k])a[k]={cid:b[k].cid,name:b[k].name,n:0};a[k].n+=b[k].n});
+      return Object.values(a).sort((x,y)=>y.n-x.n)};
+    const cards=(stages)=>byClient((DATA.projects||[]).filter(p=>stages.includes(p.current_stage)));
+    const TB=wpTopicBacklog();
+    const cutRows=merge(cards(B.cut),TB.shot);
+    const readyRows=merge(cards(B.ready),TB.cut);
+    const workRows=Object.values(cards(B.hands)).sort((x,y)=>y.n-x.n);
+    const waitRows=Object.values(cards(B.wait)).sort((x,y)=>y.n-x.n);
+    const tot=rs=>rs.reduce((s,r)=>s+r.n,0);
+    /* A row opens where its number can be changed: the pipeline, filtered to
+       that client and that box's stages. A row made only of topics opens the
+       client, because that is where a topic is ticked. */
+    const box=(cls,icon,title,sub,rows,empty,stages,topicSide)=>`<div class="wp-sum-col ${cls}">
         <div class="wp-sum-head"><span>${icon} ${title}</span><span class="wp-sum-total">${tot(rows)}</span></div>
         <div class="wp-sum-sub">${sub}</div>
-        ${rows.length?rows.map(r=>`<div class="wp-sum-row"><span>${esc(r[0])}</span><strong>${r[1]}</strong></div>`).join(''):`<div class="wp-sum-empty">${empty}</div>`}
+        ${rows.length?rows.map(r=>{
+          const onlyTopics=topicSide&&topicSide[r.cid]&&topicSide[r.cid].n===r.n;
+          const act=onlyTopics?`openClientDetail(${r.cid})`:`wpOpenBox(${r.cid},'${stages.join(',')}')`;
+          return `<div class="wp-sum-row" role="button" tabindex="0" onclick="${act}" title="${onlyTopics?'Open the client to tick its topics':'Open these cards in the pipeline'}"><span>${esc(r.name)}</span><strong>${r.n}</strong></div>`;
+        }).join(''):`<div class="wp-sum-empty">${empty}</div>`}
       </div>`;
     // === CUTTING TRACKER =================================================
     // Counts from what the team already types into this same grid, so it works
@@ -4604,11 +4684,11 @@ function wpGridRender(){
       ${cutUnknown?`<div class="cut-note">${cutUnknown} cutting entr${cutUnknown===1?'y carries':'ies carry'} no number, so ${cutUnknown===1?'it is':'they are'} counted as work done but add 0 to the totals. Write the count in brackets, for example CUT & GRADE CCT (6), and it will be counted.</div>`:''}
     </div>`;
     summaryHtml=`<div class="wp-summary">
-      ${box('wp-sum-cut',vicon('scissors'),'Needs cutting','Footage is shot. Waiting on a cut.',cutRows,'Nothing waiting to be cut')}
-      ${box('wp-sum-bank',vicon('film'),'Cut, ready to edit','Cut and handed over. An editor can start now.',readyRows,'Nothing cut yet. Click a topic to move it Shot to Cut.')}
-      ${box('',vicon('pencil'),'In our hands','Being cut, edited or fixed by our team right now.',workRows,'Nothing in production')}
-      ${box('wp-sum-wait',vicon('clock'),'Waiting on others','Sitting with a reviewer or the client. Nobody is editing these.',waitRows,'Nothing waiting')}
-    </div>`+cuttingHtml;
+      ${box('wp-sum-cut',vicon('scissors'),'Needs cutting','Shot, not cut yet. Cards at Video Shot, plus footage shot this month or last with no card.',cutRows,'Nothing waiting to be cut',B.cut,TB.shot)}
+      ${box('wp-sum-bank',vicon('film'),'Cut, ready to edit','Cut and rendering. An editor picks these up next.',readyRows,'Nothing waiting between the cut and the edit',B.ready,TB.cut)}
+      ${box('',vicon('pencil'),'In our hands','Being cut, edited or fixed by our team right now.',workRows,'Nothing in production',B.hands,null)}
+      ${box('wp-sum-wait',vicon('clock'),'Waiting on others','Sitting with a reviewer or the client. Nobody is editing these.',waitRows,'Nothing waiting',B.wait,null)}
+    </div>`+(TB.staleN||TB.goneN?`<div class="wp-sum-note">Not counted: ${TB.staleN?`${TB.staleN} topic${TB.staleN===1?'':'s'} ticked Shot before ${TB.sinceLabel} with no card, oldest ${TB.oldest}`:''}${TB.staleN&&TB.goneN?'; ':''}${TB.goneN?`${TB.goneN} on clients who have left`:''}. Open the client and tick them Edited, or delete them, and this line goes away.</div>`:'')+cuttingHtml;
   }
 
   const carryHtml=(!_wpCarry.length)?'':`<div class="wp-carry">
@@ -7154,6 +7234,40 @@ async function runSelfTest(){
    okData('Team: no open video is left in the name of somebody inactive',
       stranded.length===0,
       stranded.length?(stranded.length+' to reassign: '+stranded.map(p=>'#'+p.id+' '+byId[Number(p.assigned_editor_id)]).join(', ')):'every open card is with somebody active');
+  })();
+
+  /* ── M · the four production boxes add up ──────────────────────────── */
+  (function(){
+   /* 28 September. Needs cutting read 244 while the pipeline held 0 cards at
+      Video Shot. Every open stage must sit in exactly one box, and the boxes
+      must count what the pipeline holds, card for card. */
+   const all=[].concat(WP_BOXES.cut,WP_BOXES.ready,WP_BOXES.hands,WP_BOXES.wait);
+   const dup=all.filter((k,i)=>all.indexOf(k)!==i);
+   const open=STAGES.map(s=>s.key).filter(k=>!DELIVERED_STAGES.includes(k));
+   const missing=open.filter(k=>all.indexOf(k)===-1);
+   ok('Boxes: every open stage is in exactly one box',dup.length===0&&missing.length===0,
+      (dup.length?'twice: '+dup.join(', ')+'. ':'')+(missing.length?'in no box: '+missing.join(', '):'')||all.length+' stages, each once');
+   const inBoxes=(DATA.projects||[]).filter(p=>all.indexOf(p.current_stage)>-1).length;
+   const openCards=(DATA.projects||[]).filter(p=>!DELIVERED_STAGES.includes(p.current_stage)).length;
+   okData('Boxes: the four boxes hold every open card, once',inBoxes===openCards,
+      inBoxes+' in boxes, '+openCards+' open in the pipeline');
+   /* A topic whose month already has its card is never counted again. */
+   const keepT=DATA.videoTopics, keepA=DATA.archivedProjects;
+   let proof='';
+   try{
+     const c=DATA.clients.find(x=>!x.status||x.status==='active');
+     const d=new Date(), y=d.getFullYear(), m=d.getMonth()+1;
+     DATA.videoTopics=[{client_id:c.id,target_year:y,target_month:m,status:'shot'},{client_id:c.id,target_year:y,target_month:m,status:'shot'},
+                       {client_id:c.id,target_year:2020,target_month:1,status:'shot'}];
+     DATA.archivedProjects=(keepA||[]).concat([{id:-9,client_id:c.id,target_year:y,target_month:m,current_stage:'add_to_drive'}]);
+     const base=(DATA.projects||[]).filter(p=>p.client_id===c.id&&inTargetMonth(p,y,m)).length;
+     const tb=wpTopicBacklog();
+     const want=Math.max(0,2-(base+1));
+     proof=((tb.shot[c.id]||{n:0}).n===want&&tb.staleN>=1)?'ok':('shot '+((tb.shot[c.id]||{n:0}).n)+' want '+want+', stale '+tb.staleN);
+   }catch(e){proof='errored: '+e.message;}
+   DATA.videoTopics=keepT; DATA.archivedProjects=keepA;
+   okData('Boxes: a topic that already has its card is never counted as needing a cut',proof==='ok',
+      proof==='ok'?'carded topics drop out, old ones are reported, not counted':proof);
   })();
 
   /* ── K · a blip is not a bug, and an offline fault is not lost ───────── */

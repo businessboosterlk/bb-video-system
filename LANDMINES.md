@@ -1620,3 +1620,49 @@ second failure is worth a word.
 back. Click path on the bar: appears, Details opens, panel closes, bar survives,
 × dismisses, a later blip does not resurrect it, plan cells still take a click.
 102 checks, 1 failed, and that one is the two videos waiting to be reassigned.
+
+---
+
+## L-VID-037 · Needs cutting read 244 because it counted a list nobody moves
+
+**Reported 28 September 2026** from a screenshot of the four production boxes
+on the Weekly Plan: Needs cutting 244, Cut ready to edit 2, In our hands 38,
+Waiting on others 72.
+
+**Two sources, never reconciled.** The two right boxes read pipeline CARDS by
+stage. The two left boxes read video TOPICS, the checklist on each client page
+(planned, shot, cut, edited). They counted every topic ever ticked Shot back to
+April. A topic is ticked Shot at the shoot and then never touched again. Only 2
+of 355 topics had ever been ticked Cut. **184 of the 244 already had a card in
+the pipeline for the same client and month, most of them on Drive.** Meanwhile
+the pipeline itself held 0 cards at Video Shot: a card is BORN at Video Shot
+(178 of 179 cards made since 1 August), so the answer was always in the cards.
+
+**Also a double count.** In our hands included Video Shot and Rendering, which
+are the stages the two left boxes are about.
+
+**The block.** `WP_BOXES` puts every open stage in exactly one box and Add to
+Drive in none. Topics only add what the pipeline cannot see yet: per client and
+month, topics filmed (Shot, Cut or Edited) minus cards tagged that month,
+counting only this month and last. Anything older or on a client who
+has left is reported in a grey line under the boxes rather than hidden or
+counted. Each row now opens the pipeline filtered to exactly the cards it
+counted. A row made only of topics opens the client page instead.
+
+**Proven.** An independent count straight from the database gave 24, 1, 37, 72
+with 40 old topics and 5 on churned clients. The rendered boxes read the
+same. Clicking In our hands for Clove Wadduwa opened 6 cards in 3 columns, and
+Bellvantage in Waiting opened 8. Three checks: every stage in one box, the boxes
+hold every open card once (110 of 110), a topic with its card is never counted
+again. With the old box stages put back, the first check fails and names
+video_shot and rendering. 105 checks, 1 failed. That one is still the two
+videos in KAVISH's name.
+
+**Known and left alone.** The Video System does not route by URL, so the phone's
+Back button leaves the app rather than returning to the Weekly Plan. That is true
+of every page, not only these rows.
+
+**One page for the team:** `~/Downloads/BB-Video-Production-Boxes-Explained.pdf`,
+built by `~/bb-video-tools/make_boxes_onepager.py`, which computes every figure
+from the database with the same rule and refuses to build if the boxes do not add
+up to the open cards.
