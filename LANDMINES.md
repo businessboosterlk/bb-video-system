@@ -1651,7 +1651,7 @@ counted. A row made only of topics opens the client page instead.
 
 **Proven.** An independent count straight from the database gave 24, 1, 37, 72
 with 40 old topics and 5 on churned clients. The rendered boxes read the
-same. Clicking In our hands for Clove Wadduwa opened 6 cards in 3 columns, and
+same. Clicking In our hands for Clove Wadduwa opened 6 cards in 3 columns.
 Bellvantage in Waiting opened 8. Three checks: every stage in one box, the boxes
 hold every open card once (110 of 110), a topic with its card is never counted
 again. With the old box stages put back, the first check fails and names
