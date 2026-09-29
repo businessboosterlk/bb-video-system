@@ -1666,3 +1666,25 @@ of every page, not only these rows.
 built by `~/bb-video-tools/make_boxes_onepager.py`, which computes every figure
 from the database with the same rule and refuses to build if the boxes do not add
 up to the open cards.
+
+## L-VID-038 · a late tile looked like a fresh one. The clock that judged it could be reset by a typo fix · BUILT 2026-09-29
+
+**Asked by Thulaib.** A tile over 48 hours in one stage turns red and alerts us. A
+tile in Add to Drive turns green.
+
+**What was there.** The dashboard counted stuck work by `updated_at`. Any edit to a
+card resets that, so a video three weeks in Editing looked new the moment somebody
+fixed its title. 13 live tiles had been edited after entering their stage.
+
+**The block.** `@@BB_STAGEAGE_BEGIN@@`, cast from `~/bb-systems/stage-age/`. The clock
+is the open row in `video_stage_history`. Saturday and Sunday are not counted. Colours
+are repainted in place, never by rebuilding the board.
+
+**Proven.** In a real browser on live data at 1440 and 390 wide: 245 tiles, 81 red,
+7 amber, 125 green, 0 page overflow, 0 errors. The database view `bb_stage_late`
+counts the same 81. Eight checks in the self-test. With the class taken off the tile
+two of them fail by name. Full self-test 114 checks, 2 failed: the test rig blocking
+the service worker and the two videos still in KAVISH's name, both known.
+
+**Known and left alone.** 3 of 245 live tiles have no open history row and fall back
+to `updated_at`. The harness reports the cover as a number.

@@ -2359,7 +2359,7 @@ function renderPipeline(){
      real set so the board shows every item the alert counted. */
   const _wantStages=f.stage?String(f.stage).split(','):null;
   const shownStages=_wantStages?STAGES.filter(st=>_wantStages.indexOf(st.key)>-1):STAGES;
-  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${shownStages.map(st=>{const sp=_stableCol(st.key,ps.filter(p=>p.current_stage===st.key));return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="stage-count">${sp.length}</div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
+  const boardHtml=`<div class="pipeline-board-wrap"><div class="pipeline-board">${shownStages.map(st=>{const sp=_stableCol(st.key,ps.filter(p=>p.current_stage===st.key));return `<div class="stage-col"><div class="stage-header"><div class="stage-title"><span class="stage-dot s-${st.key}"></span>${st.label}</div><div class="bb-age-head">${window.BBAGE?BBAGE.late(sp):''}<div class="stage-count">${sp.length}</div></div></div><div class="stage-cards" data-drop-stage="${st.key}">${sp.length?sp.map(p=>cardHtml(p)).join(''):'<div class="stage-empty">No projects</div>'}</div></div>`}).join('')}</div></div>`;
   // Bulk action floating bar
   const bulkBarHtml=PIPELINE_STATE.bulkMode?`<div class="bulk-action-bar">
     <span class="bulk-action-count">${PIPELINE_STATE.selected.size} selected</span>
@@ -2408,7 +2408,8 @@ function cardHtml(p){
   const smm=clientSmm(p.client_id);
   const menuBtn=(canDrag&&!PIPELINE_STATE.bulkMode)?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
-  return `<div class="card pr-${pr} ${bulkClass} ${selClass}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${mv}</div>`;
+  const age=(window.BBAGE?BBAGE.cls(p):''),ageChip=(window.BBAGE?BBAGE.chip(p):'');
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}${age}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${ageChip}${mv}</div>`;
 }
 function openCardMenu(pid,btn){
   // Close any existing menu
@@ -6412,6 +6413,8 @@ async function runSelfTest(){
  const cs=getComputedStyle;
  const snapPage=(typeof currentPage!=='undefined')?currentPage:'dashboard';
  try{
+  /* ── stage age: the tile colours and the clock behind them ───────────── */
+  (window.BBAGE?BBAGE.selfcheck():[{name:'Stage age: module present',pass:false,detail:'BBAGE is missing'}]).forEach(function(c){ok(c.name,c.pass,c.detail);});
   /* ── A · boot integrity ─────────────────────────────────────────────── */
   ok('Boot: core globals present',
      typeof DATA==='object'&&typeof STAGES!=='undefined'&&typeof navTo==='function'&&typeof sb==='object');
@@ -7618,6 +7621,180 @@ if('serviceWorker' in navigator){
     : init();
 }());
 </script>
+<!-- @@BB_STAGEAGE_BEGIN@@ -->
+<!-- BB STAGE AGE. Cast from ~/bb-systems/stage-age/bb-stage-age.CANON.html by cast.py.
+     Never edit this block inside an app: edit the canon and cast again.
+     A tile that has sat 48 working hours in one stage turns red. A tile in a
+     finished stage turns green. The clock is the stage history row, never
+     updated_at, because editing a title must not make a late tile look fresh. -->
+<style>
+.bb-age-red{--bb-age-c:var(--red);--bb-age-s:var(--red-soft)}
+.bb-age-green{--bb-age-c:var(--green);--bb-age-s:var(--green-soft)}
+.card.bb-age-red,.card.bb-age-green{background:linear-gradient(var(--bb-age-s),var(--bb-age-s)),var(--surface-2);border-top-color:var(--bb-age-c);border-right-color:var(--bb-age-c);border-bottom-color:var(--bb-age-c);}
+.bb-age-chip{display:inline-block;margin-top:9px;padding:4px 8px;border-radius:6px;font-size:11px;line-height:1.2;font-weight:600;color:var(--text-3);background:var(--surface-3);white-space:nowrap}
+.bb-age-chip:empty{display:none}
+.bb-age-amber .bb-age-chip{color:var(--amber);background:var(--amber-soft)}
+.bb-age-red .bb-age-chip{color:var(--red);background:transparent;padding-left:0}
+.bb-age-green .bb-age-chip{color:var(--green);background:transparent;padding-left:0}
+.bb-age-head{display:flex;align-items:center;gap:8px}
+.bb-age-late{font-size:11px;line-height:1.2;font-weight:700;color:var(--red);white-space:nowrap}
+.bb-age-late:empty{display:none}
+</style>
+<script>
+(function(){
+  'use strict';
+  var APP='video-system';
+  var OFF=19800000, DAY=86400000, HOUR=3600000;   /* Colombo is UTC+5:30 all year */
+  var RED_H=48, AMBER_H=24;
+  var DONE=['add_to_drive','posted'];
+  var MAP={};            /* id -> {stage, at, src} */
+  var loadedAt=0, loading=false, lastTry=0, truncated=false, wanted=false;
+
+  function live(){ try{ return ((typeof DATA!=='undefined'&&DATA.projects)||[]).filter(function(p){return !p.is_archived;}); }catch(e){ return []; } }
+  function stageLabel(k){ try{ var s=STAGES.find(function(x){return x.key===k;}); return (s&&s.label)||((typeof RETIRED_STAGE_LABELS!=='undefined'&&RETIRED_STAGE_LABELS[k])||''); }catch(e){ return ''; } }
+  function fetchEntries(ids){ return sb.from('video_stage_history').select('video_project_id,stage,entered_at').is('exited_at',null).in('video_project_id',ids).order('entered_at',{ascending:false}).limit(1000).then(function(r){ if(r.error)throw r.error; return (r.data||[]).map(function(x){return {id:x.video_project_id,stage:x.stage,at:x.entered_at};}); }); }
+  function stages(){ return STAGES.map(function(s){return s.key;}); }
+  function renderCard(p){ return cardHtml(p); }
+
+  /* Hours between two instants that fall on Monday to Friday, Colombo time.
+     A tile that arrives at five on a Friday has had seven working hours by
+     Monday morning, not sixty three. */
+  function wkHours(fromMs,toMs){
+    if(!(toMs>fromMs))return 0;
+    var a=fromMs+OFF,b=toMs+OFF,total=0;
+    for(var d=Math.floor(a/DAY)*DAY;d<b;d+=DAY){
+      var dow=new Date(d).getUTCDay();
+      if(dow===0||dow===6)continue;
+      var s=Math.max(a,d),e=Math.min(b,d+DAY);
+      if(e>s)total+=e-s;
+    }
+    return total/HOUR;
+  }
+  function ms(v){var t=v?new Date(v).getTime():NaN;return isNaN(t)?0:t;}
+  function entered(p){
+    var e=MAP[p.id];
+    if(e&&e.stage===p.current_stage)return e;
+    if(e&&loadedAt){
+      /* The history said another stage, so the tile moved after we read it. */
+      e=MAP[p.id]={stage:p.current_stage,at:Date.now(),src:'seen'};wanted=true;return e;
+    }
+    wanted=true;
+    return {stage:p.current_stage,at:ms(p.updated_at)||ms(p.created_at)||Date.now(),src:'fallback'};
+  }
+  function stateFor(stage,atMs,nowMs){
+    if(DONE.indexOf(stage)>-1)return 'green';
+    var h=wkHours(atMs,nowMs);
+    return h>=RED_H?'red':(h>=AMBER_H?'amber':'');
+  }
+  function state(p){return stateFor(p.current_stage,entered(p).at,Date.now());}
+  function span(h){
+    if(h<1)return 'under 1h';
+    if(h<24)return Math.floor(h)+'h';
+    var d=Math.floor(h/24),r=Math.floor(h-d*24);
+    return d+'d'+(r?' '+r+'h':'');
+  }
+  function day(t){return new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Asia/Colombo'});}
+  function chipText(p){
+    var e=entered(p);
+    if(DONE.indexOf(p.current_stage)>-1)return stageLabel(p.current_stage)+' '+day(e.at);
+    return span(wkHours(e.at,Date.now()))+' in this stage';
+  }
+  function chipTitle(p){
+    var e=entered(p);
+    return 'Entered '+stageLabel(p.current_stage)+' on '+day(e.at)+'. Saturday and Sunday are not counted.';
+  }
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function cls(p){ensure();var s=state(p);return s?' bb-age-'+s:'';}
+  function chip(p){return '<div class="bb-age-chip" title="'+esc(chipTitle(p))+'">'+esc(chipText(p))+'</div>';}
+  function late(cards){
+    var n=0;(cards||[]).forEach(function(p){if(state(p)==='red')n++;});
+    return '<span class="bb-age-late">'+(n?n+' late':'')+'</span>';
+  }
+
+  /* Repaint in place. No board rebuild, so a finger mid-drag, an open menu and
+     every scroll position are left exactly where they were. */
+  function paint(){
+    var byId={};live().forEach(function(p){byId[String(p.id)]=p;});
+    document.querySelectorAll('.card').forEach(function(el){
+      var p=byId[String(el.getAttribute('data-pid'))];if(!p)return;
+      var s=state(p);
+      ['red','amber','green'].forEach(function(k){el.classList.toggle('bb-age-'+k,s===k);});
+      var c=el.querySelector('.bb-age-chip');
+      if(c){c.textContent=chipText(p);c.title=chipTitle(p);}
+    });
+    document.querySelectorAll('.bb-age-late').forEach(function(el){
+      var col=el.closest('.stage-col');if(!col)return;
+      var n=col.querySelectorAll('.card.bb-age-red').length;
+      el.textContent=n?n+' late':'';
+    });
+  }
+  function load(){
+    if(loading)return Promise.resolve(false);
+    var ids=live().map(function(p){return p.id;}).filter(function(x){return x!=null;});
+    if(!ids.length)return Promise.resolve(false);
+    loading=true;lastTry=Date.now();wanted=false;
+    return fetchEntries(ids).then(function(rows){
+      if(!Array.isArray(rows))throw new Error('history read returned no list');
+      truncated=rows.length>=1000;
+      var cur={};live().forEach(function(p){cur[String(p.id)]=p.current_stage;});
+      var next={};
+      rows.forEach(function(r){
+        var k=String(r.id),t=ms(r.at);if(!t)return;
+        var mine=r.stage===cur[k],had=next[k];
+        if(!had||(mine&&!had.mine)||(mine===had.mine&&t>had.at))next[k]={stage:r.stage,at:t,src:'history',mine:mine};
+      });
+      Object.keys(MAP).forEach(function(k){if(MAP[k].src==='seen'&&!(next[k]&&next[k].stage===MAP[k].stage))next[k]=MAP[k];});
+      MAP=next;loadedAt=Date.now();loading=false;
+      try{paint();}catch(e){console.error('BBAGE paint',e);}
+      return true;
+    }).catch(function(e){loading=false;console.error('BBAGE load',e);return false;});
+  }
+  function ensure(){
+    var now=Date.now();
+    if(loading)return;
+    if(!loadedAt){if(now-lastTry>5000)setTimeout(load,0);return;}
+    if((wanted&&now-lastTry>15000)||now-loadedAt>600000)setTimeout(load,0);
+  }
+  setInterval(function(){if(!document.hidden&&loadedAt){try{paint();}catch(e){}}},300000);
+
+  /* Read-only checks for the app's own ?selftest. Nothing here writes. */
+  function selfcheck(){
+    var out=[],ok=function(n,p,d){out.push({name:'Stage age: '+n,pass:!!p,detail:String(d==null?'':d)});};
+    var C=function(y,m,d,h,mi){return Date.UTC(y,m-1,d,h,mi||0)-OFF;};   /* a Colombo wall clock time */
+    var a=wkHours(C(2026,9,25,17),C(2026,9,28,9));
+    ok('Friday 17:00 to Monday 09:00 is 16 working hours',Math.abs(a-16)<0.001,a);
+    var b=wkHours(C(2026,9,26,10),C(2026,9,27,10));
+    ok('a whole weekend counts as nothing',b===0,b);
+    var now=C(2026,9,24,12),first=stages().filter(function(s){return DONE.indexOf(s)<0;})[0];
+    ok('48 working hours turns a tile red',stateFor(first,now-48*HOUR,now)==='red'&&stateFor(first,now-47.9*HOUR,now)==='amber',
+       stateFor(first,now-48*HOUR,now)+' then '+stateFor(first,now-47.9*HOUR,now));
+    ok('a fresh tile has no colour',stateFor(first,now-HOUR,now)==='',stateFor(first,now-HOUR,now));
+    ok('a finished tile is green however old',DONE.every(function(s){return stateFor(s,now-5000*HOUR,now)==='green';}),DONE.join(', '));
+    var known=stages(),lost=DONE.filter(function(s){return !stageLabel(s);});
+    ok('every finished stage still has a name in this app',!lost.length&&DONE.some(function(s){return known.indexOf(s)>-1;}),lost.length?'no label for '+lost.join(', '):DONE.join(', '));
+    try{
+      var keep=MAP[-999],fake={id:-999,title:'Stage age probe',current_stage:first,priority:'medium',updated_at:new Date().toISOString()};
+      MAP[-999]={stage:first,at:Date.now()-21*DAY,src:'history'};
+      var html=renderCard(fake);
+      if(keep)MAP[-999]=keep;else delete MAP[-999];
+      ok('a late tile is drawn red with its age',/bb-age-red/.test(html)&&/bb-age-chip/.test(html)&&/in this stage/.test(html),
+         /bb-age-red/.test(html)?'red and chip present':'class missing from the rendered tile');
+      fake.current_stage=DONE[0];MAP[-999]={stage:DONE[0],at:Date.now()-21*DAY,src:'history'};
+      html=renderCard(fake);delete MAP[-999];if(keep)MAP[-999]=keep;
+      ok('a finished tile is drawn green',/bb-age-green/.test(html)&&!/bb-age-red/.test(html),/bb-age-green/.test(html)?'green':'class missing');
+    }catch(e){ok('a late tile is drawn red with its age',false,e.message);}
+    var liveNow=live();
+    if(loadedAt&&liveNow.length){
+      var hit=liveNow.filter(function(p){var e=MAP[p.id];return e&&e.src==='history'&&e.stage===p.current_stage;}).length;
+      ok('the history read covers the live tiles',hit/liveNow.length>=0.9&&!truncated,hit+' of '+liveNow.length+(truncated?', and the read hit the 1000 row ceiling':''));
+    }
+    return out;
+  }
+  window.BBAGE={cls:cls,chip:chip,late:late,state:state,paint:paint,load:load,selfcheck:selfcheck,wkHours:wkHours,stateFor:stateFor,
+    info:function(){return {app:APP,loadedAt:loadedAt,entries:Object.keys(MAP).length,truncated:truncated};}};
+})();
+</script>
+<!-- @@BB_STAGEAGE_END@@ -->
 <!-- @@BB_PUSH_BEGIN@@ -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
