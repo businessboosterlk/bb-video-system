@@ -728,6 +728,9 @@ a:hover{text-decoration:underline}
 .rc-sub{font-size:9px;font-weight:600;color:var(--text-3);text-transform:none;letter-spacing:0;margin-top:2px}
 .cm-flag{margin-left:3px;font-size:10px;font-weight:800;color:var(--red,#ef4444);text-transform:uppercase;letter-spacing:.04em}
 .dl-stages{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
+.dl-filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
+.dl-filter .filter-select{min-width:240px}
+@media(max-width:640px){.dl-filter .filter-select{min-width:0;flex:1 1 100%}}
 .dl-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface-2);
   color:var(--text-2);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;min-height:36px}
 .dl-chip:hover{border-color:var(--accent);color:var(--accent)}
@@ -3284,6 +3287,9 @@ function openTimeForm(){
 // === PAGE: DRIVE LINKS ===
 let driveStage='';
 let driveTab='raw_footage';
+/* Which client the Drive Links page is narrowed to. '' is every client, 'none'
+   is links whose project has no client. Asked for by Thulaib 30 Sep 2026. */
+let driveClient='';
 /* EVERY MONTH FOR ONE CLIENT, in one shape. Reuses monthDelivery so this can
    never disagree with the Clients page or the Month Recap. Read LANDMINES.md
    L-VID-030 before changing. */
@@ -3343,27 +3349,53 @@ function renderDriveLinks(){
     const p=getProject(l.video_project_id);
     return !!p&&p.current_stage===driveStage;
   };
-  const pool=DATA.links.filter(inStage);
+  /* CLIENT FIRST, then stage, then type. The stage chips count inside the
+     chosen client, so "Waverley, Client Review, 3" means three of Waverley's. */
+  const clientOf=function(l){const p=getProject(l.video_project_id);return p&&p.client_id!=null?String(p.client_id):'none';};
+  const inClient=function(l){return !driveClient||clientOf(l)===driveClient;};
+  const mine=DATA.links.filter(inClient);
+  const pool=mine.filter(inStage);
   const raw=pool.filter(l=>l.tag==='raw_footage');
   const fin=pool.filter(l=>l.tag==='final_cut');
   const other=pool.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
   const stageCount=function(k){
-    return DATA.links.filter(function(l){const p=getProject(l.video_project_id);return !!p&&p.current_stage===k}).length;
+    return mine.filter(function(l){const p=getProject(l.video_project_id);return !!p&&p.current_stage===k}).length;
   };
   $('#pageSub').textContent=`${raw.length} raw · ${fin.length} final · ${other.length} other`+
-    (driveStage?(' · '+((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)):'');
+    (driveStage?(' · '+((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)):'')+
+    (driveClient?(' · '+(driveClient==='none'?'no client':((getClient(parseInt(driveClient))||{}).name||'client'))):'');
+  /* Only clients that HAVE links are offered, with how many, sorted by name.
+     A list of every client would offer a dozen choices that show nothing. */
+  const perClient={};
+  DATA.links.forEach(function(l){const k=clientOf(l);perClient[k]=(perClient[k]||0)+1;});
+  const clientOpts=Object.keys(perClient).map(function(k){
+    return {k:k,name:k==='none'?'No client':((getClient(parseInt(k))||{}).name||'Unknown client'),n:perClient[k]};
+  }).sort(function(a,b){return a.k==='none'?1:b.k==='none'?-1:a.name.localeCompare(b.name);});
+  /* A client chosen before its last link went away must not leave the page
+     filtered to nothing with no way to see why. */
+  if(driveClient&&!perClient[driveClient])driveClient='';
   const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Client and project</th><th>Link title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=getProject(l.video_project_id);const cl=p?getClient(p.client_id):null;const st=p?(STAGES.find(x=>x.key===p.current_stage)||{}):null;
       return `<tr class="clickable" data-pid="${l.video_project_id}"><td><div class="dl-client">${esc(cl?cl.name:'no client')}</div><div class="dl-title">${esc(p?.title||'—')}</div>${(!driveStage&&st&&st.label)?`<span class="dl-stagetag"><span class="stage-dot s-${p.current_stage}"></span>${esc(st.label)}</span>`:''}</td><td>${esc(l.label||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Drive Links</div><div class="page-sub">All raw footage and final video links across projects</div></div></div>
+    <div class="dl-filter">
+      <select class="filter-select" id="dlClient" aria-label="Filter by client">
+        <option value="">All clients (${DATA.links.length})</option>
+        ${clientOpts.map(o=>`<option value="${o.k}" ${driveClient===o.k?'selected':''}>${esc(o.name)} (${o.n})</option>`).join('')}
+      </select>
+      ${(driveClient||driveStage)?'<button class="btn btn-ghost btn-sm" data-action="dl-clear">Clear filters</button>':''}
+    </div>
     <div class="dl-stages">
-      <button class="dl-chip${driveStage?'':' on'}" data-stage="">All stages <span class="dl-n">${DATA.links.length}</span></button>
+      <button class="dl-chip${driveStage?'':' on'}" data-stage="">All stages <span class="dl-n">${mine.length}</span></button>
       ${STAGES.map(st=>{const c=stageCount(st.key);return c?`<button class="dl-chip${driveStage===st.key?' on':''}" data-stage="${st.key}"><span class="stage-dot s-${st.key}"></span>${st.label} <span class="dl-n">${c}</span></button>`:''}).join('')}
     </div>
     ${driveStage?`<div class="dl-why">${vicon('alert',13)}<span>Showing <b>${driveWantsFinal(driveStage)?'final videos':'raw clips'}</b>, because a video at <b>${esc((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)}</b> is ${driveWantsFinal(driveStage)?'finished work, not footage':'still being built from footage'}. Tap another tab to override.</span></div>`:''}
     <div class="tabs"><div class="tab ${driveTab==='raw_footage'?'active':''}" data-tab="raw_footage">Raw Clips (${raw.length})</div><div class="tab ${driveTab==='final_cut'?'active':''}" data-tab="final_cut">Final Videos (${fin.length})</div><div class="tab ${driveTab==='other'?'active':''}" data-tab="other">Other (${other.length})</div></div>
     ${renderRows(driveTab==='raw_footage'?raw:driveTab==='final_cut'?fin:other)}
   `;
+  const sel=document.getElementById('dlClient');
+  if(sel)sel.onchange=function(){driveClient=sel.value;renderDriveLinks();};
   $('#pageContent').onclick=e=>{
+    if(e.target.closest('[data-action="dl-clear"]')){driveClient='';driveStage='';renderDriveLinks();return;}
     const sc=e.target.closest('[data-stage]');
     if(sc){
       driveStage=sc.dataset.stage||'';
@@ -6269,6 +6301,17 @@ body.sheet-open{position:fixed;left:0;right:0;width:100%}
       screen with the least room. Removed rather than moved: a floating button
       on a 375px screen is always covering something. */
 #bbv-fab,#bb-agent-bubble,#bbv-panel,#bb-agent-panel,#vsCheckinBtn{display:none!important}
+
+/* 8 · SELECT LAW (Thulaib, 11 Sep 2026): never the browser's own arrow.
+      All 25 selects in this file carried it. The class selectors are listed
+      on purpose: `.filter-select` sets the background SHORTHAND, and a bare
+      `select` rule loses to a class however late it sits, so the drawn chevron
+      would silently vanish. Canonical CSS: bb-web-design-system.md 3.9a. */
+select,select.filter-select,select.field-select,select.bulk-action-select{
+ -webkit-appearance:none;appearance:none;padding-right:44px;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8d96' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+ background-repeat:no-repeat;background-position:right 16px center;background-size:14px 14px}
+select::-ms-expand{display:none}
 </style>
 
 <script>
@@ -7254,6 +7297,39 @@ async function runSelfTest(){
    okData('Team: no open video is left in the name of somebody inactive',
       stranded.length===0,
       stranded.length?(stranded.length+' to reassign: '+stranded.map(p=>'#'+p.id+' '+byId[Number(p.assigned_editor_id)]).join(', ')):'every open card is with somebody active');
+  })();
+
+  /* ── N · Drive Links narrows to one client, and selects draw their own arrow */
+  await (async function(){
+   const links=(DATA.links||[]);
+   const withClient=links.map(l=>getProject(l.video_project_id)).filter(p=>p&&p.client_id!=null);
+   if(!withClient.length){okData('Drive Links: the client filter shows only that client',false,'no link belongs to a client');return;}
+   const keep={c:driveClient,s:driveStage,t:driveTab,pg:(typeof currentPage!=='undefined'?currentPage:'')};
+   const cid=String(withClient[0].client_id), name=(getClient(parseInt(cid))||{}).name||'';
+   try{
+     driveClient=cid;driveStage='';navTo('drive_links');await new Promise(r=>setTimeout(r,250));
+     const tabsTotal=['raw_footage','final_cut','other'].reduce((t,tab)=>{driveTab=tab;renderDriveLinks();
+       return t+[...document.querySelectorAll('#pageContent tr[data-pid]')].length;},0);
+     const want=links.filter(l=>{const p=getProject(l.video_project_id);return p&&String(p.client_id)===cid}).length;
+     renderDriveLinks();
+     const strays=[...document.querySelectorAll('#pageContent .dl-client')].map(x=>x.textContent).filter(t=>t!==name);
+     const sel=document.getElementById('dlClient');
+     okData('Drive Links: the client filter shows only that client',
+        tabsTotal===want&&strays.length===0&&sel&&sel.value===cid,
+        name+': '+tabsTotal+' of '+want+' links across the three tabs'+(strays.length?', strays: '+strays.slice(0,3).join(', '):''));
+   }catch(e){ok('Drive Links: the client filter shows only that client',false,'errored: '+e.message);}
+   driveClient=keep.c;driveStage=keep.s;driveTab=keep.t;
+   try{if(keep.pg)navTo(keep.pg);}catch(e){}
+   /* SELECT LAW, probed with a throwaway select of each class so the check
+      cannot pass by finding nothing on screen. */
+   const bad=['filter-select','field-select','bulk-action-select',''].filter(cls=>{
+     const el=document.createElement('select');if(cls)el.className=cls;document.body.appendChild(el);
+     const st=getComputedStyle(el), img=st.backgroundImage||'', app=st.appearance||st.webkitAppearance||'';
+     const pr=parseFloat(st.paddingRight)||0; el.remove();
+     return !(img.indexOf('svg')>-1&&app==='none'&&pr>=40);
+   });
+   ok('Design: every select draws its own chevron, never the browser arrow',bad.length===0,
+      bad.length?('native arrow on: '+bad.map(c=>c||'plain select').join(', ')):'4 select classes probed, all drawn');
   })();
 
   /* ── M · the four production boxes add up ──────────────────────────── */
