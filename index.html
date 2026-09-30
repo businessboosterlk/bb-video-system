@@ -2801,9 +2801,14 @@ async function moveProject(project,newStage){
   }
   const old=project.current_stage;
   const oldUpdated=project.updated_at;
+  const oldCompleted=project.completed_at;
   project.current_stage=newStage;
   project.updated_at=new Date().toISOString(); // float the card to the top of its new column immediately
+  /* Stamp the finish on the way IN and CLEAR it on the way OUT. Without the clear, a video
+     pulled back out of Add to Drive kept its finish date and still counted as done: five live
+     videos did exactly that by 30 September. The Graphic System has cleared it since July. */
   if(newStage==='add_to_drive')project.completed_at=new Date().toISOString();
+  else if(COMPLETED_STAGES.includes(old)||old==='posted')project.completed_at=null;
   _pendingOps++;
   if(!_bulkRunning)renderPage();
   let succeeded=false;
@@ -2813,6 +2818,7 @@ async function moveProject(project,newStage){
     await sb.from('video_stage_history').insert({video_project_id:project.id,stage:newStage,moved_by:currentUser.name});
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
     if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
+    else if(COMPLETED_STAGES.includes(old)||old==='posted')up.completed_at=null;
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
     succeeded=true;
@@ -2833,7 +2839,7 @@ async function moveProject(project,newStage){
     console.error(err);
     project.current_stage=old;
     project.updated_at=oldUpdated;
-    if(old!=='add_to_drive')project.completed_at=undefined;
+    project.completed_at=oldCompleted;
     if(!_bulkRunning)toast('Move failed','error');
     if(_bulkRunning)throw err; // let the bulk runner count the failure
   }finally{
@@ -2900,6 +2906,7 @@ function stageTimingSection(projectId){
     return `<tr><td>${esc(lbl)}</td><td class="muted">${fmtDateTime(h.entered_at)}</td><td class="muted">${h.exited_at?fmtDateTime(h.exited_at):'<span style="color:var(--accent)">currently here</span>'}</td><td><strong>${dur}</strong></td></tr>`;
   }).join('');
   return `<div class="detail-section"><div class="detail-section-title">Time Tracking</div>
+    ${window.BBWORK?BBWORK.slot('video',projectId):`
     <div class="detail-meta-grid" style="margin-bottom:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
       <div class="detail-meta-item"><div class="detail-meta-label">Cutting/Color</div><div class="detail-meta-value">${fmtDuration(cuttingSecs)}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Rendering</div><div class="detail-meta-value">${fmtDuration(renderingSecs)}</div></div>
@@ -2907,7 +2914,7 @@ function stageTimingSection(projectId){
       <div class="detail-meta-item"><div class="detail-meta-label">Team Changes</div><div class="detail-meta-value">${fmtDuration(teamChangesSecs)}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Client Changes</div><div class="detail-meta-value">${fmtDuration(clientChangesSecs)}</div></div>
       <div class="detail-meta-item"><div class="detail-meta-label">Review</div><div class="detail-meta-value">${fmtDuration(reviewSecs)}</div></div>
-    </div>
+    </div>`}
     <details><summary style="cursor:pointer;font-size:12px;color:var(--text-3);padding:6px 0">Show full stage history (${hist.length})</summary>
     <table class="tbl" style="margin-top:8px"><thead><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Duration</th></tr></thead><tbody>${histRows}</tbody></table>
     </details>
@@ -4020,12 +4027,20 @@ function renderTeam(){
   $('#pageSub').textContent=`${members.length} team member${members.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team</div><div class="page-sub">Click any member to see full history and current work</div></div></div>
     <div class="team-grid">
-      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(roleLabel(m.role))}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
+      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)&&p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(roleLabel(m.role))}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value" data-bbw-done="${m.id}">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
     </div>`;
   $('#pageContent').onclick=e=>{const c=e.target.closest('[data-mid]');if(c)openMemberDetail(parseInt(c.dataset.mid))};
+  /* The card's own count only sees videos not yet archived, and finished videos are
+     archived after three days. The monthly view sees all of them. 2026-09-30. */
+  if(window.BBWORK)BBWORK.fillDone('video');
 }
 async function openMemberDetail(mid){
   const m=getMember(mid);if(!m)return;
+  /* One view of a person's month for the whole estate, read from bb_work_items.
+     The card below it counted Hours from a time log nobody has ever used (0 rows)
+     and Avg Editing Time from moved_by, which is who moved a tile, not who edited
+     it. It stays only as the fallback if the block fails to load. 2026-09-30. */
+  if(window.BBWORK){BBWORK.openPerson({sys:'video',personId:mid,personName:m.name});return;}
   const ps=DATA.projects.filter(p=>p.assigned_editor_id===mid);
   const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
   const monthStart=startOfMonth();
@@ -6415,6 +6430,8 @@ async function runSelfTest(){
  try{
   /* ── stage age: the tile colours and the clock behind them ───────────── */
   (window.BBAGE?BBAGE.selfcheck():[{name:'Stage age: module present',pass:false,detail:'BBAGE is missing'}]).forEach(function(c){ok(c.name,c.pass,c.detail);});
+  (window.BBWORK?BBWORK.selfcheck():[{name:'Work time: module present',pass:false,detail:'BBWORK is missing'}]).forEach(function(c){ok(c.name,c.pass,c.detail);});
+  if(window.BBWORK){const _x=await BBWORK.crosscheck();ok(_x.name,_x.pass,_x.detail);}
   /* ── A · boot integrity ─────────────────────────────────────────────── */
   ok('Boot: core globals present',
      typeof DATA==='object'&&typeof STAGES!=='undefined'&&typeof navTo==='function'&&typeof sb==='object');
@@ -7621,19 +7638,304 @@ if('serviceWorker' in navigator){
     : init();
 }());
 </script>
+<!-- @@BB_WORKTIME_BEGIN@@ -->
+<!-- BB WORK TIME. Cast from ~/bb-systems/stage-age/bb-work-time.CANON.html by cast_work.py.
+     Never edit this block inside an app: edit the canon and cast again.
+     Reads the database views bb_work_items and bb_person_month, so the Video System, the
+     Graphic System and the Command Centre show the same number for the same question.
+     Read only. It never writes. -->
+<style>
+#bbw-sheet{z-index:5000;padding:20px;align-items:center;justify-content:center}
+#bbw-sheet .bbw-panel{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:16px;width:min(900px,100%);max-height:calc(100dvh - 40px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.45);text-align:left}
+#bbw-sheet .bbw-head{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+#bbw-sheet .bbw-who{flex:1;min-width:0}
+#bbw-sheet .bbw-name{font-size:18px;font-weight:700;line-height:1.2}
+#bbw-sheet .bbw-role{font-size:12px;color:var(--text-3);margin-top:2px}
+#bbw-sheet .bbw-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px 8px;flex:1}
+#bbw-sheet .bbw-foot{padding:12px 20px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
+#bbw-sheet button{font:inherit;color:inherit;cursor:pointer}
+.bbw-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);font-size:13px;font-weight:600;color:var(--text)}
+.bbw-btn[disabled]{opacity:.35;cursor:default}
+.bbw-btn-quiet{width:100%;background:transparent;color:var(--text-2)}
+.bbw-btn-primary{width:100%;background:var(--accent);border-color:var(--accent);color:#fff}
+.bbw-month{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin-bottom:14px}
+.bbw-month-label{text-align:center;font-weight:700;font-size:15px}
+.bbw-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.bbw-stat{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;min-width:0}
+.bbw-stat b{display:block;font-size:22px;font-weight:700;line-height:1.15;white-space:nowrap}
+.bbw-stat span{display:block;font-size:11.5px;color:var(--text-3);margin-top:3px;line-height:1.3}
+.bbw-find{width:100%;min-height:40px;margin:16px 0 4px;padding:0 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:inherit;font-size:16px}
+.bbw-sec{margin-top:18px}
+.bbw-sec h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin:0 0 8px}
+.bbw-row{border:1px solid var(--border);border-radius:12px;background:var(--surface-2);margin-bottom:8px;overflow:hidden}
+.bbw-row-top{display:block;width:100%;text-align:left;background:none;border:0;padding:12px 14px}
+.bbw-row-line{display:flex;align-items:baseline;gap:10px}
+.bbw-row-title{flex:1;min-width:0;font-weight:600;font-size:13.5px;line-height:1.35;overflow-wrap:anywhere}
+.bbw-row-end{font-size:12px;font-weight:700;white-space:nowrap}
+.bbw-row-meta{font-size:11.5px;color:var(--text-3);margin-top:3px}
+.bbw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.bbw-chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:var(--surface-3);color:var(--text-2);white-space:nowrap}
+.bbw-chip.m{color:var(--accent)}
+.bbw-row.orange{border-color:#f97316}.bbw-row.orange .bbw-row-end{color:#f97316}
+.bbw-row.red{border-color:var(--red)}.bbw-row.red .bbw-row-end{color:var(--red)}
+.bbw-open{border-top:1px solid var(--border);padding:10px 14px 12px}
+.bbw-st{display:grid;grid-template-columns:minmax(0,9.5em) 1fr auto;align-items:center;gap:10px;padding:4px 0;font-size:12.5px}
+.bbw-st-name{color:var(--text-2);overflow-wrap:anywhere}
+.bbw-st-bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.bbw-st-bar i{display:block;height:100%;border-radius:3px;background:var(--text-3)}
+.bbw-st-bar i.maker{background:var(--accent)}.bbw-st-bar i.review{background:var(--amber)}.bbw-st-bar i.client{background:var(--text-3)}
+.bbw-st-val{font-weight:600;white-space:nowrap;text-align:right}
+.bbw-st-val small{display:block;font-weight:500;font-size:10.5px;color:var(--text-3)}
+.bbw-note{font-size:11.5px;color:var(--text-3);line-height:1.5;margin:14px 0 10px}
+.bbw-muted{font-size:12.5px;color:var(--text-3);padding:10px 0}
+.bbw-stages{margin:6px 0 14px}
+.bbw-sum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.bbw-card{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px;margin:0 0 16px}
+.bbw-card .bbw-stats{margin-bottom:12px}
+@media (max-width:640px){
+  #bbw-sheet{padding:0}
+  #bbw-sheet .bbw-panel{width:100%;max-height:none;height:100%;border-radius:0;border:0}
+  #bbw-sheet .bbw-head{padding-top:calc(14px + env(safe-area-inset-top))}
+  .bbw-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bbw-st{grid-template-columns:minmax(0,7.5em) 1fr auto}
+}
+</style>
+<script>
+(function(){
+  'use strict';
+  var APP='video-system', OWN_SYS='video', OVCLASS='modal-backdrop';
+  function sbUrl(){ return SUPABASE_URL; }
+  function sbKey(){ return SUPABASE_ANON_KEY; }
+  function appStages(){ try{ return STAGES.map(function(s){return s.key;}); }catch(e){ return []; } }
+  var LABELS={
+    video:{video_shot:'Video Shot',cutting_color_grading:'Cutting and Colour',rendering:'Rendering',editing:'Editing',
+      video_head_review:'Video Head Review',team_review:'Team Review',changes:'Changes',coo_check:'COO Check',
+      client_review:'Client Review',client_changes:'Client Changes',add_to_drive:'Add to Drive',sent_to_client:'Sent to Client',posted:'Posted'},
+    graphic:{brief:'Brief',in_progress:'In Progress',first_draft:'First Draft',revisions:'Revisions',head_review:'Head Review',
+      sent_to_client:'Sent to Client',client_changes:'Client Changes',approved:'Approved'}
+  };
+  var MAKER={video:'With the editor',graphic:'With the designer'};
+  var NOUN={video:['video','videos'],graphic:['graphic','graphics']};
+  var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var COLS='project_id,title,client_name,person_id,person_name,current_stage,current_bucket,is_archived,finished_at,finished_month,finished_source,maker_hours,review_hours,client_hours,total_hours,total_clock_hours,change_rounds,current_stage_hours,in_stage_since,stages';
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function label(sys,k){var m=LABELS[sys]||{};return m[k]||String(k||'').replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}
+  /* Working time in the words a person uses. A day here is a weekday, 24 hours. */
+  function fmt(h){h=Number(h)||0;if(h<1)return 'under 1h';if(h<24)return Math.floor(h)+'h';
+    var d=Math.floor(h/24),r=Math.round(h-d*24);if(r===24){d++;r=0;}return d+'d'+(r?' '+r+'h':'');}
+  function cal(h){var d=Math.round((Number(h)||0)/24);return d<1?'under a day':d+' calendar day'+(d===1?'':'s');}
+  function avg(rows,k){if(!rows.length)return 0;var s=0;rows.forEach(function(r){s+=Number(r[k])||0;});return s/rows.length;}
+  function monthNow(){var d=new Date(Date.now()+19800000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');}
+  function shiftMonth(m,n){var y=+m.slice(0,4),mo=+m.slice(5,7)-1+n;y+=Math.floor(mo/12);mo=((mo%12)+12)%12;return y+'-'+String(mo+1).padStart(2,'0');}
+  function monthName(m){return MONTHS[+m.slice(5,7)-1]+' '+m.slice(0,4);}
+  function day(t){return t?new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Asia/Colombo'}):'';}
+  function tone(h){h=Number(h)||0;return h>=48?'red':(h>=24?'orange':'');}
+  function get(path){
+    return fetch(sbUrl()+'/rest/v1/'+path,{headers:{apikey:sbKey(),Authorization:'Bearer '+sbKey()}})
+      .then(function(r){if(!r.ok)return r.text().then(function(t){throw new Error(r.status+' '+t.slice(0,140));});return r.json();});
+  }
+  function rowsFor(sys,pid,month){
+    return get('bb_work_items?select='+COLS+'&sys=eq.'+sys+'&person_id=eq.'+pid+
+      '&or=(finished_month.eq.'+month+',and(finished_at.is.null,is_archived.is.false))&order=finished_at.desc.nullslast,current_stage_hours.desc.nullslast');
+  }
+
+  function stagesHtml(sys,item){
+    var st=(item.stages||[]).filter(function(s){return s.bucket!=='done';});
+    if(!st.length)return '<div class="bbw-muted">No stage history recorded for this one.</div>';
+    var max=Math.max.apply(null,st.map(function(s){return Number(s.hours)||0;}).concat([1]));
+    return st.map(function(s){
+      var w=Math.max(2,Math.round((Number(s.hours)||0)/max*100));
+      var now=(item.current_stage===s.stage&&!item.finished_at)?', here now':'';
+      return '<div class="bbw-st"><div class="bbw-st-name">'+esc(label(sys,s.stage))+'</div>'+
+        '<div class="bbw-st-bar"><i class="'+esc(s.bucket)+'" style="width:'+w+'%"></i></div>'+
+        '<div class="bbw-st-val">'+fmt(s.hours)+'<small>'+(s.visits>1?s.visits+' visits':'1 visit')+esc(now)+'</small></div></div>';
+    }).join('');
+  }
+  function splitChips(sys,r){
+    return '<div class="bbw-chips"><span class="bbw-chip m">'+esc(MAKER[sys])+' '+fmt(r.maker_hours)+'</span>'+
+      '<span class="bbw-chip">In review '+fmt(r.review_hours)+'</span>'+
+      '<span class="bbw-chip">With the client '+fmt(r.client_hours)+'</span>'+
+      (r.change_rounds?'<span class="bbw-chip">'+r.change_rounds+' round'+(r.change_rounds===1?'':'s')+' of changes</span>':'')+'</div>';
+  }
+
+  /* ── the person sheet ─────────────────────────────────────────────── */
+  var S=null;
+  function close(){var el=document.getElementById('bbw-sheet');if(el)el.remove();S=null;}
+  function openPerson(o){
+    o=o||{};var sys=o.sys||OWN_SYS;
+    close();
+    S={sys:sys,pid:o.personId||null,name:o.personName||'',month:o.month||monthNow(),rows:null,err:null,q:'',open:{}};
+    var root=document.createElement('div');
+    root.id='bbw-sheet';root.className='bbw-root '+OVCLASS;
+    root.innerHTML='<div class="bbw-panel" role="dialog" aria-modal="true" aria-labelledby="bbw-name">'+
+      '<div class="bbw-head"><div class="bbw-who"><div class="bbw-name" id="bbw-name"></div><div class="bbw-role"></div></div>'+
+      '<button class="bbw-btn" data-close onclick="BBWORK.close()">Close</button></div>'+
+      '<div class="bbw-body"></div>'+
+      '<div class="bbw-foot"><button class="bbw-btn bbw-btn-quiet" data-close onclick="BBWORK.close()">Close</button></div></div>';
+    root.addEventListener('click',function(e){if(e.target===root)close();});
+    root.querySelector('.bbw-body').addEventListener('click',onBody);
+    root.querySelector('.bbw-body').addEventListener('input',function(e){if(e.target.classList.contains('bbw-find')){S.q=e.target.value.toLowerCase();drawLists();}});
+    document.body.appendChild(root);
+    var start=S.pid?Promise.resolve(S.pid):get('team_members?select=id,name&name=ilike.'+encodeURIComponent(S.name)).then(function(r){
+      if(!r||!r.length)throw new Error('Nobody called '+S.name+' is in the team list');S.name=r[0].name;return r[0].id;});
+    start.then(function(pid){S.pid=pid;load();}).catch(function(e){S.err=e.message;draw();});
+    draw();
+  }
+  function load(){
+    if(!S)return;var mine=S;mine.rows=null;mine.err=null;draw();
+    rowsFor(mine.sys,mine.pid,mine.month).then(function(rows){if(S!==mine)return;mine.rows=rows||[];
+      if(!mine.name&&rows&&rows[0])mine.name=rows[0].person_name;draw();})
+      .catch(function(e){if(S!==mine)return;mine.err=e.message;draw();});
+  }
+  function onBody(e){
+    var b=e.target.closest('[data-bbw]');if(!b||!S)return;
+    var a=b.getAttribute('data-bbw');
+    if(a==='prev'){S.month=shiftMonth(S.month,-1);load();}
+    else if(a==='next'){S.month=shiftMonth(S.month,1);load();}
+    else if(a==='retry'){load();}
+    else if(a==='row'){var id=b.getAttribute('data-id');S.open[id]=!S.open[id];drawLists();}
+  }
+  function draw(){
+    var root=document.getElementById('bbw-sheet');if(!root||!S)return;
+    var n=NOUN[S.sys];
+    root.querySelector('.bbw-name').textContent=S.name?S.name.charAt(0)+S.name.slice(1).toLowerCase():'Loading';
+    root.querySelector('.bbw-role').textContent=(S.sys==='video'?'Video System':'Graphic System')+', work through the pipeline';
+    var body=root.querySelector('.bbw-body');
+    var cur=monthNow(),atNow=S.month>=cur;
+    var head='<div class="bbw-month"><button class="bbw-btn" data-bbw="prev" aria-label="Previous month">Previous</button>'+
+      '<div class="bbw-month-label">'+esc(monthName(S.month))+'</div>'+
+      '<button class="bbw-btn" data-bbw="next" aria-label="Next month"'+(atNow?' disabled':'')+'>Next</button></div>';
+    if(S.err){body.innerHTML=head+'<div class="bbw-muted">Could not load this: '+esc(S.err)+'</div><button class="bbw-btn bbw-btn-primary" data-bbw="retry">Try again</button>';return;}
+    if(!S.rows){body.innerHTML=head+'<div class="bbw-muted">Loading '+esc(monthName(S.month))+'</div>';return;}
+    var fin=S.rows.filter(function(r){return r.finished_month===S.month;});
+    var hold=S.rows.filter(function(r){return !r.finished_at;});
+    body.innerHTML=head+
+      '<div class="bbw-stats">'+
+        '<div class="bbw-stat"><b data-bbw-finished>'+fin.length+'</b><span>'+esc(n[1])+' finished in '+esc(MONTHS[+S.month.slice(5,7)-1])+'</span></div>'+
+        '<div class="bbw-stat"><b>'+(fin.length?fmt(avg(fin,'maker_hours')):'none')+'</b><span>'+esc(MAKER[S.sys])+', on average</span></div>'+
+        '<div class="bbw-stat"><b>'+(fin.length?fmt(avg(fin,'total_hours')):'none')+'</b><span>Start to finish, on average</span></div>'+
+        '<div class="bbw-stat"><b>'+(fin.length?(Math.round(avg(fin,'change_rounds')*10)/10):'none')+'</b><span>Rounds of changes per '+esc(n[0])+'</span></div>'+
+      '</div>'+
+      '<input class="bbw-find" type="search" placeholder="Find a '+esc(n[0])+' or client" value="'+esc(S.q)+'" aria-label="Find">'+
+      '<div class="bbw-lists"></div>'+
+      '<div class="bbw-note">Times count Monday to Friday. They show how long each piece sat in each stage, not hours worked. Tap any row to see every stage.</div>';
+    drawLists();
+  }
+  function match(r){if(!S.q)return true;return ((r.title||'')+' '+(r.client_name||'')).toLowerCase().indexOf(S.q)>-1;}
+  function drawLists(){
+    var root=document.getElementById('bbw-sheet');if(!root||!S||!S.rows)return;
+    var el=root.querySelector('.bbw-lists');if(!el)return;
+    var n=NOUN[S.sys];
+    var fin=S.rows.filter(function(r){return r.finished_month===S.month&&match(r);});
+    var hold=S.rows.filter(function(r){return !r.finished_at&&match(r);});
+    function row(r,kind){
+      var id=String(r.project_id),opened=!!S.open[id];
+      var end=kind==='fin'?day(r.finished_at):fmt(r.current_stage_hours)+' here';
+      var meta=kind==='fin'?(esc(r.client_name||'No client')+', start to finish '+fmt(r.total_hours)+' ('+cal(r.total_clock_hours)+')')
+                           :(esc(r.client_name||'No client')+', now in '+esc(label(S.sys,r.current_stage)));
+      return '<div class="bbw-row '+(kind==='hold'?tone(r.current_stage_hours):'')+'">'+
+        '<button class="bbw-row-top" data-bbw="row" data-id="'+esc(id)+'" aria-expanded="'+opened+'">'+
+          '<div class="bbw-row-line"><div class="bbw-row-title">'+esc(r.title||'Untitled')+'</div><div class="bbw-row-end">'+esc(end)+'</div></div>'+
+          '<div class="bbw-row-meta">'+meta+'</div>'+splitChips(S.sys,r)+'</button>'+
+        (opened?'<div class="bbw-open">'+stagesHtml(S.sys,r)+'</div>':'')+'</div>';
+    }
+    el.innerHTML=
+      '<div class="bbw-sec"><h4>Finished in '+esc(monthName(S.month))+' ('+fin.length+')</h4>'+
+        (fin.length?fin.map(function(r){return row(r,'fin');}).join(''):'<div class="bbw-muted">No '+esc(n[1])+' reached the end of the pipeline in '+esc(monthName(S.month))+(S.q?' that match':'')+'.</div>')+'</div>'+
+      '<div class="bbw-sec"><h4>Holding now ('+hold.length+')</h4>'+
+        (hold.length?hold.map(function(r){return row(r,'hold');}).join(''):'<div class="bbw-muted">Nothing in progress'+(S.q?' that matches':'')+'.</div>')+'</div>';
+  }
+
+  /* ── the per stage panel inside a project ─────────────────────────── */
+  function slot(sys,pid){
+    setTimeout(fill,0);
+    return '<div class="bbw-stages" data-bbw-sys="'+esc(sys)+'" data-bbw-pid="'+esc(pid)+'"><div class="bbw-muted">Loading the time in each stage</div></div>';
+  }
+  function fill(){
+    document.querySelectorAll('.bbw-stages:not([data-bbw-done])').forEach(function(el){
+      el.setAttribute('data-bbw-done','1');
+      var sys=el.getAttribute('data-bbw-sys'),pid=el.getAttribute('data-bbw-pid');
+      get('bb_work_items?select='+COLS+'&sys=eq.'+sys+'&project_id=eq.'+encodeURIComponent(pid)).then(function(r){
+        var it=r&&r[0];if(!it){el.innerHTML='<div class="bbw-muted">No stage history recorded for this one.</div>';return;}
+        el.innerHTML=splitChips(sys,it).replace('bbw-chips','bbw-chips bbw-sum')+stagesHtml(sys,it)+
+          '<div class="bbw-note">'+(it.finished_at?'Finished '+esc(day(it.finished_at))+', start to finish '+fmt(it.total_hours)+' ('+esc(cal(it.total_clock_hours))+'). ':'')+
+          'Times count Monday to Friday and show how long it sat in each stage, not hours worked.</div>';
+      }).catch(function(e){el.removeAttribute('data-bbw-done');el.innerHTML='<div class="bbw-muted">Could not load the stage times: '+esc(e.message)+'</div>';});
+    });
+  }
+
+  /* ── a summary card for a person page that already exists ─────────── */
+  function summarySlot(sys,pid,month,name){
+    var key='bbw-sum-'+Math.random().toString(36).slice(2);
+    setTimeout(function(){
+      var el=document.getElementById(key);if(!el)return;
+      rowsFor(sys,pid,month).then(function(rows){
+        var fin=(rows||[]).filter(function(r){return r.finished_month===month;}),hold=(rows||[]).filter(function(r){return !r.finished_at;}),n=NOUN[sys];
+        el.innerHTML='<div class="bbw-stats">'+
+          '<div class="bbw-stat"><b data-bbw-finished>'+fin.length+'</b><span>'+esc(n[1])+' finished in '+esc(monthName(month))+'</span></div>'+
+          '<div class="bbw-stat"><b>'+(fin.length?fmt(avg(fin,'maker_hours')):'none')+'</b><span>'+esc(MAKER[sys])+', on average</span></div>'+
+          '<div class="bbw-stat"><b>'+(fin.length?fmt(avg(fin,'total_hours')):'none')+'</b><span>Start to finish, on average</span></div>'+
+          '<div class="bbw-stat"><b>'+hold.length+'</b><span>Holding now</span></div></div>'+
+          '<button class="bbw-btn bbw-btn-primary" onclick="BBWORK.openPerson({sys:\''+sys+'\',personId:'+Number(pid)+',personName:\''+esc(String(name||'').replace(/'/g,''))+'\',month:\''+month+'\'})">See every '+esc(n[0])+' for '+esc(monthName(month))+'</button>';
+      }).catch(function(e){el.innerHTML='<div class="bbw-muted">Could not load the pipeline numbers: '+esc(e.message)+'</div>';});
+    },0);
+    return '<div class="bbw-card" id="'+key+'"><div class="bbw-muted">Loading the pipeline numbers</div></div>';
+  }
+
+  /* ── read only checks for the app's own ?selftest ─────────────────── */
+  function selfcheck(){
+    var out=[],ok=function(n,p,d){out.push({name:'Work time: '+n,pass:!!p,detail:String(d==null?'':d)});};
+    ok('under an hour reads as under 1h',fmt(0.5)==='under 1h',fmt(0.5));
+    ok('49 hours reads as 2d 1h',fmt(49)==='2d 1h',fmt(49));
+    ok('23.9 hours reads as 23h',fmt(23.9)==='23h',fmt(23.9));
+    ok('24 hours is orange, 48 is red',tone(24)==='orange'&&tone(47.9)==='orange'&&tone(48)==='red'&&tone(23.9)==='',tone(24)+' '+tone(48));
+    ok('month arithmetic crosses a year',shiftMonth('2026-01',-1)==='2025-12'&&shiftMonth('2026-12',1)==='2027-01',shiftMonth('2026-01',-1));
+    var known=appStages(),miss=known.filter(function(k){return !(LABELS[OWN_SYS]||{})[k];});
+    ok('every stage this app has carries a name here',known.length>0&&!miss.length,miss.length?'no name for '+miss.join(', '):known.length+' stages');
+    return out;
+  }
+  /* Live check: the sheet and the monthly view must give the same count. Read only. */
+  function crosscheck(){
+    var m=shiftMonth(monthNow(),-1);
+    return get('bb_person_month?select=person_id,person_name,finished&sys=eq.'+OWN_SYS+'&month=eq.'+m+'&order=finished.desc&limit=1').then(function(pm){
+      if(!pm||!pm.length)return {name:'Work time: the sheet and the monthly view agree',pass:true,detail:'nobody finished anything in '+m};
+      var p=pm[0];
+      return rowsFor(OWN_SYS,p.person_id,m).then(function(rows){
+        var n=(rows||[]).filter(function(r){return r.finished_month===m;}).length;
+        return {name:'Work time: the sheet and the monthly view agree',pass:n===p.finished,detail:p.person_name+' '+m+': sheet '+n+', view '+p.finished};
+      });
+    }).catch(function(e){return {name:'Work time: the sheet and the monthly view agree',pass:false,detail:e.message};});
+  }
+  /* Put the monthly view's count into every [data-bbw-done="<person id>"] on the page,
+     so a card and the sheet it opens can never show two numbers for one month. */
+  function fillDone(sys,month){
+    sys=sys||OWN_SYS;month=month||monthNow();
+    return get('bb_person_month?select=person_id,finished&sys=eq.'+sys+'&month=eq.'+month).then(function(rows){
+      var by={};(rows||[]).forEach(function(r){by[String(r.person_id)]=r.finished;});
+      document.querySelectorAll('[data-bbw-done]').forEach(function(el){el.textContent=by[el.getAttribute('data-bbw-done')]||0;el.setAttribute('data-bbw-filled','1');});
+      return by;
+    }).catch(function(e){console.error('BBWORK fillDone',e);return null;});
+  }
+  window.BBWORK={fillDone:fillDone,openPerson:openPerson,close:close,slot:slot,fill:fill,summarySlot:summarySlot,selfcheck:selfcheck,crosscheck:crosscheck,fmt:fmt,tone:tone,
+    state:function(){return S?{sys:S.sys,pid:S.pid,month:S.month,rows:S.rows?S.rows.length:null,err:S.err}:null;}};
+})();
+</script>
+<!-- @@BB_WORKTIME_END@@ -->
 <!-- @@BB_STAGEAGE_BEGIN@@ -->
 <!-- BB STAGE AGE. Cast from ~/bb-systems/stage-age/bb-stage-age.CANON.html by cast.py.
      Never edit this block inside an app: edit the canon and cast again.
-     A tile that has sat 48 working hours in one stage turns red. A tile in a
-     finished stage turns green. The clock is the stage history row, never
+     A tile that has sat 24 working hours in one stage turns orange, 48 turns it
+     red. A tile in a finished stage turns green. The clock is the stage history row, never
      updated_at, because editing a title must not make a late tile look fresh. -->
 <style>
+.bb-age-amber{--bb-age-c:#f97316;--bb-age-s:rgba(249,115,22,.14)}
 .bb-age-red{--bb-age-c:var(--red);--bb-age-s:var(--red-soft)}
 .bb-age-green{--bb-age-c:var(--green);--bb-age-s:var(--green-soft)}
-.card.bb-age-red,.card.bb-age-green{background:linear-gradient(var(--bb-age-s),var(--bb-age-s)),var(--surface-2);border-top-color:var(--bb-age-c);border-right-color:var(--bb-age-c);border-bottom-color:var(--bb-age-c);}
+.card.bb-age-amber,.card.bb-age-red,.card.bb-age-green{background:linear-gradient(var(--bb-age-s),var(--bb-age-s)),var(--surface-2);border-top-color:var(--bb-age-c);border-right-color:var(--bb-age-c);border-bottom-color:var(--bb-age-c);}
 .bb-age-chip{display:inline-block;margin-top:9px;padding:4px 8px;border-radius:6px;font-size:11px;line-height:1.2;font-weight:600;color:var(--text-3);background:var(--surface-3);white-space:nowrap}
 .bb-age-chip:empty{display:none}
-.bb-age-amber .bb-age-chip{color:var(--amber);background:var(--amber-soft)}
+.bb-age-amber .bb-age-chip{color:#f97316;background:transparent;padding-left:0}
 .bb-age-red .bb-age-chip{color:var(--red);background:transparent;padding-left:0}
 .bb-age-green .bb-age-chip{color:var(--green);background:transparent;padding-left:0}
 .bb-age-head{display:flex;align-items:center;gap:8px}
@@ -7781,6 +8083,13 @@ if('serviceWorker' in navigator){
          /bb-age-red/.test(html)?'red and chip present':'class missing from the rendered tile');
       fake.current_stage=DONE[0];MAP[-999]={stage:DONE[0],at:Date.now()-21*DAY,src:'history'};
       html=renderCard(fake);delete MAP[-999];if(keep)MAP[-999]=keep;
+      /* Step back until exactly 30 WORKING hours lie between then and now, so this
+         check means the same thing on a Monday morning as on a Wednesday. */
+      var t30=Date.now()-30*HOUR,guard=0;while(wkHours(t30,Date.now())<30&&guard++<200)t30-=HOUR;
+      fake.current_stage=first;MAP[-999]={stage:first,at:t30,src:'history'};
+      var ho=renderCard(fake);delete MAP[-999];if(keep)MAP[-999]=keep;
+      ok('a tile past 24 working hours is drawn orange',/bb-age-amber/.test(ho)&&!/bb-age-red/.test(ho),
+         /bb-age-amber/.test(ho)?'orange at '+Math.round(wkHours(t30,Date.now()))+' working hours':'class missing');
       ok('a finished tile is drawn green',/bb-age-green/.test(html)&&!/bb-age-red/.test(html),/bb-age-green/.test(html)?'green':'class missing');
     }catch(e){ok('a late tile is drawn red with its age',false,e.message);}
     var liveNow=live();
