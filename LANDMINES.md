@@ -1688,3 +1688,27 @@ the service worker and the two videos still in KAVISH's name, both known.
 
 **Known and left alone.** 3 of 245 live tiles have no open history row and fall back
 to `updated_at`. The harness reports the cover as a number.
+
+## L-VID-039 · a video pulled back out of Add to Drive still counted as done · FIXED 2026-09-30
+
+**Symptom.** Rajeewa's team card said 36 videos done in September. The pipeline history
+said 35. Ramani's said 9 against 8.
+
+**Root cause, two of them.** The move stamped `completed_at` on the way into Add to Drive and
+never cleared it on the way out, so five live videos pulled back for more changes still
+counted as finished. The card also counted only unarchived videos. Finished videos are
+archived after three days, so its number shrank as the month went on. The Graphic System
+has cleared the date on the way out since July (see its `gfxSetStage`).
+
+**The block.** `moveProject` now clears the date when a video leaves a finished stage and
+restores the old value if the save fails. The card takes its number from the database view
+`bb_person_month` through `BBWORK.fillDone`, the same source as the person view and the
+Command Centre, so the three cannot drift apart. The per stage time and the person month
+live in `@@BB_WORKTIME_BEGIN@@`, cast from `~/bb-systems/stage-age/`.
+
+**Proven.** A move out of Add to Drive, captured before it reached the database, carried
+`completed_at: null`. The cards read 38, 11 and 9 against a view reading 38, 11 and 9, in a
+real browser and on the iPhone simulator. Self-test 123 checks, 17 new, all 17 pass.
+
+**Left alone, needs Thulaib.** Five live videos still hold a stale finish date from before
+the fix. Nothing on screen reads it any more. Clearing them is a data change.
