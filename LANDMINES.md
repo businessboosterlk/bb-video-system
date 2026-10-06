@@ -573,10 +573,18 @@ landed on the previous week, **failing in exactly the way it was written to
 catch**. It now takes the newest stored week, loads it through the app's own
 `wpGridLoad`, and asserts cells come back.
 
-**Still open, needs Thulaib's approval:** the keys are still Sundays. One
-`UPDATE weekly_plan_cells SET week_start = week_start + 1` normalises every row
-to the correct Monday, after which the legacy path can be deleted. That is a
-data change, so it waits for a yes.
+**CLOSED, found by the 6 Oct 2026 scan:** the keys are no longer Sundays. Every
+row was moved to its Monday on 12 Aug 2026 and the both-keys read was removed with
+it (the comment above `wpFetchWeek` in index.html). The proof, re-run 7 Oct 2026
+at 00:01 Colombo time, returned 249 rows and 0 not on a Monday:
+
+```sql
+select count(*) as total_rows,
+       count(*) filter (where extract(isodow from week_start) <> 1) as not_monday
+from weekly_plan_cells;
+```
+
+~~**Still open, needs Thulaib's approval:** the keys are still Sundays.~~
 
 ---
 
@@ -1712,3 +1720,145 @@ real browser and on the iPhone simulator. Self-test 123 checks, 17 new, all 17 p
 
 **Left alone, needs Thulaib.** Five live videos still hold a stale finish date from before
 the fix. Nothing on screen reads it any more. Clearing them is a data change.
+
+## L-VID-040 · one failed read on the timer blanked the board · FIXED 2026-10-06
+
+**Symptom.** `fetchAll` awaited twelve reads and assigned `pr.data||[]` to each set.
+supabase-js returns `{data:null,error}` and never throws, so the catch never saw a
+failed read. One failed `video_projects` read on the 3 minute refresh drew a board with
+zero cards and said nothing. `system_bug_log` shows every table failing at once on
+28 Sep 17:06, so blips do happen while the app is open.
+
+**The fix.** The four core reads (`video_projects`, `clients`, `team_members`,
+`video_stage_history`) are checked. Any error keeps the last copy, skips the render and
+logs the table and status with `console.warn`. A refresh somebody asked for also shows
+the toast "Could not refresh, showing the last copy". Every side read, the archived list
+included, keeps its previous value through `_keep`.
+
+**Proven.** In a real browser with the `video_projects` read stubbed to fail: before,
+263 cards fell to 0 with no message; after, 263 stayed, the silent refresh stayed quiet
+and the asked for refresh showed the toast. With `video_topics` failing: before 408 fell
+to 0, after 408 stayed.
+
+**The rule.** Every read in `fetchAll` goes through an error check. A read that can
+fail into an empty list is a read that can erase the screen.
+
+## L-VID-041 · a capped window was read as the whole table · FIXED 2026-10-06
+
+Same class as L-VID-033, in two more places.
+
+**Symptom one.** `video_project_comments` (449 rows) and `video_topics` (408 rows) were
+read oldest first with no limit. At the 1000 row server cap the NEWEST rows would have
+dropped out with no error. Both are now read newest first with `.limit(1000)` and
+reversed, so every renderer still sees oldest first.
+
+**Symptom two.** The detail modal's "Show full stage history" filtered
+`DATA.stageHistory`, the newest 1000 rows, which no longer reached the open row of 98
+live videos. `openProjectDetail` now fetches the project's own rows and passes them to
+`stageTimingSection` and `stageDurationSecs`. The window is only the fallback when that
+read fails.
+
+**Proven.** Comments 449 and topics 408 loaded, both oldest first. The oldest live
+card (#2) said "full stage history (2)" before and says 30 now. SQL counts 30.
+
+**Left alone.** Past 1000 comments or topics the oldest drop off instead of the newest.
+Scoping topics to two months and reading comments per project (the audit's fuller fix)
+are not built.
+
+## L-VID-042 · the month a video counts for was set wrong in three places · FIXED 2026-10-06
+
+**Duplicate dropped the month.** `duplicateProject` built the copy without
+`target_month` or `target_year`, so a copy counted for no client month (SQL: 5 copies,
+3 with no month). It now carries both from the original. Proven: the captured insert
+for a copy of #489 carries month 10, year 2026. Before it carried neither.
+
+**A new video always took this year.** `saveProject` used the current year whatever
+month was picked, so January work planned in December landed in the past. A month more
+than six months behind the current month now means next year. Proven: January picked in
+October saves as 2027. Before it saved as 2026.
+
+**The Clients month picker repeated a month.** `new Date()` then `setMonth` on the 29th
+to the 31st rolls into the next month. Each option is now built from the 1st of its own
+month. Proven with the clock fixed at 31 Oct 2026: before, 12 options with 7 distinct
+and October twice; after, 12 distinct.
+
+**Left alone.** 33 archived videos still have no month. Filling them is a data change.
+
+## L-VID-043 · archived videos vanished from Analytics and Drive Links · FIXED 2026-10-06
+
+Same class as L-VID-039: a reader that sees unarchived videos only loses finished work
+once it is archived.
+
+**Analytics.** Completed this month, last month and the per person and per client done
+counts now run over `allProjects()`. Active counts stay live only. The archived read
+gained `title` and `created_at` so turnaround can be timed. Proven: last month read 72
+before and 73 after. This month reads 14 both ways because no October video is archived
+yet.
+
+**Drive Links.** Every project lookup on the page resolves through `allProjects()`.
+Proven: 424 links, rows under "no client" 102 before and 0 after, blank titles 102 before
+and 0 after. SQL: 102 of 424 links belong to archived videos. Self-test check N used
+`getProject` for its expected count and failed with 44 of 40 after the fix, so it now
+resolves the same way.
+
+**Left alone.** Tapping an archived link row still opens nothing, because
+`openProjectDetail` looks at live videos only. The Analytics client target still skips
+the override table and its stage average read is not paged.
+
+## L-VID-044 · "cards pushed forward" counted creations and send backs · FIXED 2026-10-06
+
+**Symptom.** The Recap column "Moves made, cards pushed forward" counted every history
+row. Ushane's 532 in September held 107 card creations and 104 sends back.
+
+**The rule now.** A row counts when it moves the card later than the stage it left.
+Changes and Client Changes rank with Editing. Plain STAGES order was not enough:
+Changes sits after Team Review on the board, so it counted 74 sends back from Video Head
+Review into Changes as forward and 110 fixes sent on from Changes as backward. The read
+also fetches the row each card left at the start of the month (entered before, exited
+inside) as context, never counted.
+
+**Proven.** September in a real browser against SQL using the same rule: USHANE 532 to
+316, SHIARA 113 to 87, TIANA 50 to 29, RAJEEWA 142 to 118. SQL: 316, 87, 29 and 118.
+
+**Left alone.** Creations and sends back are not shown as their own columns.
+
+## L-VID-045 · the self-test never wrote its score down · FIXED 2026-10-06
+
+**Symptom.** `runSelfTest` ended in `console.table`. `bb_harness_runs` held one
+video-system row (9 Sep 07:31) against 49 for the SMM Workspace and 20 for the Command
+Centre.
+
+**The fix.** Ported `smmWriteHarnessRow` as `vidWriteHarnessRow` and
+`vidScheduleHarnessRow`, same columns, called from `onLoginSuccess`. One row per person
+per local day. Skipped checks are not failures. Never on localhost, so the headless
+runner writes nothing.
+
+**Proven.** Called in a browser with writes captured: one post to `bb_harness_runs`
+carrying app video-system, 123 checks and each failure with its detail.
+
+**Still to prove.** A row from a real sign-in on the live site. The check:
+`select count(*) from bb_harness_runs where app = 'video-system' and created_at > '2026-10-07';`
+
+## L-VID-046 · login rows carried no member id for the newer editors · FIXED 2026-10-06
+
+**Symptom.** `VIDEO_MEMBER_IDS` names five people, two of whom have left. Login rows for
+BAVITH, MATHUSHAN, THARUSHA and the heads went in with a null `team_member_id`.
+
+**The fix.** When the map has no id, `logVideoLogin` takes it from the loaded roster by
+name, else reads `team_members` where active and the name matches.
+
+**Proven.** Captured login rows: MATHUSHAN null before and 27 after, THULAIB null before
+and 23 after.
+
+**Left alone.** Past rows keep their null id. Filling them is a data change.
+
+## L-VID-047 · symbol glyphs as icons, five more replaced · progress on L-VID-005
+
+The bulk toggle's tick and box are now `vicon('check')` and `vicon('square')`. The
+refresh glyph on Time Tracker, Drive Links, Clients and Team is now `vicon('refresh')`.
+No refresh icon existed, so its paths were copied unchanged from lucide-static v0.544.0
+`refresh-cw`. The buttons gained `aria-label="Refresh"` because the icon is hidden from
+screen readers.
+
+**Left alone.** Nine refresh glyphs remain on other buttons, plus the moon, sun and
+others. L-VID-005 stays OPEN.
