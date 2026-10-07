@@ -7530,28 +7530,68 @@ if(location.search.indexOf('selftest')>-1){
    only ever printed to the console, so nothing reached bb_harness_runs after
    9 September. Ported from the SMM Workspace (smmWriteHarnessRow), same
    columns. After sign-in the harness runs once and posts one row. The walk
-   visits every page, so on a wide screen it runs twenty seconds after sign-in
-   and on a phone it waits until the app goes to the background. Never shown,
-   never blocking, nothing else written. Skipped checks are not failures. */
+   visits every page, so it runs only out of sight and never over work in
+   hand (below). Nothing else is written. Skipped checks are not failures. */
+/* NEVER UNDER SOMEONE'S HANDS (L-VID-048, 7 Oct 2026). The walk calls navTo
+   for every page and navTo empties #modalRoot. The first version ran twenty
+   seconds after sign-in on a desk, so it wiped whatever form or comment was
+   half typed and flashed every page past, admin pages included on an
+   editor's screen. It now starts only while the app is hidden (a desk tab
+   must stay hidden for twenty seconds first) and never while vidHarnessBusy
+   finds work in hand. Busy means wait for the next time the app is hidden.
+   The day's key is set only when a run really starts. */
 function vidHarnessKey(){ return 'video-harness-'+((currentUser&&currentUser.name)||'')+'-'+localDateStr(); }
 function vidHarnessRowToday(){ try{ return localStorage.getItem(vidHarnessKey()); }catch(e){ return '1'; } }
+/* Work in hand: an open sheet or overlay, a focused field, typing on the page
+   not yet saved, a save in flight or bulk select. Returns the reason when busy
+   and an empty string when idle. */
+function vidHarnessBusy(){
+  try{
+    var mr=document.getElementById('modalRoot');
+    if(mr&&mr.innerHTML.trim()) return 'a sheet is open';
+    if(document.getElementById('modal2')) return 'a second sheet is open';
+    if(typeof BBF==='object'&&BBF.anyOpen&&BBF.anyOpen()) return 'an overlay is open';
+    var a=document.activeElement;
+    if(a&&a.getClientRects().length&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable)) return 'a field has focus';
+    var pc=document.getElementById('pageContent');
+    var typed=pc?[].slice.call(pc.querySelectorAll('input,textarea')).some(function(el){
+      return !/^(hidden|checkbox|radio|button|submit|reset|file|range)$/i.test(el.type||'')&&el.value!==el.defaultValue;}):false;
+    if(typed) return 'typing on the page is not saved';
+    if(typeof _pendingOps!=='undefined'&&_pendingOps>0) return 'a save is in flight';
+    if(typeof PIPELINE_STATE!=='undefined'&&PIPELINE_STATE.bulkMode) return 'bulk select is on';
+  }catch(e){ return 'could not tell'; }
+  return '';
+}
+/* Resolves true once today's run is done or under way, false when it waited. */
 async function vidWriteHarnessRow(){
-  if(!currentUser||vidHarnessRowToday()) return;
+  if(!currentUser) return false;
+  if(vidHarnessRowToday()) return true;
+  if(document.visibilityState!=='hidden'||vidHarnessBusy()) return false;   /* L-VID-048 */
   try{ localStorage.setItem(vidHarnessKey(),'1'); }catch(e){}
   var r=null;
-  try{ r=await runSelfTest(); }catch(e){ return; }
-  if(!r||!r.results) return;
+  try{ r=await runSelfTest(); }catch(e){ return true; }
+  if(!r||!r.results) return true;
   var failed=r.results.filter(function(x){return !x.pass&&!x.skipped;}).map(function(x){return x.name+(x.detail?' ['+String(x.detail).slice(0,120)+']':'');});
   try{
     await fetch(SUPABASE_URL+'/rest/v1/bb_harness_runs',{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({app:'video-system',checks:r.total,failed:failed.length,failed_names:failed,width:window.innerWidth,user_name:(currentUser&&currentUser.name)||null,url:location.href.slice(0,200)})});
   }catch(e){}
+  return true;
 }
 function vidScheduleHarnessRow(){
   if(vidHarnessRowToday()) return;
   if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
-  if(window.innerWidth>=900){ setTimeout(vidWriteHarnessRow, 20000); return; }
-  document.addEventListener('visibilitychange', function onHide(){ if(document.visibilityState==='hidden'){ document.removeEventListener('visibilitychange', onHide); vidWriteHarnessRow(); } });
+  /* L-VID-048: desk and phone both wait until the app is hidden. A desk tab
+     must stay hidden twenty seconds so a quick look at another tab is never
+     caught mid walk. The listener stays until a run really starts. */
+  var wait=null;
+  function tryNow(){ vidWriteHarnessRow().then(function(done){ if(done) document.removeEventListener('visibilitychange', onVis); }).catch(function(){}); }
+  function onVis(){
+    clearTimeout(wait);
+    if(document.visibilityState!=='hidden') return;
+    if(window.innerWidth>=900) wait=setTimeout(tryNow, 20000); else tryNow();
+  }
+  document.addEventListener('visibilitychange', onVis);
 }
 </script>
 

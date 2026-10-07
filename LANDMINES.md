@@ -1862,3 +1862,31 @@ screen readers.
 
 **Left alone.** Nine refresh glyphs remain on other buttons, plus the moon, sun and
 others. L-VID-005 stays OPEN.
+
+## L-VID-048 · the daily self-test row ran over a half typed form · FIXED 2026-10-07
+
+**Symptom.** The L-VID-045 writer ran `runSelfTest` twenty seconds after sign-in on any
+screen 900px or wider. On a phone it ran the first time the app went to the background. The
+walk calls `navTo` for every page and `navTo` empties `#modalRoot`. A probe opened New
+Project, typed a title and asked for the row: 21 page changes in 4.4 seconds, the form
+closed and the title gone. Every page flashed past, admin pages included on an editor's
+screen. The day's key was set before the run, so a run that should have waited could not.
+
+**The fix.** `vidHarnessBusy` names the work in hand: a sheet in `#modalRoot`, `#modal2`,
+any open overlay, a focused field, typing in `#pageContent` not yet saved, `_pendingOps`
+above nought or bulk select. `vidWriteHarnessRow` starts only while the app is hidden and
+nothing is in hand. It sets the key only then. On a desk the tab must stay hidden twenty
+seconds first. Busy means the listener stays for the next hide.
+
+**Proven.** The reviewer's probe again: 0 page changes, the form still open, the title
+kept, no row posted. The schedule path on a non-localhost name with hidden faked: form
+open and hidden 21 seconds, 0 page changes and no row. A 3 second look away, nothing. Idle
+and hidden 21 seconds, 21 page changes and one `bb_harness_runs` post. Hidden again, no
+second post. Phone: a chat draft and bulk select each held it back, the draft kept.
+
+**The rule.** Anything that walks the app's own pages runs only out of sight and only
+when nobody has work open. Check before starting and mark the day done only once it
+starts.
+
+**Still to prove.** A row from a real hidden tab on the live site, where timers slow down.
+The run is short but still not abortable: someone back inside those seconds sees it.
