@@ -2107,3 +2107,42 @@ worker).
 **The rule.** A message that says something saved belongs after the line that saves it. A helper
 that runs halfway through a sequence of writes cannot speak for the writes that come after it, so
 it reports to its caller and the caller tells the user.
+
+## L-VID-054 · a same-target race closed the right history row and opened a copy of it · FIXED 2026-10-07
+
+**Found by the second independent review of the L-VID-052 fix the same day.** When two clients
+move one card into the SAME stage at the same moment, the first one opens the history row for
+that stage. The second client's insert gets 23505. L-VID-052 then closed every open row and
+inserted again, so it closed the racer's correct row about 0 seconds after it opened and wrote a
+second row for the same stage: a self-transition pair (X then X). That is the pollution
+`moveProject`'s own guard at the top stops (the 11 team_review to team_review rows), and it feeds
+the Time Tracker and the stall agents. A race into client_changes also added one false revision
+round to the Revision Overload card, which counts client_changes rows per video with a threshold
+of 3 or more. Before L-VID-052 the refused insert was simply dropped and the racer's single row
+was correct. The forward move counts in the monthly report were not affected: they rank the
+stages and ignore X to X.
+
+**The fix.** After a 23505 `vshInsert` reads the open rows first through `vshOpenRows(pid)`,
+which now selects `stage` as well. If exactly one row is open and its stage is the stage being
+written, the history already holds that line: it returns true with no close and no retry.
+Otherwise it closes those rows through `vshCloseOpen(rows)` and tries once more, as before. No
+database change.
+
+**Proven in replay, no network.** `runners/probe-video-dbg003.mjs` gained two cases (7 and 8) and
+a per case stage for each open row read. The reviewer's `runners/rv2-probe-video-sametarget.mjs`
+was run again after the fix.
+
+| Case | Before the fix | After the fix |
+|---|---|---|
+| 7, moveProject, open row after 23505 is video_head_review | closed it, second insert 201 | no close, no second insert, card update sent |
+| 8, create door alone, open row after 23505 is video_shot | closed it, second insert 201 | returned true, one insert only |
+| Reviewer case A, same target | closed 910002, second insert 201 | GET open then the card update, nothing else |
+| Cases 1 to 6 and reviewer case B (different stage) | close and retry | unchanged |
+
+No `[history]` warning and no history toast in cases 7 and 8. Guard PASS. The replay runner is
+unchanged: phone 132 checks and desk 131, 1 failure each (the test browser blocking the service
+worker).
+
+**The rule.** A retry after a uniqueness refusal reads what won first. If the row that is already
+there is the row you were about to write, the job is done; closing it to write your own copy turns
+one correct line into two.

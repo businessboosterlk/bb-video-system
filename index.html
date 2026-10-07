@@ -2932,7 +2932,8 @@ window.bbuUndo=bbuUndo;
    moves of one card raced, the database refused the second insert with 23505
    while the move itself saved. The error was ignored, so the card's history
    lost a row. Every insert into video_stage_history now goes through vshInsert.
-   On 23505 it closes every open row for the video again and tries once more.
+   On 23505 it closes every open row for the video again and tries once more
+   (since L-VID-054 it first leaves alone a single open row for this stage).
    If that still fails the move stands: a console warning and the quiet toast
    say the history line was not saved. It never throws, so a lost history line
    cannot undo a move that saved.
@@ -2947,11 +2948,21 @@ let _vshToastAt=0;
 function vshWarnToast(){
   if(Date.now()-_vshToastAt>3000){ _vshToastAt=Date.now(); toast('History line not saved. The card itself is saved.','info'); }
 }
-async function vshCloseOpen(pid){
-  const r=await sb.from('video_stage_history').select('id,entered_at').eq('video_project_id',pid).is('exited_at',null).limit(20);
+/* Review follow-up, 7 Oct 2026 (L-VID-054): after a 23505 the open rows are
+   READ first (with their stage) and closed only if they are not already the
+   line being written. In a same-target race the other client has already
+   opened the row for this very stage. Closing it and inserting again left a
+   self-transition pair (X then X), the same pollution moveProject's guard
+   stops. A race into client_changes also added a false revision round to the
+   Revision Overload card. */
+async function vshOpenRows(pid){
+  const r=await sb.from('video_stage_history').select('id,stage,entered_at').eq('video_project_id',pid).is('exited_at',null).limit(20);
   if(r.error)throw r.error;
+  return r.data||[];
+}
+async function vshCloseOpen(rows){
   const ex=new Date();
-  for(const o of (r.data||[])){
+  for(const o of rows){
     const u=await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-new Date(o.entered_at))/1000))}).eq('id',o.id).is('exited_at',null);
     if(u.error)throw u.error;
   }
@@ -2963,7 +2974,11 @@ async function vshInsert(pid,stage,quiet){
     let r=await sb.from('video_stage_history').insert(row);
     err=r.error;
     if(err&&err.code==='23505'){
-      await vshCloseOpen(pid);
+      const open=await vshOpenRows(pid);
+      /* L-VID-054, 7 Oct 2026: one open row already for this stage means the
+         history holds this line. Leave it open and send nothing more. */
+      if(open.length===1&&open[0].stage===stage) return true;
+      await vshCloseOpen(open);
       r=await sb.from('video_stage_history').insert(row);
       err=r.error;
     }
