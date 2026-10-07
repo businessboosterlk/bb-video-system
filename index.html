@@ -2935,8 +2935,18 @@ window.bbuUndo=bbuUndo;
    On 23505 it closes every open row for the video again and tries once more.
    If that still fails the move stands: a console warning and the quiet toast
    say the history line was not saved. It never throws, so a lost history line
-   cannot undo a move that saved. */
+   cannot undo a move that saved.
+   Review follow-up, 7 Oct 2026 (L-VID-053): moveProject inserts the history
+   line BEFORE it updates the card, so the toast's "The card itself is saved"
+   was a claim made before the card was written. In an outage both fail and the
+   user read "saved" then "Move failed". moveProject now passes quiet, keeps the
+   result and shows vshWarnToast only after the card update has succeeded. The
+   create and duplicate doors keep the toast in vshInsert: their card insert has
+   already succeeded when they call it. */
 let _vshToastAt=0;
+function vshWarnToast(){
+  if(Date.now()-_vshToastAt>3000){ _vshToastAt=Date.now(); toast('History line not saved. The card itself is saved.','info'); }
+}
 async function vshCloseOpen(pid){
   const r=await sb.from('video_stage_history').select('id,entered_at').eq('video_project_id',pid).is('exited_at',null).limit(20);
   if(r.error)throw r.error;
@@ -2946,7 +2956,7 @@ async function vshCloseOpen(pid){
     if(u.error)throw u.error;
   }
 }
-async function vshInsert(pid,stage){
+async function vshInsert(pid,stage,quiet){
   let err=null;
   try{
     const row={video_project_id:pid,stage:stage,moved_by:currentUser.name};
@@ -2960,7 +2970,7 @@ async function vshInsert(pid,stage){
   }catch(e){ err=e||new Error('unknown'); }
   if(!err) return true;
   console.warn('[history] stage history line not saved for video '+pid+' ('+stage+'): '+((err.code?err.code+' ':'')+(err.message||String(err))));
-  if(Date.now()-_vshToastAt>3000){ _vshToastAt=Date.now(); toast('History line not saved. The card itself is saved.','info'); }
+  if(!quiet) vshWarnToast();   /* L-VID-053, 7 Oct 2026: quiet callers toast after their own save */
   return false;
 }
 
@@ -3007,7 +3017,7 @@ async function moveProject(project,newStage){
   try{
     const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
     if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-en)/1000))}).eq('id',o.id)}
-    await vshInsert(project.id,newStage);   /* DBG-003 follow-up, 7 Oct 2026: error checked, 23505 closes and retries once */
+    const histOk=await vshInsert(project.id,newStage,true);   /* DBG-003 follow-up, 7 Oct 2026: error checked, 23505 closes and retries once. L-VID-053: quiet, the toast waits for the card update */
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
     if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
     else if(COMPLETED_STAGES.includes(old)||old==='posted')up.completed_at=null;
@@ -3027,6 +3037,7 @@ async function moveProject(project,newStage){
       }
       toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`+_extra,'success');
     }
+    if(!histOk) vshWarnToast();   /* L-VID-053, 7 Oct 2026: only now is "the card itself is saved" true */
   }catch(err){
     console.error(err);
     project.current_stage=old;

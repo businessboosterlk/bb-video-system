@@ -2070,3 +2070,40 @@ blocking the service worker), the same as before the change.
 **The rule.** An insert whose error nobody reads is a write nobody checked. When a constraint
 can refuse a row the app is about to write, read the error, name the code and decide on purpose
 what the user sees.
+
+## L-VID-053 · the history toast said the card was saved before the card was written · FIXED 2026-10-07
+
+**Found by the independent review of the L-VID-052 fix the same day.** `moveProject` inserts the
+history line first and updates `video_projects` second. L-VID-052 put the toast "History line not
+saved. The card itself is saved." inside `vshInsert`, so it fired before the card update had even
+been sent. When both writes fail, which is exactly the 522 outage of 7 Oct or a dropped network,
+the user read "The card itself is saved" and then "Move failed" while the card went back to its
+old stage. A bulk move did the same and then said "0 projects, 1 failed". The old code only said
+"Move failed", so the false claim was new.
+
+**The fix.** The toast lives in `vshWarnToast()` (same text, same once every 3 seconds).
+`vshInsert(pid, stage, quiet)` still warns in the console every time. It skips the toast when
+`quiet` is set. `moveProject` passes `quiet`, keeps the result as `histOk` and calls
+`vshWarnToast()` only after the `video_projects` update has come back without an error, so the
+sentence is true when it shows. The create and duplicate doors keep the toast inside `vshInsert`:
+their card insert has already succeeded when they call it.
+
+**Proven in replay, no network** (`runners/probe-fix-video-l053.mjs`, the review probe plus two
+cases, history and card answers stubbed):
+
+| Case | Card after | Toasts |
+|---|---|---|
+| Single move, history and card both 522 | back to editing | Move failed |
+| Single move, network dropped | back to editing | Move failed |
+| Single move, history 522, card saves | Video Head Review | Moved to Video Head Review, then the history toast |
+| Bulk move of card 485, both 522 | stays in changes | the progress toast, then 0 projects 1 failed |
+| Bulk move of card 485, history 522, card saves | saved | the progress toast, the history toast, then 1 project |
+| `vshInsert` alone (create door), history 522 | not a move, returned false | the history toast |
+
+The `[history]` console warning still fires in every failing case. Guard PASS. The replay runner is
+unchanged: phone 132 checks and desk 131, 1 failure each (the test browser blocking the service
+worker).
+
+**The rule.** A message that says something saved belongs after the line that saves it. A helper
+that runs halfway through a sequence of writes cannot speak for the writes that come after it, so
+it reports to its caller and the caller tells the user.
