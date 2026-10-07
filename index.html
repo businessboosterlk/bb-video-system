@@ -926,7 +926,10 @@ const USERS = [
      the role is `editor` (they see only their own assigned projects), and the
      PINs are TEMPORARY. Change them here and tell the two of them. */
   { name: 'BAVITH',  pin: '2846', role: 'editor' },
-  { name: 'KAVISH',  pin: '3927', role: 'editor' },
+  /* Decision 105, 7 Oct 2026: KAVISH left (team_members 21 is active false
+     since 21 Sep) and his PIN still opened the app. His login is gone. His
+     roster row stays, so his past work still shows who did it. The sign-in
+     also asks the roster now, see vidRosterSwitchedOff. */
   /* Added 2026-08-21 on Thulaib's ask: the social media manager, with the
      master view. `admin` is what "master look" means here, the same as SHIARA.
      Worth knowing it carries more than looking: isAdmin() also unlocks New
@@ -1276,9 +1279,34 @@ function isAdmin(){return currentUser&&(currentUser.role==='admin'||currentUser.
 function isEditor(){return currentUser&&currentUser.role==='editor'}
 // Single source of truth for whether an editor can move a card from->to a given stage.
 // Admins/video_heads bypass this; only called when the user is an editor.
+/* Decision 105, 7 Oct 2026: this was a stub that returned true, so an editor
+   could put their own video into Add to Drive and skip every review. An editor
+   now moves a video only from an editing stage into Video Head Review. It may
+   also move one from Video Head Review or Changes back into an editing stage. Every other move is
+   the video head's. The rule is enforced inside moveProject (vidMoveRefusal),
+   so drag and drop, the move menu, bulk move and undo all meet it. */
+const EDITOR_EDIT_STAGES=['video_shot','cutting_color_grading','rendering','editing','changes'];
 function editorCanMove(fromStage,toStage){
-  // Editors can move to any stage (they still only see their own assigned work)
-  return true;
+  if(fromStage===toStage)return true;
+  if(toStage==='video_head_review')return EDITOR_EDIT_STAGES.indexOf(fromStage)>-1;
+  if(EDITOR_EDIT_STAGES.indexOf(toStage)>-1)return fromStage==='video_head_review'||fromStage==='changes';
+  return false;
+}
+/* Decision 105, 7 Oct 2026: the head is read from the roster, so a new video
+   head needs no code change. Title case because the toast is a sentence. */
+function videoHeadName(){
+  const m=((typeof DATA!=='undefined'&&DATA.teamMembers)||[]).find(x=>x&&x.active!==false&&x.role==='video_head');
+  const u=USERS.find(x=>x.role==='video_head');
+  const n=String((m&&m.name)||(u&&u.name)||'');
+  return n?n.charAt(0).toUpperCase()+n.slice(1).toLowerCase():'the video head';
+}
+/* Decision 105, 7 Oct 2026: null when the move is allowed, else the sentence
+   the person is shown. Heads and admins move freely. user defaults to the
+   person signed in; the self-test passes its own. */
+function vidMoveRefusal(fromStage,toStage,user){
+  const u=user||currentUser;
+  if(!u||u.role!=='editor'||editorCanMove(fromStage,toStage))return null;
+  return 'Only the video head, '+videoHeadName()+', can move a video from '+stageLabel(fromStage)+' to '+stageLabel(toStage);
 }
 function isSmm(){return currentUser&&currentUser.role==='smm'}
 function isVideoHead(){return currentUser&&currentUser.role==='video_head'}
@@ -1619,8 +1647,39 @@ function setupLogin(){
   $('#loginBtn').onclick=doLogin;
   ['#loginName','#loginPin'].forEach(s=>{const el=$(s);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()})});
   const saved=sessionStorage.getItem('bb_video_user');
-  if(saved){try{const u=JSON.parse(saved);const ex=USERS.find(x=>x.name===u.name||(x.alt||[]).indexOf(u.name)>-1);if(ex){onLoginSuccess(ex);return}}catch(_){}}
+  if(saved){try{const u=JSON.parse(saved);const ex=USERS.find(x=>x.name===u.name||(x.alt||[]).indexOf(u.name)>-1);if(ex){
+    /* Decision 105, 7 Oct 2026: a kept session asks the roster first, the
+       same as the door, so a person switched off since cannot ride an old tab
+       back in. The sign-in screen stays invisible while it asks, so a normal
+       reload shows no flash of it. */
+    const ls=$('#loginScreen');if(ls)ls.style.visibility='hidden';
+    vidRosterSwitchedOff(ex).then(off=>{
+      if(ls)ls.style.visibility='';
+      if(off){sessionStorage.removeItem('bb_video_user');$('#loginError').textContent=VID_SWITCHED_OFF_MSG;setTimeout(()=>$('#loginName')?.focus(),100);return}
+      onLoginSuccess(ex);
+    });
+    return}}catch(_){}}
   setTimeout(()=>$('#loginName')?.focus(),100);
+}
+/* Decision 105, 7 Oct 2026: the door used to check the name and the PIN only,
+   so a person who had left signed in as long as their USERS line stayed. It
+   now also asks team_members. TRUE only when a row for this name is found and
+   every such row is active false. No row (admins without one), a failed read or
+   a slow one (4 seconds) all answer FALSE, so the PIN decides as before and a
+   bad connection never locks anybody out. Those cases are logged. */
+const VID_SWITCHED_OFF_MSG='This sign-in is switched off. Ask Ushane.';
+function vidRosterSwitchedOff(u){
+  if(!u||!sb||!sb.from)return Promise.resolve(false);
+  let timer=null;
+  const late=new Promise(res=>{timer=setTimeout(()=>{console.warn('[sign-in] roster check took over 4s, the PIN decides');res(false)},4000)});
+  const ask=Promise.resolve().then(()=>sb.from('team_members').select('name,active').ilike('name',u.name).limit(5))
+    .then(r=>{
+      if(!r||r.error){console.warn('[sign-in] roster check failed, the PIN decides',(r&&(r.status||(r.error&&(r.error.message||r.error.code))))||'no answer');return false}
+      const rows=(r.data||[]).filter(m=>String(m.name||'').toUpperCase()===String(u.name).toUpperCase());
+      return rows.length>0&&rows.every(m=>m.active===false);
+    },err=>{console.warn('[sign-in] roster check failed, the PIN decides',err&&err.message);return false})
+    .catch(err=>{console.warn('[sign-in] roster check failed, the PIN decides',err&&err.message);return false});
+  return Promise.race([ask,late]).finally(()=>clearTimeout(timer));
 }
 function doLogin(){
   const n=$('#loginName').value.trim().toUpperCase();const p=$('#loginPin').value.trim();const e=$('#loginError');
@@ -1631,7 +1690,15 @@ function doLogin(){
   const u=USERS.find(x=>x.name===n||(x.alt||[]).indexOf(n)>-1);
   if(!u){e.textContent=`User "${n}" not found`;return}
   if(u.pin!==p){e.textContent='Wrong PIN';$('#loginPin').value='';return}
-  e.textContent='';onLoginSuccess(u);
+  /* Decision 105, 7 Oct 2026: the right PIN is not enough if the roster says
+     this person is switched off. The button waits while the roster answers. */
+  const btn=$('#loginBtn');if(btn&&btn.disabled)return;
+  if(btn)btn.disabled=true;e.textContent='Checking…';
+  vidRosterSwitchedOff(u).then(off=>{
+    if(btn)btn.disabled=false;
+    if(off){e.textContent=VID_SWITCHED_OFF_MSG;$('#loginPin').value='';return}
+    e.textContent='';onLoginSuccess(u);
+  });
 }
 /* ══ WELCOME WALKTHROUGH ══════════════════════════════════════════════════
    Cards answer what a new person actually arrives asking, never "here is our
@@ -2437,7 +2504,8 @@ function renderPipeline(){
 function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
   const ov=p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
-  // Editors can drag from any stage (editorCanMove always returns true)
+  /* Decision 105, 7 Oct 2026: editors still pick up any card they can see;
+     the drop is where vidMoveRefusal says yes or names the video head. */
   const canDrag=isAdmin()||isVideoHead()||isEditor();
   const dr=(canDrag&&!PIPELINE_STATE.bulkMode)?'draggable="true"':'';
   const mv=(canDrag&&!PIPELINE_STATE.bulkMode)?`<button class="card-move" data-move="${p.id}">&#8645; Move stage</button>`:'';
@@ -2557,6 +2625,11 @@ async function bulkMoveProjects(newStage){
   const ids=Array.from(PIPELINE_STATE.selected);
   if(!ids.length||_bulkRunning)return;
   const lbl=STAGES.find(s=>s.key===newStage)?.label||newStage;
+  /* Decision 105, 7 Oct 2026: bulk is offered to heads and admins only today,
+     but a refused card is named once before the run rather than counted as a
+     silent failure, should the toggle ever reach an editor. */
+  const _no=ids.map(id=>getProject(id)).filter(Boolean).map(p=>vidMoveRefusal(p.current_stage,newStage)).find(Boolean);
+  if(_no){toast(_no,'error');return;}
   await _runBulk(`Moved to ${lbl} —`, ids, async (pid)=>{
     const p=getProject(pid);
     if(!p||p.current_stage===newStage)return 'skip';
@@ -2724,14 +2797,10 @@ function attachDropListeners(){
       e.preventDefault();z.classList.remove('drop-target');
       const pid=parseInt(e.dataTransfer.getData('text/pid'));const ns=z.dataset.dropStage;
       const p=getProject(pid);if(!p||p.current_stage===ns)return;
-      // Editor permission check — admins bypass
-      if(!isAdmin()&&isEditor()){
-        if(!editorCanMove(p.current_stage,ns)){
-          const stLabel=STAGES.find(s=>s.key===ns)?.label||ns;
-          toast(`Only admins can move into ${stLabel}`,'error');
-          return;
-        }
-      }
+      /* Decision 105, 7 Oct 2026: the rule and its sentence come from
+         vidMoveRefusal, which moveProject applies again. */
+      const _no=vidMoveRefusal(p.current_stage,ns);
+      if(_no){toast(_no,'error');return;}
       await moveProject(p,ns);
     });
   });
@@ -2771,12 +2840,14 @@ function bbuLabel(e){
 /* The same rule the drop handler enforces. moveProject does NOT carry it, so
    undo must ask, or it becomes the one way an editor can reach a stage the
    board refuses to drop into. */
+/* Decision 105, 7 Oct 2026: returns the refusal sentence from vidMoveRefusal
+   (it names the video head), and moveProject applies the same rule again. */
 function bbuBlocked(e){
   if(!e || isAdmin() || !isEditor()) return null;
   for(const i of e.items){
     const p=getProject(i.id);
-    if(p && typeof editorCanMove==='function' && !editorCanMove(p.current_stage, i.from))
-      return (STAGES.find(x=>x.key===i.from)||{}).label||i.from;
+    const no=p?vidMoveRefusal(p.current_stage, i.from):null;
+    if(no) return no;
   }
   return null;
 }
@@ -2784,7 +2855,7 @@ async function bbuUndo(){
   const e=BBU.stack[BBU.stack.length-1];
   if(!e){ toast('Nothing to undo','info'); return; }
   const blocked=bbuBlocked(e);
-  if(blocked){ toast(`Only admins can move into ${blocked}`,'error'); return; }
+  if(blocked){ toast(blocked,'error'); return; }
   BBU.stack.pop();
   BBU.suspended=true;
   const many=e.items.length>1;
@@ -2841,6 +2912,17 @@ async function moveProject(project,newStage){
      action that caught cards already sitting in the target stage. */
   if(project.current_stage===newStage){
     if(!_bulkRunning)toast(`Already in ${STAGES.find(s=>s.key===newStage)?.label||newStage}`,'info');
+    return;
+  }
+  /* Decision 105, 7 Oct 2026: the editor gate lives HERE, in the one writer,
+     not in each caller (L-VID-025 had it open). Drag and drop, the move menu,
+     bulk move, undo and any caller added later all meet the same rule. Refused
+     before anything is written or repainted. Inside a bulk run it throws, so
+     the runner counts it; the callers that can show a sentence check first. */
+  const _refusal=vidMoveRefusal(project.current_stage,newStage);
+  if(_refusal){
+    if(_bulkRunning)throw new Error(_refusal);
+    toast(_refusal,'error');
     return;
   }
   const old=project.current_stage;
@@ -4416,6 +4498,10 @@ function openStageMenu(pid){
     var cur=p.current_stage===s.key?' cur':'';
     return '<button class="m-stage-opt'+cur+'" data-stage="'+s.key+'"><span class="sd s-'+s.key+'" style="background:var(--accent)"></span>'+esc(s.label)+(cur?' &nbsp;·&nbsp; current':'')+'</button>';
   }).join('');
+  /* Decision 105, 7 Oct 2026: an editor sees only the moves they may make, so
+     the sheet says who makes the rest instead of leaving stages missing. */
+  if(isEditor()&&!isAdmin()&&STAGES.some(function(s){return !allowed(s.key)}))
+    opts+='<div class="m-sheet-sub">Any other move is made by the video head, '+esc(videoHeadName())+'.</div>';
   var wrap=document.createElement('div');
   wrap.className='m-sheet';wrap.id='m-stage-sheet';
   wrap.innerHTML='<div class="m-sheet-inner"><div class="m-sheet-grip"></div><div class="m-sheet-title">'+esc(p.title)+'</div><div class="m-sheet-sub">Move to stage</div>'+opts+'</div>';
@@ -4425,9 +4511,10 @@ function openStageMenu(pid){
     var b=e.target.closest('[data-stage]');if(!b)return;
     var ns=b.dataset.stage;
     if(p.current_stage===ns){wrap.remove();return;}
-    if(!isAdmin()&&isEditor()&&!editorCanMove(p.current_stage,ns)){
-      var stLabel=(STAGES.find(function(s){return s.key===ns})||{}).label||ns;
-      if(typeof toast==='function')toast('Only admins can move into '+stLabel,'error');
+    /* Decision 105, 7 Oct 2026: same rule and sentence as every other caller. */
+    var _no=vidMoveRefusal(p.current_stage,ns);
+    if(_no){
+      if(typeof toast==='function')toast(_no,'error');
       wrap.remove();return;
     }
     wrap.remove();
@@ -7263,6 +7350,45 @@ async function runSelfTest(){
    ok('Undo: there is a permanent way to reach it',
       typeof bbuUndo==='function'&&/data-action="undo"/.test(renderPipeline.toString()),
       'Pipeline button, the bar, and Ctrl+Z');
+  })();
+
+  /* ── H22 · decision 105, 7 Oct 2026: the editor move gate ────────────── */
+  (function(){
+   /* The gate was a stub that returned true for a month and nothing noticed,
+      because nothing asked. These ask the rule itself with a made up editor,
+      so no card moves and nothing is written. */
+   const ed={name:'SELFTEST',role:'editor'}, hd={name:'SELFTEST',role:'video_head'};
+   const allow=[['editing','video_head_review'],['changes','video_head_review'],['video_shot','video_head_review'],
+                ['video_head_review','changes'],['video_head_review','editing'],['changes','editing']];
+   const refuse=[['editing','add_to_drive'],['changes','team_review'],['team_review','video_head_review'],
+                 ['video_head_review','client_review'],['editing','rendering'],['client_review','changes']];
+   const badA=allow.filter(m=>vidMoveRefusal(m[0],m[1],ed)!==null).map(m=>m.join(' to '));
+   const badR=refuse.filter(m=>vidMoveRefusal(m[0],m[1],ed)===null).map(m=>m.join(' to '));
+   ok('Moves: an editor sends a video to review and takes it back, nothing else',!badA.length&&!badR.length,
+      ((badA.length?'wrongly refused '+badA.join('; ')+'. ':'')+(badR.length?'wrongly allowed '+badR.join('; '):''))||
+      (allow.length+' moves allowed, '+refuse.length+' refused'));
+   const headFree=STAGES.every(a=>STAGES.every(b=>vidMoveRefusal(a.key,b.key,hd)===null))&&
+      vidMoveRefusal('editing','add_to_drive',{name:'SELFTEST',role:'admin'})===null;
+   ok('Moves: the video head and admins move freely',headFree,headFree?'every stage pair open to both':'a head or admin move was refused');
+   const msg=vidMoveRefusal('editing','add_to_drive',ed)||'';
+   ok('Moves: a refused move names who can make it',/video head/.test(msg)&&msg.indexOf(videoHeadName())>-1,'"'+msg+'"');
+   const src=moveProject.toString(), at=src.indexOf('vidMoveRefusal(');
+   ok('Moves: the rule lives inside the one writer',at>-1&&at<src.indexOf('_pendingOps++'),
+      at>-1?'moveProject asks before it writes':'moveProject does not ask, so a new caller can skip the rule');
+  })();
+
+  /* ── H23 · decision 105, 7 Oct 2026: nobody who has left can sign in ── */
+  (function(){
+   const tm=(DATA.teamMembers||[]);
+   const up=s=>String(s||'').toUpperCase();
+   const leavers=USERS.filter(u=>tm.some(m=>m&&m.active===false&&up(m.name)===up(u.name))&&
+      !tm.some(m=>m&&m.active!==false&&up(m.name)===up(u.name))).map(u=>u.name);
+   okData('Access: no login belongs to somebody who has left',leavers.length===0,
+      leavers.length?('still in USERS but inactive in team_members: '+leavers.join(', '))
+                    :(USERS.length+' logins, none inactive in the roster'));
+   ok('Access: the door asks the roster',typeof vidRosterSwitchedOff==='function'&&
+      /vidRosterSwitchedOff\(/.test(doLogin.toString())&&/vidRosterSwitchedOff\(/.test(setupLogin.toString()),
+      'a new sign-in and a kept session both check');
   })();
 
   /* ── H18 · the notification panel can actually be seen ───────────────── */

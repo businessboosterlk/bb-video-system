@@ -1890,3 +1890,67 @@ starts.
 
 **Still to prove.** A row from a real hidden tab on the live site, where timers slow down.
 The run is short but still not abortable: someone back inside those seconds sees it.
+
+## L-VID-049 · a leaver's PIN still opened the app and the editor gate was a stub · FIXED 2026-10-07
+
+**Decision 105, Thulaib's yes on 7 Oct 2026.** Two faults from the estate audit of the same day.
+
+**1. KAVISH's PIN still worked.** His `team_members` row (21) has been active false since 21
+September. His `USERS` line stayed, so he could sign in and read the Weekly Plan, tasks and
+chat. The door checked the name and the PIN only. Roster read on 7 Oct for every `USERS`
+name: 11 rows, KAVISH the only one inactive. His line is gone. His roster row stays, so his
+past work still names him.
+
+**2. The door now asks the roster.** `vidRosterSwitchedOff(u)` reads `team_members` by name.
+It refuses only when a row is found and every such row is active false, with "This sign-in is
+switched off. Ask Ushane." No row (an admin without one), a failed read or a read slower than
+4 seconds lets the PIN decide as before and logs a `console.warn`, so a bad connection never
+locks anybody out. A kept session asks the same question before the board opens. The sign-in
+screen stays invisible while it asks, so a normal reload shows no flash of it.
+
+**3. The editor gate returned true for every move.** An editor could put their own video
+into Add to Drive and skip every review. That stage stamps `completed_at` and counts the video
+delivered.
+Now an editor moves a video only from an editing stage (`video_shot`,
+`cutting_color_grading`, `rendering`, `editing`, `changes`) into `video_head_review`. It also
+moves one from `video_head_review` or `changes` back into an editing stage. Every other move is refused
+with a toast naming the video head, read from the roster by `videoHeadName()`. Heads and
+admins move freely.
+
+**Where it lives.** Inside `moveProject`, through `vidMoveRefusal`, before anything is written
+or repainted. This closes the item L-VID-025 left open: drag and drop, the move menu, bulk
+move, undo and any caller added later all meet one rule. The callers that can show a sentence
+ask first. Inside a bulk run `moveProject` throws, so the runner counts it. The move menu shows
+an editor only the moves they may make, plus one line saying who makes the rest.
+
+**What it now refuses that editors did before.** Editor moves in `video_stage_history` over
+the last 60 days with a known previous stage: 519. The rule allows 395 and refuses 124. The
+largest refused pairs: `changes` to `team_review` 33, `team_review` to `video_head_review` 23,
+moves between the editing stages themselves 22. Each is now the video head's move. If one of
+them should stay the editor's, widen `editorCanMove` and the H22 table together.
+
+**Proven, REPLAY only, no network** (scratchpad `runners/probe-video-105.mjs`, roster answers
+stubbed per case, writes counted by the live guard):
+
+| Case | Seen |
+|---|---|
+| KAVISH at the door | `User "KAVISH" not found`, not in `USERS` |
+| A made up editor, roster says inactive | refused with the sentence, app stays hidden |
+| The same, roster read fails (504) | signed in, one `[sign-in]` warning |
+| Kept RAJEEWA session, roster says inactive | back at the door with the sentence, session cleared |
+| RAJEEWA: Editing to Add to Drive through `moveProject` | refused, 0 writes |
+| RAJEEWA: real card 484 dropped on Cutting and Colour | refused, 0 writes |
+| RAJEEWA: move menu on a Video Shot card | offers Video Shot and Video Head Review, plus the line naming Ushane |
+| RAJEEWA: undo into Add to Drive | blocked with the sentence |
+| RAJEEWA: bulk move into Add to Drive | refused, 0 writes |
+| RAJEEWA: Editing to Video Head Review | allowed, 2 writes |
+| USHANE: Editing to Add to Drive | allowed, 2 writes |
+
+**Six self-test checks (H22, H23):** the allow and refuse table (6 and 6), heads and admins
+free on every stage pair, the refusal names the head, the rule sits inside `moveProject`
+before it writes, no `USERS` login belongs to an inactive roster row, the door and the kept
+session both ask the roster. Replay harness: 131 checks on the phone and 130 on the desk,
+1 failure, the baseline one ("Boot: zero console errors", a test browser warning).
+
+**The rule.** A role rule lives in the one writer, never in its callers. A sign-in asks the
+roster, because a `USERS` line is the thing nobody remembers on the day somebody leaves.
