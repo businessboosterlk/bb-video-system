@@ -2791,7 +2791,7 @@ async function duplicateProject(pid){
   };
   const {data:ins,error}=await sb.from('video_projects').insert(copy).select().single();
   if(error)throw error;
-  await sb.from('video_stage_history').insert({video_project_id:ins.id,stage:ins.current_stage,moved_by:currentUser.name});
+  await vshInsert(ins.id,ins.current_stage);   /* DBG-003 follow-up, 7 Oct 2026 */
   return ins;
 }
 function attachDropListeners(){
@@ -2927,6 +2927,43 @@ function bbuBtn(){
 }
 window.bbuUndo=bbuUndo;
 
+/* DBG-003 follow-up, 7 Oct 2026 (L-VID-052): the unique index
+   video_stage_history_one_open allows one open history row per video. When two
+   moves of one card raced, the database refused the second insert with 23505
+   while the move itself saved. The error was ignored, so the card's history
+   lost a row. Every insert into video_stage_history now goes through vshInsert.
+   On 23505 it closes every open row for the video again and tries once more.
+   If that still fails the move stands: a console warning and the quiet toast
+   say the history line was not saved. It never throws, so a lost history line
+   cannot undo a move that saved. */
+let _vshToastAt=0;
+async function vshCloseOpen(pid){
+  const r=await sb.from('video_stage_history').select('id,entered_at').eq('video_project_id',pid).is('exited_at',null).limit(20);
+  if(r.error)throw r.error;
+  const ex=new Date();
+  for(const o of (r.data||[])){
+    const u=await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-new Date(o.entered_at))/1000))}).eq('id',o.id).is('exited_at',null);
+    if(u.error)throw u.error;
+  }
+}
+async function vshInsert(pid,stage){
+  let err=null;
+  try{
+    const row={video_project_id:pid,stage:stage,moved_by:currentUser.name};
+    let r=await sb.from('video_stage_history').insert(row);
+    err=r.error;
+    if(err&&err.code==='23505'){
+      await vshCloseOpen(pid);
+      r=await sb.from('video_stage_history').insert(row);
+      err=r.error;
+    }
+  }catch(e){ err=e||new Error('unknown'); }
+  if(!err) return true;
+  console.warn('[history] stage history line not saved for video '+pid+' ('+stage+'): '+((err.code?err.code+' ':'')+(err.message||String(err))));
+  if(Date.now()-_vshToastAt>3000){ _vshToastAt=Date.now(); toast('History line not saved. The card itself is saved.','info'); }
+  return false;
+}
+
 async function moveProject(project,newStage){
   /* A move to the stage it is ALREADY in is not a move. Without this it wrote
      a history row, bumped updated_at, and the card jumped to the top of its own
@@ -2970,7 +3007,7 @@ async function moveProject(project,newStage){
   try{
     const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
     if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-en)/1000))}).eq('id',o.id)}
-    await sb.from('video_stage_history').insert({video_project_id:project.id,stage:newStage,moved_by:currentUser.name});
+    await vshInsert(project.id,newStage);   /* DBG-003 follow-up, 7 Oct 2026: error checked, 23505 closes and retries once */
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
     if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
     else if(COMPLETED_STAGES.includes(old)||old==='posted')up.completed_at=null;
@@ -3039,7 +3076,7 @@ async function saveProject(id){
   d.target_year=ty;
   try{
     if(id){const o=getProject(id);if(o&&o.current_stage!==d.current_stage)await moveProject(o,d.current_stage);d.updated_at=new Date().toISOString();const {error}=await sb.from('video_projects').update(d).eq('id',id);if(error)throw error;toast('Project updated','success')}
-    else{d.created_by=currentUser.name;const {data:ins,error}=await sb.from('video_projects').insert(d).select().single();if(error)throw error;await sb.from('video_stage_history').insert({video_project_id:ins.id,stage:ins.current_stage,moved_by:currentUser.name});toast('Project created','success')}
+    else{d.created_by=currentUser.name;const {data:ins,error}=await sb.from('video_projects').insert(d).select().single();if(error)throw error;await vshInsert(ins.id,ins.current_stage);/* DBG-003 follow-up, 7 Oct 2026 */toast('Project created','success')}
     closeModal();await fetchAll();
   }catch(err){console.error(err);toast('Save failed: '+(err.message||''),'error')}
 }

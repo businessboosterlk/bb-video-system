@@ -2031,3 +2031,42 @@ entry in the log, so it also hid the true baseline failure behind it.
 **The rule.** A note the app writes on purpose when it falls back safely is not a fault. Give
 it a prefix and keep that prefix out of the self-test log. Otherwise the daily row reports the
 connection and not the app. Read a replay failure before calling it baseline.
+
+## L-VID-052 · a refused history insert was ignored, so a raced move lost its history line · FIXED 2026-10-07
+
+**Found by the review of DBG-003 the same day.** This morning the unique index
+`video_stage_history_one_open` started allowing one open history row per video. `moveProject`
+closed the open row and then inserted the new one without reading the insert's error. When two
+moves of one card raced, the database refused the second insert with 23505 while the move
+itself saved, so the card sat in its new stage with no history line for it. The Time Tracker,
+the weekly report and the stall agents read that history. The create and duplicate doors
+ignored the same error.
+
+**The fix.** Every insert into `video_stage_history` goes through `vshInsert(pid, stage)`:
+`moveProject` (which carries drag and drop, the move menu, bulk move, undo and the Edit save),
+`duplicateProject` and the create path of `saveProject`. On 23505 it closes every open row for
+that video again (exited_at now, with the duration, only rows still open) and tries the insert
+once more. If that fails too or the first error is anything else, the move stands, the console
+gets a warning that starts with `[history]` and the quiet info toast says the history line was
+not saved. The toast shows at most once every 3 seconds so a bulk run cannot stack them. The
+helper never throws, so a lost history line cannot undo a move that saved. The warning is
+deliberately not on the `[sign-in]` skip list: a missing history row is a real loss and the
+self-test boot check should say so.
+
+**Proven in replay, no network** (`runners/probe-video-dbg003.mjs`, history answers stubbed):
+
+| Case | Inserts sent | Move | Warning and toast |
+|---|---|---|---|
+| Normal, 201 | 1 | saved | none |
+| 23505 then 201 | 2, with a fresh open row read and a close between them | saved | none |
+| 23505 twice | 2 | saved | both |
+| 42501 | 1, no retry | saved | both |
+| Bulk move, 23505 then 201 | 2 | saved | none |
+| `vshInsert` alone (create door), 23505 then 201 | 2, returned true | not a move | none |
+
+The replay runner is unchanged: phone 132 checks and desk 131, 1 failure each (the test browser
+blocking the service worker), the same as before the change.
+
+**The rule.** An insert whose error nobody reads is a write nobody checked. When a constraint
+can refuse a row the app is about to write, read the error, name the code and decide on purpose
+what the user sees.
