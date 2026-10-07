@@ -1998,3 +1998,36 @@ Changes at all. If yes, widen `editorCanMove` and the H22 table together.
 
 **The rule.** Undoing your own allowed move is always possible. A refused undo leaves the
 stack, because kept on top it buries every older one.
+
+## L-VID-051 · the sign-in roster warning failed the self-test boot check · FIXED 2026-10-07
+
+**Found by the independent review of decision 105 the same day.** L-VID-049 added four
+`console.warn` lines to `vidRosterSwitchedOff`: one when the roster read takes over 4 seconds
+and three when it fails. They are wanted, decision 105 asks for them. The boot capture at the
+top of the file records every `console.warn` in `window.__ST_LOG`. Only window `error` and
+`unhandledrejection` events went through `isNetworkBlip`. The check "Boot: zero console errors
+since load" fails on any entry and `vidWriteHarnessRow` sends the failed names to
+`bb_harness_runs`. So in a real browser a slow or failed roster read at the door turned the
+daily row red, which is the crying wolf the file header forbids. The replay runner showed it on
+every run (phone 132 checks and desk 131, 1 failure each). L-VID-050 called that failure the
+baseline test browser warning. It was not: it was this fault.
+
+**The fix.** The capture skips a `console.warn` whose text starts with `[sign-in]`. The
+warning still reaches the console. A `console.error` is never skipped this way, so a real
+fault on the sign-in path still fails the check.
+
+**Proven in replay, no network:**
+
+| Run | Before (755d810) | After |
+|---|---|---|
+| Phone | 132 checks, 1 failed (the `[sign-in]` warning) | 132 checks, 1 failed (the test browser blocking the service worker) |
+| Desk | 131 checks, 1 failed (the same) | 131 checks, 1 failed (the same test browser warning) |
+
+An offline check of the capture itself: of five messages all five reached the console and
+two entered the self-test log (a `[sign-in]` error and an unrelated warning). Both roster
+warnings and the harness's own output stayed out. The roster warning had been the first
+entry in the log, so it also hid the true baseline failure behind it.
+
+**The rule.** A note the app writes on purpose when it falls back safely is not a fault. Give
+it a prefix and keep that prefix out of the self-test log. Otherwise the daily row reports the
+connection and not the app. Read a replay failure before calling it baseline.

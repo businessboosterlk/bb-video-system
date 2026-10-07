@@ -20,8 +20,14 @@ window.__ST_LOG=[];
     /* the harness reports failures through console.warn. Logging its own
        output would fail the NEXT run's "zero console errors" check with the
        previous run's noise, so it flags itself while reporting. */
-    if(!window.__ST_REPORTING)
-     window.__ST_LOG.push({kind:k,msg:Array.prototype.slice.call(arguments).join(' ').slice(0,300)});
+    /* Decision 105 review, 7 Oct 2026 (L-VID-051): a warning that starts
+       with [sign-in] is the door noting that a slow or failed roster read
+       let the PIN decide. That is a connection at the door, not a fault in
+       this app, so it stays in the console and stays out of the self-test
+       log. Errors are never skipped this way. */
+    var m=Array.prototype.slice.call(arguments).join(' ');
+    if(!window.__ST_REPORTING&&!(k==='warn'&&m.indexOf('[sign-in]')===0))
+     window.__ST_LOG.push({kind:k,msg:m.slice(0,300)});
    }catch(e){}
    o.apply(null,arguments);
   };
