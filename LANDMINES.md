@@ -1954,3 +1954,47 @@ session both ask the roster. Replay harness: 131 checks on the phone and 130 on 
 
 **The rule.** A role rule lives in the one writer, never in its callers. A sign-in asks the
 roster, because a `USERS` line is the thing nobody remembers on the day somebody leaves.
+
+## L-VID-050 · an editor could not undo their own move and a refused undo hid every older one · FIXED 2026-10-07
+
+**Found by the independent review of decision 105 the same day.** The gate in L-VID-049 lets
+an editor move a video from Changes into Video Shot, Cutting and Colour, Rendering or Editing.
+It refuses the reverse of each. Undo asks the same gate, so an editor could make any of those
+four moves and could not take it back. `bbuUndo` returned on the refusal before it popped the
+entry. The refused entry stayed on top of the stack and every older undo in the session sat
+behind it. Before L-VID-049 the gate was a stub, so every undo went through.
+
+**The fix.** `bbuRecord` stamps each entry with `by`, the person signed in.
+`bbuOwnReverse(e, i, p)` allows the exact reverse of a move when the entry is theirs, the card
+still sits where they put it and the gate allows the move they made. `bbuBlocked` lets those
+items through and `moveProject` gives the same answer through `BBU.undoing`, so the one writer
+still decides. Any other undo the gate refuses leaves the stack with its sentence, so the
+older entries stay reachable. The gate itself is unchanged: an editor moving a video from
+Editing to Changes directly is still refused.
+
+**Proven offline, no network** (scratchpad `rev105fix-undo-proof.js` lifts the real gate, undo
+and `moveProject` code and counts writes on a stub):
+
+| Case | Before (93affcf) | After |
+|---|---|---|
+| Every allowed editor move, undone at once by the same editor | 10 of 14, four stuck | 14 of 14 |
+| A refused undo (the head moved the card on), then Undo again | stack stays at 2, the older move never reached | refused entry gone, older move undone, stack 0 |
+| Another editor signed in on the same tab presses Undo | refused, entry stays on top | refused, 0 writes, entry gone |
+| An editor moves a video from Editing to Changes directly | refused, 0 writes | refused, 0 writes |
+
+One self-test check added to H22: an editor takes back their own Changes to Editing move,
+while a colleague's entry and a card moved on since stay refused. Replay harness: 132 checks on
+the phone and 131 on the desk, 1 failure, the baseline one ("Boot: zero console errors", a
+test browser warning).
+
+**The second fault: a comma check run line by line.** A comment in `bulkMoveProjects` ended
+one line with "today," and began the next with "but". The house style check passed every
+added line on its own and failed the same lines as one block. Run `house_style.py` on the
+added lines as ONE file. A comma that ends one line before a conjunction that starts the next
+is invisible to a check that reads one line at a time.
+
+**Still Thulaib's call.** Whether an editor should move a video from an editing stage into
+Changes at all. If yes, widen `editorCanMove` and the H22 table together.
+
+**The rule.** Undoing your own allowed move is always possible. A refused undo leaves the
+stack, because kept on top it buries every older one.

@@ -2625,8 +2625,8 @@ async function bulkMoveProjects(newStage){
   const ids=Array.from(PIPELINE_STATE.selected);
   if(!ids.length||_bulkRunning)return;
   const lbl=STAGES.find(s=>s.key===newStage)?.label||newStage;
-  /* Decision 105, 7 Oct 2026: bulk is offered to heads and admins only today,
-     but a refused card is named once before the run rather than counted as a
+  /* Decision 105, 7 Oct 2026: bulk is offered to heads and admins only today.
+     A refused card is named once before the run rather than counted as a
      silent failure, should the toggle ever reach an editor. */
   const _no=ids.map(id=>getProject(id)).filter(Boolean).map(p=>vidMoveRefusal(p.current_stage,newStage)).find(Boolean);
   if(_no){toast(_no,'error');return;}
@@ -2814,7 +2814,8 @@ const BBU = {
   stack: [],           /* newest last. {items:[{id,from,to,title}], at} */
   max: 15,
   suspended: false,    /* true while undoing, so the reverse move is not recorded */
-  batch: null          /* collects items during a bulk run so N moves are ONE undo */
+  batch: null,         /* collects items during a bulk run so N moves are ONE undo */
+  undoing: null        /* decision 105, 7 Oct 2026: the entry being undone, read by moveProject */
 };
 function bbuNote(project, from, to){
   if(BBU.suspended || !project) return;
@@ -2824,7 +2825,9 @@ function bbuNote(project, from, to){
 }
 function bbuRecord(items){
   if(!items || !items.length) return;
-  BBU.stack.push({items:items, at:Date.now()});
+  /* Decision 105, 7 Oct 2026: by names who made the move, so undo can tell an
+     editor's own move from one made by whoever signed in before them. */
+  BBU.stack.push({items:items, at:Date.now(), by:currentUser?currentUser.name:null});
   while(BBU.stack.length>BBU.max) BBU.stack.shift();
   bbuRender(true);
 }
@@ -2842,10 +2845,21 @@ function bbuLabel(e){
    board refuses to drop into. */
 /* Decision 105, 7 Oct 2026: returns the refusal sentence from vidMoveRefusal
    (it names the video head), and moveProject applies the same rule again. */
+/* Decision 105, 7 Oct 2026 (review fix, L-VID-050): an editor may move Changes
+   to Editing but not Editing to Changes, so the gate alone refused the undo of
+   their own move. The exact reverse of a move this person made in this session
+   goes through: the entry is theirs, the card still sits where they put it and
+   the gate allows the move they made. user defaults to the person signed in. */
+function bbuOwnReverse(e, i, p, user){
+  const u=user||currentUser;
+  return !!(e && i && p && u && e.by===u.name &&
+    p.current_stage===i.to && vidMoveRefusal(i.from, i.to, u)===null);
+}
 function bbuBlocked(e){
   if(!e || isAdmin() || !isEditor()) return null;
   for(const i of e.items){
     const p=getProject(i.id);
+    if(bbuOwnReverse(e, i, p)) continue;
     const no=p?vidMoveRefusal(p.current_stage, i.from):null;
     if(no) return no;
   }
@@ -2855,9 +2869,12 @@ async function bbuUndo(){
   const e=BBU.stack[BBU.stack.length-1];
   if(!e){ toast('Nothing to undo','info'); return; }
   const blocked=bbuBlocked(e);
-  if(blocked){ toast(blocked,'error'); return; }
+  /* Decision 105, 7 Oct 2026 (review fix): a refused entry leaves the stack.
+     Kept, it sat on top for good and hid every older undo behind it. */
+  if(blocked){ BBU.stack.pop(); bbuRender(); toast(blocked,'error'); return; }
   BBU.stack.pop();
   BBU.suspended=true;
+  BBU.undoing=e;
   const many=e.items.length>1;
   if(many) _bulkRunning=true;   /* one repaint at the end, and no auto-refresh mid-flight */
   let done=0, failed=0;
@@ -2870,6 +2887,7 @@ async function bbuUndo(){
     }
   } finally {
     BBU.suspended=false;
+    BBU.undoing=null;
     if(many) _bulkRunning=false;
     bbuRender();
     await fetchAll(true);
@@ -2919,7 +2937,12 @@ async function moveProject(project,newStage){
      bulk move, undo and any caller added later all meet the same rule. Refused
      before anything is written or repainted. Inside a bulk run it throws, so
      the runner counts it; the callers that can show a sentence check first. */
-  const _refusal=vidMoveRefusal(project.current_stage,newStage);
+  /* Decision 105, 7 Oct 2026 (review fix, L-VID-050): an undo that
+     bbuOwnReverse allows passes here too. Without this the writer refused what
+     bbuBlocked let through. */
+  const _u=BBU.undoing;
+  const _own=!!(_u&&_u.items.some(i=>i.id===project.id&&i.from===newStage&&bbuOwnReverse(_u,i,project)));
+  const _refusal=_own?null:vidMoveRefusal(project.current_stage,newStage);
   if(_refusal){
     if(_bulkRunning)throw new Error(_refusal);
     toast(_refusal,'error');
@@ -7375,6 +7398,16 @@ async function runSelfTest(){
    const src=moveProject.toString(), at=src.indexOf('vidMoveRefusal(');
    ok('Moves: the rule lives inside the one writer',at>-1&&at<src.indexOf('_pendingOps++'),
       at>-1?'moveProject asks before it writes':'moveProject does not ask, so a new caller can skip the rule');
+   /* Decision 105, 7 Oct 2026 (review fix, L-VID-050): an editor takes back
+      their own Changes to Editing move, which the gate alone refuses. Someone
+      else's entry or a card moved on since stays refused. Nothing is moved. */
+   const _it={id:-5,from:'changes',to:'editing',title:'SELFTEST'};
+   const _mine={by:ed.name,items:[_it]}, _theirs={by:'SOMEONE ELSE',items:[_it]};
+   const _here={id:-5,current_stage:'editing'}, _gone={id:-5,current_stage:'team_review'};
+   const _ownOk=vidMoveRefusal('editing','changes',ed)!==null&&bbuOwnReverse(_mine,_it,_here,ed)&&
+      !bbuOwnReverse(_theirs,_it,_here,ed)&&!bbuOwnReverse(_mine,_it,_gone,ed);
+   ok('Undo: an editor can take back their own move and only that',_ownOk,
+      _ownOk?'own move back, a colleague\'s entry and a card moved on since both refused':'the own move undo rule is wrong');
   })();
 
   /* ── H23 · decision 105, 7 Oct 2026: nobody who has left can sign in ── */
