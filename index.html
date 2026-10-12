@@ -1222,6 +1222,7 @@ const PAGES_FULL = [
   { key: 'recap',         label: 'Month Recap',    section: 'TEAM' },
   { key: 'clients',       label: 'Clients',        section: 'TEAM' },
   { key: 'team',          label: 'Team',           section: 'TEAM' },
+  { key: 'teambrief',     label: 'Team morning brief', section: 'TEAM' },
   { key: 'analytics',     label: 'Analytics',      section: 'TEAM' },
   { key: 'team_chat',     label: 'Team Chat',      section: 'TEAM' },
   { key: 'inspo',         label: 'Inspo Hub ↗',    section: 'EXTRA' },
@@ -1865,7 +1866,8 @@ function bootApp(){
 
 // === SIDEBAR ===
 function buildSidebar(){
-  const pages=isEditor()?PAGES_EDITOR:PAGES_FULL;
+  /* The Team morning brief belongs to the video head alone (Thulaib, 12 Oct 2026). */
+  const pages=(isEditor()?PAGES_EDITOR:PAGES_FULL).filter(p=>p.key!=='teambrief'||isVideoHead());
   const sections={};
   pages.forEach(p=>{if(!sections[p.section])sections[p.section]=[];sections[p.section].push(p)});
   let html='';
@@ -1892,6 +1894,7 @@ function navIcon(key){
     team_chat:'<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>',
     inspo:'<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z"/></svg>',
   };
+  icons.teambrief=icons.team; /* same approved Lucide-shape asset, never a hand-drawn path */
   return icons[key]||icons.dashboard;
 }
 function navTo(page){
@@ -2060,7 +2063,7 @@ function _silentRerender(){
 
 // === ROUTER ===
 function renderPage(){
-  const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,weeklyplan:renderWeeklyPlan,drive_links:renderDriveLinks,clients:renderClients,recap:renderRecap,team:renderTeam,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub,agents:renderAgentsPage};
+  const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,weeklyplan:renderWeeklyPlan,drive_links:renderDriveLinks,clients:renderClients,recap:renderRecap,team:renderTeam,teambrief:renderTeamBrief,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub,agents:renderAgentsPage};
   const fn=map[currentPage]||renderDashboard;
   try{const r=fn();if(r&&typeof r.catch==='function')r.catch(err=>{console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">'+vicon('alert',34)+'</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'})}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">'+vicon('alert',34)+'</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
   try{renderNotifications()}catch(_){}
@@ -2323,6 +2326,168 @@ function ushaneDailyPillarsHtml(){
     </div>
   </div>`;
 }
+
+// ============================================================================
+// @@BBVID_TEAMBRIEF_BEGIN@@  TEAM MORNING BRIEF (Thulaib, 12 Oct 2026)
+// Every morning the video head speaks to each person on the team, one by one:
+// what they finished yesterday, questions, blockers and the alternative,
+// today's plan, on track or not. Each check-in is recorded here, then ONE
+// message is built for the staff chat. The head copies and pastes it into
+// WhatsApp; BB never auto-sends. Table morning_briefs, unique on
+// (brief_date, head, member), RLS copied from the delivery ledger pattern.
+// ============================================================================
+let TMB={rows:[],prev:{},filter:'all',search:''};
+function tmbHeadRow(){return (DATA.teamMembers||[]).find(m=>m.name&&currentUser&&m.name.toUpperCase()===currentUser.name.toUpperCase())||null}
+function tmbMembers(){
+  /* The video team minus the head himself. MATHUSHAN (id 27) has left but his
+     roster row still read active on 12 Oct 2026; excluded here until Thulaib
+     flips the row (bb_pending). Remove the id check when team_members says so. */
+  const head=tmbHeadRow();
+  return videoMembers().filter(m=>m.id!==27&&(!head||m.id!==head.id));
+}
+async function tmbLoad(){
+  const head=tmbHeadRow(); if(!head)return;
+  const today=localDateStr();
+  const from=new Date(); from.setDate(from.getDate()-4);
+  /* One read covers today plus the last four days, so the prefill survives a weekend. */
+  const r=await sb.from('morning_briefs').select('*').eq('head',head.id).gte('brief_date',localDateStr(from)).lte('brief_date',today).order('brief_date',{ascending:false});
+  if(r.error){if(window.bbReportDbError)window.bbReportDbError('morning_briefs','load',r.error);toast('Could not load the morning briefs','error');return}
+  TMB.rows=(r.data||[]).filter(x=>x.brief_date===today);
+  TMB.prev={};
+  (r.data||[]).forEach(x=>{if(x.brief_date!==today&&!TMB.prev[x.member])TMB.prev[x.member]=x});
+}
+function tmbRowFor(mid){return TMB.rows.find(r=>r.member===mid)||null}
+function tmbDateLabel(d){return (d||new Date()).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}).replace(',','')}
+function tmbMessageText(){
+  const ms=tmbMembers();
+  const onTrack=ms.filter(m=>{const r=tmbRowFor(m.id);return r&&r.on_track}).length;
+  const lines=['VIDEO TEAM, '+tmbDateLabel(),'Yesterday: done '+onTrack+' of '+ms.length,'Today:'];
+  ms.forEach(m=>{const r=tmbRowFor(m.id);lines.push(m.name+': '+(((r&&r.today_plan)||'').trim()||'nothing recorded'))});
+  const blocked=ms.filter(m=>{const r=tmbRowFor(m.id);return r&&(r.blocker||'').trim()});
+  lines.push('Blockers:');
+  if(!blocked.length)lines.push('none');
+  else blocked.forEach(m=>{const r=tmbRowFor(m.id);let l=m.name+': '+r.blocker.trim();const alt=(r.alternative||'').trim();if(alt)l+='. Alternative: '+alt;lines.push(l)});
+  return lines.join('\n');
+}
+async function tmbCopyMessage(){
+  const txt=tmbMessageText();
+  let ok=false;
+  try{await navigator.clipboard.writeText(txt);ok=true}catch(e){
+    try{const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();ok=document.execCommand('copy');ta.remove()}catch(e2){ok=false}
+  }
+  toast(ok?'Message copied. Paste it into the staff chat.':'Copy failed. Long-press the preview and copy it by hand.',ok?'success':'error');
+}
+function tmbChip(r){
+  if(!r)return '<span class="tmb-chip" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-3)">To brief</span>';
+  if((r.blocker||'').trim())return '<span class="tmb-chip" style="background:rgba(230,160,60,0.12);border:1px solid rgba(230,160,60,0.5);color:#c98a2e">Blocker noted</span>';
+  return '<span class="tmb-chip" style="background:rgba(60,180,110,0.12);border:1px solid rgba(60,180,110,0.5);color:#2f9e63">Done</span>';
+}
+function tmbPaintList(){
+  const box=$('#tmb-list'); if(!box)return;
+  const q=(TMB.search||'').toLowerCase().trim();
+  let ms=tmbMembers();
+  if(q)ms=ms.filter(m=>m.name.toLowerCase().includes(q));
+  if(TMB.filter==='todo')ms=ms.filter(m=>!tmbRowFor(m.id));
+  if(TMB.filter==='done')ms=ms.filter(m=>!!tmbRowFor(m.id));
+  if(TMB.filter==='blockers')ms=ms.filter(m=>{const r=tmbRowFor(m.id);return r&&(r.blocker||'').trim()});
+  if(!ms.length){box.innerHTML='<div style="padding:26px 14px;text-align:center;color:var(--text-3);font-size:13px">No one matches this filter.</div>';return}
+  box.innerHTML=ms.map(m=>{
+    const r=tmbRowFor(m.id);
+    const plan=((r&&r.today_plan)||'').trim();
+    return `<div class="tmb-row" data-tmb-member="${m.id}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer">
+      <div class="team-card-avatar" style="width:36px;height:36px;font-size:12px;flex-shrink:0">${initials(m.name)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(m.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${plan?esc(plan):esc(roleLabel(m.role))}</div>
+      </div>
+      ${r&&r.on_track===false?'<span style="width:8px;height:8px;border-radius:50%;background:var(--danger,#d64545);flex-shrink:0"></span>':''}
+      ${tmbChip(r)}
+      ${r?'<span style="font-size:11px;color:var(--text-3);flex-shrink:0">Edit</span>':''}
+    </div>`;
+  }).join('');
+}
+async function renderTeamBrief(){
+  if(!isVideoHead()){$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-text">This page belongs to the video head.</div></div>';return}
+  $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh" aria-label="Refresh" title="Refresh">'+vicon('refresh',15)+'</button>';
+  $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))renderTeamBrief()};
+  await tmbLoad();
+  const ms=tmbMembers();
+  const briefed=ms.filter(m=>!!tmbRowFor(m.id)).length;
+  const allDone=ms.length>0&&briefed===ms.length;
+  $('#pageSub').textContent=`${briefed} of ${ms.length} briefed`;
+  $('#pageContent').innerHTML=`
+    <div class="page-head"><div><div class="page-title">Team morning brief</div><div class="page-sub">${tmbDateLabel()}. Speak to each person, record it, then copy one message for the staff chat.</div></div></div>
+    <div class="panel" style="max-width:720px">
+      <div style="display:flex;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <input id="tmb-search" class="field-input" placeholder="Search the team" value="${esc(TMB.search)}" style="flex:1;min-width:150px">
+        <select id="tmb-filter" class="field-select" style="width:150px">
+          <option value="all"${TMB.filter==='all'?' selected':''}>All</option>
+          <option value="todo"${TMB.filter==='todo'?' selected':''}>To brief</option>
+          <option value="done"${TMB.filter==='done'?' selected':''}>Done</option>
+          <option value="blockers"${TMB.filter==='blockers'?' selected':''}>Blockers</option>
+        </select>
+      </div>
+      <div id="tmb-list"></div>
+      <div style="padding:14px">
+        <button class="btn btn-primary" id="tmb-copy" style="width:100%;min-height:44px" ${allDone?'':'disabled'}>${allDone?'Copy the staff chat message':'Copy unlocks when every person is briefed'}</button>
+        ${allDone?`<pre id="tmb-preview" style="margin-top:12px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;font-size:12px;color:var(--text-2);white-space:pre-wrap;font-family:inherit">${esc(tmbMessageText())}</pre>`:''}
+      </div>
+    </div>`;
+  tmbPaintList();
+  $('#tmb-search').oninput=e=>{TMB.search=e.target.value;tmbPaintList()};
+  $('#tmb-filter').onchange=e=>{TMB.filter=e.target.value;tmbPaintList()};
+  const cp=$('#tmb-copy'); if(cp&&allDone)cp.onclick=tmbCopyMessage;
+  $('#tmb-list').onclick=e=>{const row=e.target.closest('[data-tmb-member]');if(row)tmbOpenSheet(parseInt(row.dataset.tmbMember))};
+}
+function tmbOpenSheet(mid){
+  const m=tmbMembers().find(x=>x.id===mid); if(!m)return;
+  const r=tmbRowFor(mid);
+  const prev=TMB.prev[mid];
+  const yPrefill=r?(r.yesterday_done||''):((prev&&prev.today_plan)||'');
+  const prefilled=!r&&!!yPrefill;
+  const F=(label,name,val,hint)=>`<div style="margin-bottom:12px"><label class="field-label">${label}</label><textarea class="field-input" name="${name}" rows="2" style="resize:vertical;min-height:44px">${esc(val||'')}</textarea>${hint?`<div style="font-size:11px;color:var(--text-3);margin-top:4px">${hint}</div>`:''}</div>`;
+  $('#modalRoot').innerHTML=`<div class="modal-backdrop" id="modal"><div class="modal">
+    <div class="modal-header"><div><div class="modal-title">${esc(m.name)}</div><div class="modal-sub">Morning check-in, ${tmbDateLabel()}</div></div><button class="modal-close" data-close>&times;</button></div>
+    <form id="tmb-form" style="padding:18px 22px;overflow-y:auto">
+      ${F('What did they finish yesterday','yesterday_done',yPrefill,prefilled?'Prefilled from their last recorded plan. Edit it to what really got done.':'')}
+      ${F('Questions for you','questions',r?r.questions:'')}
+      ${F('Blocker, if any','blocker',r?r.blocker:'')}
+      ${F('The alternative while blocked','alternative',r?r.alternative:'','What they work on instead until the blocker clears.')}
+      ${F('Plan for today','today_plan',r?r.today_plan:'')}
+      <label style="display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer">
+        <input type="checkbox" name="on_track" style="width:20px;height:20px;accent-color:var(--accent)" ${r&&r.on_track?'checked':''}>
+        <span style="font-size:13px;color:var(--text)">Everything on track<span style="display:block;font-size:11px;color:var(--text-3)">Counts into the done figure in the staff message.</span></span>
+      </label>
+    </form>
+    <div style="padding:14px 22px 18px;border-top:1px solid var(--border)">
+      <button class="btn btn-primary" data-tmb-save="${mid}" style="width:100%;min-height:44px">${r?'Save changes':'Save brief'}</button>
+      <button class="btn btn-ghost" data-close style="width:100%;min-height:44px;margin-top:8px">Cancel</button>
+    </div>
+  </div></div>`;
+  $('#modalRoot').onclick=async e=>{
+    if(e.target.closest('[data-close]')||e.target.id==='modal'){closeModal();return}
+    const sv=e.target.closest('[data-tmb-save]'); if(!sv)return;
+    const head=tmbHeadRow(); if(!head){toast('Your roster row was not found','error');return}
+    const f=$('#tmb-form');
+    const payload={
+      brief_date:localDateStr(), head:head.id, member:mid,
+      yesterday_done:f.yesterday_done.value.trim()||null,
+      questions:f.questions.value.trim()||null,
+      blocker:f.blocker.value.trim()||null,
+      alternative:f.alternative.value.trim()||null,
+      today_plan:f.today_plan.value.trim()||null,
+      on_track:f.on_track.checked,
+      updated_at:new Date().toISOString()
+    };
+    sv.disabled=true;_pendingOps++;
+    try{
+      const w=await sb.from('morning_briefs').upsert(payload,{onConflict:'brief_date,head,member'});
+      if(w.error){if(window.bbReportDbError)window.bbReportDbError('morning_briefs','save',w.error);toast('Save failed: '+(w.error.message||'database refused it'),'error');sv.disabled=false;return}
+    }finally{_pendingOps--}
+    closeModal();toast('Check-in saved','success');renderTeamBrief();
+  };
+}
+// @@BBVID_TEAMBRIEF_END@@ =====================================================
 
 // === PAGE: PIPELINE ===
 const PIPELINE_STATE = { bulkMode: false, selected: new Set() };
