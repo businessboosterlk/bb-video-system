@@ -2146,3 +2146,38 @@ worker).
 **The rule.** A retry after a uniqueness refusal reads what won first. If the row that is already
 there is the row you were about to write, the job is done; closing it to write your own copy turns
 one correct line into two.
+
+---
+
+## L-VID-055 · every tick on a client's topics threw the sheet back to the top
+
+**Reported 12 October 2026** by the video head through Thulaib, with a second
+ask: remove Cut from the topic ticks.
+
+**Root cause, reproduced.** Every tap on a topic, every Add, every Delete and
+every quarter switch called `openClientDetail`, which rebuilds the whole client
+sheet with `innerHTML`. A rebuilt sheet starts at the top. Scrolled 1,850px down
+to a topic, one tap, scroll position 0. On a phone the topics sit below the
+month strip and the quarter plan, so every single tick meant scrolling back down.
+The tap also waited for the database before the screen changed at all.
+
+**The block.** `redrawClientDetail(cid)` keeps the sheet's scroll position and
+the topic grid's sideways scroll through the rebuild. All five redraws inside an
+open sheet go through it. The tick now changes at the tap and the save follows;
+a refused save puts the tick back and says so.
+
+**Cut removed.** The tick cycles To shoot, Shot, Edited. The Pipeline's Cutting
+and Colour stage already shows the cutting queue. A topic ticked Cut only
+ever went stale (L-VID-037). The 12 topics still at Cut were moved to Shot, which
+is what they were: filmed and not yet edited. Their ids, so the move can be
+undone: 584, 586, 585, 489, 484, 487, 488, 493, 494, 496, 498, 574. Any leftover
+Cut row reads as Shot and moves on to Edited.
+
+**Proven.** Three taps in a row held at 2,683px. At 375px a refused save left the
+tick, the data and the scroll position where they were. Two checks; with the old
+function put back, both fail (Cut appears in the cycle; 3,722px became 0). 132
+checks, 0 failed, on a clean load at phone width.
+
+**Found on the way.** Anonymous edits to `system_bug_log` are now refused (401),
+which closes the hole recorded in L-VID-034. A localhost test row still reaches
+the log, because the 9 September bug catcher branch was never merged.

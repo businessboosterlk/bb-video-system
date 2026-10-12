@@ -4015,8 +4015,22 @@ function renderClients(){
 // user can switch quarters/years with the buttons in the modal.
 let _qpQuarter = Math.ceil((new Date().getMonth()+1)/3);
 let _qpYear = new Date().getFullYear();
-function qpSetQuarter(cid,q){ _qpQuarter=q; openClientDetail(cid); }
-function qpSetYear(cid,delta){ _qpYear+=delta; openClientDetail(cid); }
+/* REDRAW IN PLACE. Every tick, add, delete and quarter switch rebuilt the
+   whole client sheet, and a rebuilt sheet starts at the top: Ushane, 12 Oct,
+   scrolled 1,850px down to a topic, tapped it, and was back at 0. This keeps
+   the sheet exactly where the person left it. Only ever called while the
+   same client's sheet is open, so it never opens a sheet on its own. */
+function redrawClientDetail(cid){
+  const body=document.querySelector('#modal .modal-body');
+  const y=body?body.scrollTop:0;
+  const grid=document.querySelector('#modal .vt-grid');
+  const x=grid?grid.scrollLeft:0;
+  openClientDetail(cid);
+  const b2=document.querySelector('#modal .modal-body'); if(b2)b2.scrollTop=y;
+  const g2=document.querySelector('#modal .vt-grid'); if(g2)g2.scrollLeft=x;
+}
+function qpSetQuarter(cid,q){ _qpQuarter=q; redrawClientDetail(cid); }
+function qpSetYear(cid,delta){ _qpYear+=delta; redrawClientDetail(cid); }
 
 // === VIDEO TOPICS handlers (planned → shot → edited) ===
 async function vtAdd(cid,month,year){
@@ -4031,24 +4045,34 @@ async function vtAdd(cid,month,year){
     DATA.videoTopics=(DATA.videoTopics||[]).concat(data);
   }catch(err){toast('Add topic failed: '+(err.message||''),'error');if(window.bbReportDbError)window.bbReportDbError('video_topics','insert',err);}
   finally{_pendingOps--;}
-  openClientDetail(cid);
-  setTimeout(()=>{const i=document.getElementById('vtInput-'+month);if(i)i.focus();},60);
+  redrawClientDetail(cid);
+  setTimeout(()=>{const i=document.getElementById('vtInput-'+month);if(i){try{i.focus({preventScroll:true});}catch(e){i.focus();}}},60);
 }
 async function vtCycle(id,cid){
   const t=(DATA.videoTopics||[]).find(x=>x.id===id);if(!t)return;
-  // planned -> shot -> cut -> edited -> planned. 'cut' was added 2026-08-10 so
-  // Ushane's cutting queue is visible instead of hidden inside 'shot'.
-  const next={planned:'shot',shot:'cut',cut:'edited',edited:'planned'}[t.status||'planned'];
-  const prev=t.status;
-  t.status=next; // optimistic
+  /* TWO TICKS NOW: To shoot, Shot, Edited. Cut was added on 10 Aug so the
+     cutting queue showed here, then removed on 12 Oct at the video head's ask:
+     the Pipeline's Cutting & Colour stage already shows it, and a topic was
+     ticked Cut so rarely that it only ever went stale (L-VID-037). A topic
+     still sitting at the old Cut value moves on to Edited. */
+  const next={planned:'shot',shot:'edited',cut:'edited',edited:'planned'}[t.status||'planned']||'shot';
+  const prev=t.status, prevDate=t.shot_date;
+  /* THE SCREEN CHANGES AT THE TAP, and stays where it was. The save follows;
+     if it is refused the tick goes back and says so. */
+  t.status=next;
   t.shot_date=(next!=='planned')?(t.shot_date||localDateStr()):null;
+  redrawClientDetail(cid);
   _pendingOps++;
   try{
     const {error}=await sb.from('video_topics').update({status:next,shot_date:t.shot_date,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()}).eq('id',id);
     if(error)throw error;
-  }catch(err){t.status=prev;toast('Update failed: '+(err.message||''),'error');if(window.bbReportDbError)window.bbReportDbError('video_topics','update',err);}
+  }catch(err){
+    t.status=prev;t.shot_date=prevDate;
+    toast('Not saved, the tick went back: '+(err.message||''),'error');
+    if(window.bbReportDbError)window.bbReportDbError('video_topics','update',err);
+    if(document.querySelector('#modal'))redrawClientDetail(cid);
+  }
   finally{_pendingOps--;}
-  openClientDetail(cid);
 }
 async function vtDelete(id,cid){
   if(!confirm('Delete this topic?'))return;
@@ -4059,7 +4083,7 @@ async function vtDelete(id,cid){
     DATA.videoTopics=(DATA.videoTopics||[]).filter(x=>x.id!==id);
   }catch(err){toast('Delete failed: '+(err.message||''),'error');if(window.bbReportDbError)window.bbReportDbError('video_topics','delete',err);}
   finally{_pendingOps--;}
-  openClientDetail(cid);
+  redrawClientDetail(cid);
 }
 function getClientMonthlyContract(clientId,year,month,defaultMonthly){
   const override=(DATA.clientTargets||[]).find(t=>Number(t.client_id)===Number(clientId)&&Number(t.year)===Number(year)&&Number(t.month)===Number(month));
@@ -4154,9 +4178,9 @@ function quarterlyPlanSection(client,clientProjects){
   const qTopics=allTopics.filter(t=>qMonths.includes(Number(t.target_month)));
   const qShot=qTopics.filter(t=>t.status!=='planned').length; // shot, cut and edited are all shot
   const qEdited=qTopics.filter(t=>t.status==='edited').length;
-  const qCut=qTopics.filter(t=>t.status==='cut').length;
   const qPlanned=qTopics.filter(t=>t.status==='planned').length;
-  const _stCfg={planned:{lbl:vicon('square',13)+' To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:vicon('camera',13)+' Shot',c:'var(--amber)',bg:'var(--amber-soft)'},cut:{lbl:vicon('scissors',13)+' Cut',c:'var(--accent)',bg:'var(--accent-soft)'},edited:{lbl:vicon('check',13)+' Edited',c:'var(--green)',bg:'var(--green-soft)'}};
+  const _stCfg={planned:{lbl:vicon('square',13)+' To shoot',c:'var(--text-3)',bg:'var(--surface-3)'},shot:{lbl:vicon('camera',13)+' Shot',c:'var(--amber)',bg:'var(--amber-soft)'},edited:{lbl:vicon('check',13)+' Edited',c:'var(--green)',bg:'var(--green-soft)'}};
+  _stCfg.cut=_stCfg.shot; /* Cut was retired 12 Oct: any leftover row reads as Shot */
   const topicCols=months.map(({m,name})=>{
     const list=allTopics.filter(t=>Number(t.target_month)===m).sort((a,b)=>a.id-b.id);
     const shotN=list.filter(t=>t.status!=='planned').length;
@@ -4169,7 +4193,7 @@ function quarterlyPlanSection(client,clientProjects){
   const topicsSection=`<div class="vt-section">
     <div class="detail-section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
       <span>${vicon('target',14)} Video Topics — Q${_qpQuarter}</span>
-      <span class="muted fs-12">${qShot}/${qTopics.length} shot · <strong style="color:var(--amber)">${qPlanned} left to shoot</strong> · ${qCut} cut · ${qEdited} edited</span>
+      <span class="muted fs-12">${qShot}/${qTopics.length} shot · <strong style="color:var(--amber)">${qPlanned} left to shoot</strong> · ${qEdited} edited</span>
     </div>
     <div class="vt-grid">${topicCols}</div>
   </div>`;
@@ -7646,6 +7670,45 @@ async function runSelfTest(){
    });
    ok('Design: every select draws its own chevron, never the browser arrow',bad.length===0,
       bad.length?('native arrow on: '+bad.map(c=>c||'plain select').join(', ')):'4 select classes probed, all drawn');
+  })();
+
+  /* ── O · client topics: two ticks, and a tap never jumps the sheet ───── */
+  await (async function(){
+   /* 12 Oct, from the video head: Cut removed, and every tick threw the sheet
+      back to the top (1,850px to 0, reproduced). The write is stubbed so the
+      check walks the real tap path without changing anybody's data. */
+   const seq=[];
+   const fake={id:-77,client_id:(DATA.clients[0]||{}).id,status:'planned',target_year:2020,target_month:1};
+   const keep=DATA.videoTopics; DATA.videoTopics=(keep||[]).concat([fake]);
+   const realFrom=sb.from.bind(sb);
+   sb.from=function(t){return t==='video_topics'?{update:()=>({eq:async()=>({error:null})})}:realFrom(t);};
+   const realOpen=window.openClientDetail;
+   let moved=null;
+   try{
+     for(let i=0;i<4;i++){ await vtCycle(-77,-1); seq.push(fake.status); }
+     const q=Math.ceil((new Date().getMonth()+1)/3), y=new Date().getFullYear();
+     const cid=[...new Set((keep||[]).filter(t=>t.target_year===y&&Math.ceil(t.target_month/3)===q).map(t=>t.client_id))][0];
+     if(cid!=null){
+       openClientDetail(cid);
+       const body=document.querySelector('#modal .modal-body'), btn=document.querySelector('#modal .vt-status');
+       if(body&&btn){
+         body.scrollTop=body.scrollHeight;const at=body.scrollTop;
+         const tid=parseInt((btn.getAttribute('onclick').match(/vtCycle\((-?\d+)/)||[])[1]);
+         const tt=(keep||[]).find(x=>x.id===tid), was=tt&&tt.status;
+         btn.click(); await new Promise(r=>setTimeout(r,80));
+         if(tt){tt.status=was;}
+         const b2=document.querySelector('#modal .modal-body');
+         moved={at:at,now:b2?b2.scrollTop:-1};
+       }
+       closeModal();
+     }
+   }catch(e){seq.push('error: '+e.message);}
+   sb.from=realFrom; DATA.videoTopics=keep;
+   ok('Topics: the tick has two states, Shot then Edited, never Cut',
+      seq.join(',')==='shot,edited,planned,shot',seq.join(' then '));
+   if(moved)ok('Topics: ticking a topic keeps the sheet where it was',
+      moved.at>0&&Math.abs(moved.now-moved.at)<2,'scrolled to '+Math.round(moved.at)+', after the tap '+Math.round(moved.now));
+   else blind('Topics: ticking a topic keeps the sheet where it was','no client has topics this quarter, so there was nothing to tap');
   })();
 
   /* ── M · the four production boxes add up ──────────────────────────── */
