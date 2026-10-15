@@ -1924,12 +1924,20 @@ function navTo(page){
 let _pendingOps=0;
 let _silentRender=false;     /* true only while an auto-refresh repaints */
 let PIPELINE_ORDER={};       /* stage key -> card ids, in the order last shown */
+/* Every clients column the Video System is allowed to read. mrr and contact are
+   deliberately absent: the public key cannot read them and this app never needs them. */
+const CLIENT_COLS='id,name,package,month,health,industry,start_date,renewal,notes,created_at,client_type,assigned_smm,plan_ready,monthly_posts,monthly_videos,monthly_stories,status,ended_on';
 async function fetchAll(silent=false){
   if(silent&&_pendingOps>0)return;
   try{
     const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr,vtr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
-      sb.from('clients').select('*'),
+      /* NAMED COLUMNS, never '*' (L-VID-057, 15 Oct 2026). The fee (mrr) and the
+         contact were locked away from the public key that day, which is right.
+         A select of '*' asks for them too, Postgres refuses the WHOLE request
+         with 42501, and this app loaded 0 clients, 0 videos and 0 people for
+         everyone. This system needs neither column. */
+      sb.from('clients').select(CLIENT_COLS),
       sb.from('team_members').select('id, name, role, active'),
       sb.from('video_project_links').select('*').order('created_at',{ascending:false}),
       sb.from('smm_shoots').select('*').order('shoot_date',{ascending:true}),
@@ -1959,6 +1967,11 @@ async function fetchAll(silent=false){
     const _coreBad=[['video_projects',pr],['clients',cr],['team_members',tr],['video_stage_history',shr]].filter(x=>!x[1]||x[1].error);
     if(_coreBad.length){
       _coreBad.forEach(x=>console.warn('[fetchAll] '+x[0]+' read failed',x[1]?x[1].status:'',x[1]&&x[1].error?x[1].error.message:''));
+      /* SAY IT OUT LOUD (L-VID-057). On 15 Oct a refused clients read left
+         every board empty and the only trace was this console line. A refusal
+         from the server now reaches the bug log, the red bar and the hourly
+         triage that phones the head. A dropped connection stays quiet. */
+      _coreBad.forEach(x=>{if(x[1]&&x[1].error&&window.bbReportDbError)window.bbReportDbError(x[0],'read',x[1].error);});
       if(!silent)toast('Could not refresh, showing the last copy','error');
       return;
     }
@@ -6518,7 +6531,7 @@ function vsUpdateCheckinBadge(){
   var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
   // Tables the app reads. core:true => never legitimately empty, so 0 rows = permissions red flag.
   var TABLES=[
-    {name:'clients',core:true},
+    {name:'clients',core:true,cols:(typeof CLIENT_COLS!=='undefined'?CLIENT_COLS:'id')},
     {name:'team_members',core:true},
     {name:'video_projects',core:false},
     {name:'tasks',core:false},
@@ -6669,9 +6682,13 @@ function vsUpdateCheckinBadge(){
   }
 
   // ---- Boot health check: ping every table the app needs ----
-  function headCount(table){
+  function headCount(table,cols){
     // returns Promise<{ok, count, status, error}>
-    return fetch(SB_URL+'/rest/v1/'+table+'?select=id&limit=1',{
+    /* The watchdog asks for the SAME columns the app asks for. It used to ask
+       for the id alone, which still worked on 15 Oct while the app's own read
+       of clients was refused, so the watchdog reported a healthy table under
+       an empty board (L-VID-057). */
+    return fetch(SB_URL+'/rest/v1/'+table+'?select='+(cols||'id')+'&limit=1',{
       method:'GET',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'count=exact','Range':'0-0'}
     }).then(function(r){
@@ -6687,7 +6704,7 @@ function vsUpdateCheckinBadge(){
   function checkHealth(){
     TABLES.forEach(function(t){
       function attempt(retriesLeft){
-        headCount(t.name).then(function(res){
+        headCount(t.name,t.cols).then(function(res){
           if(!res.ok){
             // HTTP 0 = the request never reached the server (offline / network blip / aborted).
             // Retry once; if it still fails it's a connectivity issue, NOT a bug — log quietly, no banner.
@@ -8012,6 +8029,28 @@ async function runSelfTest(){
    if(moved)ok('Topics: ticking a topic keeps the sheet where it was',
       moved.at>0&&Math.abs(moved.now-moved.at)<2,'scrolled to '+Math.round(moved.at)+', after the tap '+Math.round(moved.now));
    else blind('Topics: ticking a topic keeps the sheet where it was','no client has topics this quarter, so there was nothing to tap');
+  })();
+
+  /* ── Q · the app's own reads are allowed (L-VID-057) ─────────────────── */
+  await (async function(){
+   /* The exact queries fetchAll makes, with the public key. On 15 Oct the
+      clients read was refused for a column the app never used, and every board
+      in the system went empty. A refused core read is a FAIL; a dropped
+      connection is COULD NOT RUN. */
+   const reads=[['clients',sb.from('clients').select(CLIENT_COLS).limit(1)],
+     ['video_projects',sb.from('video_projects').select('*').limit(1)],
+     ['team_members',sb.from('team_members').select('*').limit(1)],
+     ['video_stage_history',sb.from('video_stage_history').select('*').limit(1)]];
+   const bad=[],net=[];
+   for(const [n,q] of reads){
+     try{const r=await q; if(r.error){(/fetch|network|load failed/i.test(r.error.message||'')?net:bad).push(n+': '+(r.error.code||'')+' '+(r.error.message||'').slice(0,60));}}
+     catch(e){net.push(n+': '+e.message);}
+   }
+   /* and the code may never go back to asking clients for every column */
+   const star=/from\('clients'\)\.select\('\*'\)/.test(APPSRC);
+   ok('Data: clients is read by named columns, never *',!star,star?"select('*') on clients is back":'named columns only');
+   if(net.length&&!bad.length)blind('Data: every core read the app makes is allowed','no connection: '+net.join('; '));
+   else ok('Data: every core read the app makes is allowed',bad.length===0,bad.length?bad.join('; '):'clients, projects, team and history all readable');
   })();
 
   /* ── P · two devices: save a change, never a copy (L-ESTATE-TWO-DEVICES) */

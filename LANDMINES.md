@@ -2221,3 +2221,38 @@ functions put back. 135 checks, 0 failed, 0 could not run.
 
 **Not automatable in guard.py**, as the estate entry says. Read L-ESTATE-TWO-DEVICES
 before writing any save.
+
+---
+
+## L-VID-057 · a column lock on clients emptied every board while nothing said so
+
+**Reported 15 October 2026** by Thulaib: "the video system is down". Signed in
+on the live site it loaded 0 videos, 0 clients, 0 people.
+
+**Root cause, proven.** That day the client fee (`mrr`) and `contact` were
+locked away from the public key, column by column, which is right. `fetchAll`
+read clients with `select('*')`, which asks for those columns too, so Postgres
+refused the WHOLE request with 42501. A refused core read keeps the last copy;
+on a fresh load there is no last copy, so the board stayed empty. Tested as the
+public key: `select=id,name` 200, `select=*` 401, `select=mrr` 401. Every other
+table this app reads has no locked column.
+
+**Why nobody was told.** The refusal went only to the browser console. The
+Sentinel's health check asked for `select=id`, which still worked, so the
+watchdog reported clients healthy under an empty board.
+
+**The block.** `CLIENT_COLS` names every clients column this app may read.
+fetchAll uses it; the app never used `mrr` or `contact`. A refused core read now
+goes through `bbReportDbError` to the bug log, the red bar and the hourly triage.
+The Sentinel asks for the same columns the app does. Two checks: every core read
+the app makes is allowed (a locked column in the list is refused 42501, so it
+fails), and clients is never read with `*` again. The CC anon-read landmine,
+one level finer: a table can be readable and still refuse the query you send.
+
+**Also in the log that morning, not this fault:** 16 `network` rows from
+BAVITH at 10:20 Colombo, one per table, a dropped connection on his side. No
+other app logged anything then and the team moved 9 cards afterwards. One blip
+still writes one row per table because the 9 September bug catcher branch is
+unmerged (bb_pending 290).
+
+136 checks, 0 failed; 284 videos, 30 clients and 24 people load in 1.3 seconds.
