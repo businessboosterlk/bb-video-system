@@ -2181,3 +2181,43 @@ checks, 0 failed, on a clean load at phone width.
 **Found on the way.** Anonymous edits to `system_bug_log` are now refused (401),
 which closes the hole recorded in L-VID-034. A localhost test row still reaches
 the log, because the 9 September bug catcher branch was never merged.
+
+---
+
+## L-VID-056 · a tick on one device erased what another device had done
+
+**Asked 15 October 2026** through the estate handover for L-ESTATE-TWO-DEVICES
+(read that entry first). That day the SMM Workspace erased an SMM's meal ticks
+the same way and showed her missing work she did.
+
+**Root cause, one shape in six places here.** The screen read a record once,
+kept a copy and saved the WHOLE copy back, so it was only right on the device
+that last read it.
+
+| Where | What it wrote |
+|---|---|
+| `toggleUshanePillar` | the whole day of pillars, built from `_pillarCache` |
+| `wpSaveCellRaw` (tick, part count, move a line) | the whole plan cell, from `_wpCells` |
+| `wpCellSave` (the typed editor) | the whole cell, over whatever was stored |
+| `wpCellClear` | deleted the day, whatever it held by then |
+| `wpCarryAct` (Move, Done, Drop on last week) | last week's row as this panel loaded it |
+
+**The block.** Pillars: note the one value wanted, read the row FRESH, set only
+that key, write; if the fresh read fails nothing is written. Plan cells: re-read
+the cell first and refuse when the stored text is not what this screen loaded,
+then refresh and say so. The typed editor keeps the person's text, shows what is
+stored now and saves on a second, deliberate press. Moving a line checks BOTH
+days before writing either, so a refusal halfway can never leave the line on two
+days. A screen that has sat open re-reads the plan and the pillars when it comes
+back on screen, never while a sheet is open.
+
+**Proven both ways on probe rows** (week 2031-01-06, deleted after, 0 left):
+the old plan write stored "[x] 1 CF / 2 HD" and lost device B's "3 NEW"; the new
+one refused, refreshed and on the second tap stored all three lines. The old
+pillar write stored team and shoot and lost the laptop's folder tick; the new one
+kept all three. The Command Centre's `pillars` row was protected during the probe
+and untouched (last written 7 Oct). Two functional checks, both fail with the old
+functions put back. 135 checks, 0 failed, 0 could not run.
+
+**Not automatable in guard.py**, as the estate entry says. Read L-ESTATE-TWO-DEVICES
+before writing any save.

@@ -1858,7 +1858,15 @@ function bootApp(){
       if(!document.hidden && currentUser && !PIPELINE_STATE.bulkMode && !_bulkRunning){
         logVideoLogin(currentUser);   // records a login if a new day started on a long-open tab
         const now=Date.now();
-        if(now-_lastVisRefresh>15000){ _lastVisRefresh=now; fetchAll(true); }
+        if(now-_lastVisRefresh>15000){ _lastVisRefresh=now; fetchAll(true);
+          /* A screen that sat open for hours re-reads what another device
+             could have changed (L-ESTATE-TWO-DEVICES rule 3). Never while a
+             sheet is open: that would throw away what the person is typing. */
+          if(!document.querySelector('#modal')){
+            if(typeof currentPage!=='undefined'&&currentPage==='weeklyplan'&&typeof wpGridLoad==='function')wpGridLoad();
+            if(typeof loadPillarState==='function')loadPillarState().then(function(){if(currentPage==='dashboard'&&typeof renderDashboard==='function')renderDashboard();}).catch(function(){});
+          }
+        }
       }
     });
   }
@@ -2314,7 +2322,33 @@ async function savePillarState(s){
     if(e2&&window.bbReportDbError)window.bbReportDbError('pillars','save',e2);
   }catch(e){if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','save',e);}
 }
-async function toggleUshanePillar(k){const s={..._pillarCache};s[k]=!s[k];_pillarCache=s;_pendingOps++;try{await savePillarState(s);}finally{_pendingOps--;}renderDashboard()}
+/* SAVE A CHANGE, NEVER A COPY (L-ESTATE-TWO-DEVICES, 15 Oct 2026). This used
+   to write the WHOLE day built from _pillarCache, the copy this screen read
+   when it opened. A tick on the phone erased every tick made on the laptop
+   since. Now: note the one value wanted, read the row FRESH, set only that key,
+   write. If the fresh read fails nothing is written, because saving an empty
+   day on top of a real one is the exact loss this exists to stop. */
+async function pillarReadFresh(){
+  const r=await sb.from('daily_pillar_state').select('state').eq('user_name','USHANE').eq('pillar_date',pillarDateStr()).maybeSingle();
+  if(r.error)throw r.error;
+  return (r.data&&r.data.state)||{};
+}
+async function toggleUshanePillar(k){
+  const want=!_pillarCache[k];
+  _pillarCache=Object.assign({},_pillarCache,{[k]:want});
+  renderDashboard();                                   /* the screen changes at the tap */
+  _pendingOps++;
+  try{
+    const fresh=await pillarReadFresh();
+    const s=Object.assign({},fresh,{[k]:want});
+    await savePillarState(s);
+  }catch(e){
+    toast('Not saved, try again when you have signal','error');
+    if(window.bbReportDbError)window.bbReportDbError('daily_pillar_state','toggle',e);
+    try{_pillarCache=await pillarReadFresh();}catch(_){}
+  }finally{_pendingOps--;}
+  renderDashboard();
+}
 async function resetUshanePillars(){_pillarCache={};_pendingOps++;try{await savePillarState({});}finally{_pendingOps--;}renderDashboard()}
 function ushaneDailyPillarsHtml(){
   const s=_pillarCache;
@@ -5429,6 +5463,23 @@ async function wpCarryAct(id,action,silent){
   const cellUrl=`${SUPABASE_URL}/rest/v1/weekly_plan_cells?id=eq.${id}`;
   /* A write that fails must say so. fetch does not throw on a 400. */
   const send=async function(url,opts){const r=await fetch(url,opts);if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,120));return r;};
+  /* Last week's row is read FRESH before it is moved, ticked or dropped
+     (L-ESTATE-TWO-DEVICES). A line ticked on another device since this panel
+     loaded would otherwise be moved forward as unfinished, or dropped. */
+  try{
+    const fr=await fetch(`${cellUrl}&select=*`,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+    if(!fr.ok)throw new Error('HTTP '+fr.status);
+    const fresh=(await fr.json())[0];
+    if(!fresh||!wpSameText(fresh.content,c.content)){
+      toast(`${c.editor_name}'s ${WP_DAYS_SHORT[(c.day_of_week||1)-1]||'day'} changed on another device. The list is up to date now.`,'error');
+      await wpGridLoad();
+      if(silent)throw new Error('changed on another device');
+      return;
+    }
+  }catch(err){
+    if(silent)throw err;
+    toast('Could not check last week before changing it, try again','error');return;
+  }
   const split=wpCarrySplit(c.content);
   /* What stays behind in last week: the ticked lines, or nothing at all. */
   const settle=async function(){
@@ -5494,8 +5545,43 @@ window.wpCarryAct=wpCarryAct;window.wpCarryAll=wpCarryAll;
 /* stopPropagation is correct HERE and only here: the cell opens the editor and
    these controls do something else entirely. It would be wrong on a control
    whose own action the cell also performs. */
-async function wpSaveCellRaw(editor,day,items,status){
+/* FREE TEXT TWO DEVICES CAN EDIT IS CHECKED BEFORE IT IS SAVED
+   (L-ESTATE-TWO-DEVICES, 15 Oct 2026). Every plan write sent the whole cell
+   built from _wpCells, the copy this screen loaded, so a tick on one device
+   erased a line another device had added or ticked. Now the cell is read FRESH
+   first. If what is stored is not what this screen loaded, nothing is written:
+   the grid refreshes to the stored day and says so. */
+async function wpFreshCell(editor,day,existing){
   const ws=_wpKeyInUse||localDateStr(wpWeekStart);
+  const q=(existing&&existing.id)?('id=eq.'+existing.id)
+    :('week_start=eq.'+ws+'&editor_name=eq.'+encodeURIComponent(editor)+'&day_of_week=eq.'+day);
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells?${q}&select=*`,
+    {headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}});
+  if(!r.ok)throw new Error('could not re-read the day (HTTP '+r.status+')');
+  const rows=await r.json();
+  return rows[0]||null;
+}
+function wpSameText(a,b){return String(a||'').trim()===String(b||'').trim();}
+/* true = safe to write. false = it changed elsewhere; the screen is already
+   updated to what is stored and the person has been told. */
+async function wpGuardCell(editor,day,quiet){
+  const key=editor+'-'+day, existing=_wpCells[key];
+  const fresh=await wpFreshCell(editor,day,existing);
+  const changed=existing
+    ?(!fresh||!wpSameText(fresh.content,existing.content))
+    :!!(fresh&&String(fresh.content||'').trim());
+  if(!changed)return true;
+  if(fresh)_wpCells[key]=fresh;else delete _wpCells[key];
+  if(!quiet){
+    wpGridRender();
+    toast(`${editor}'s ${WP_DAYS_SHORT[day-1]||'day'} changed on another device. It is up to date now, tap again.`,'error');
+  }
+  return false;
+}
+window.wpGuardCell=wpGuardCell;
+async function wpSaveCellRaw(editor,day,items,status,checked){
+  const ws=_wpKeyInUse||localDateStr(wpWeekStart);
+  if(!checked&&!(await wpGuardCell(editor,day)))return false;
   const existing=_wpCells[editor+'-'+day];
   const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
   const content=wpItemsToText(items);
@@ -5513,6 +5599,7 @@ async function wpSaveCellRaw(editor,day,items,status){
     const r=await fetch(`${SUPABASE_URL}/rest/v1/weekly_plan_cells`,{method:'POST',headers,body:JSON.stringify(body)});
     const j=await r.json();if(j&&j[0])_wpCells[editor+'-'+day]=j[0];
   }
+  return true;
 }
 async function wpToggleItem(editor,day,idx){
   const cell=_wpCells[editor+'-'+day];if(!cell)return;
@@ -5547,8 +5634,17 @@ async function wpMoveItemNextDay(editor,day,idx){
   const nextItems=nextCell?wpItems(nextCell.content):[];
   nextItems.push({done:0,text:partial?wpSetNumber(moving.text,remainder):moving.text,planned:partial?remainder:moving.planned,fin:false});
   try{
-    await wpSaveCellRaw(editor,day+1,nextItems,wpStatusFromItems(nextItems,nextCell&&nextCell.status));
-    await wpSaveCellRaw(editor,day,rest,wpStatusFromItems(rest,cell.status));
+    /* BOTH days are checked before EITHER is written. Checking one at a time
+       would let tomorrow take the line and today refuse to give it up, so the
+       line would sit on both days. */
+    const okToday=await wpGuardCell(editor,day,true), okNext=await wpGuardCell(editor,day+1,true);
+    if(!okToday||!okNext){
+      wpGridRender();
+      toast(`${editor}'s plan changed on another device. It is up to date now, move it again.`,'error');
+      return;
+    }
+    await wpSaveCellRaw(editor,day+1,nextItems,wpStatusFromItems(nextItems,nextCell&&nextCell.status),true);
+    await wpSaveCellRaw(editor,day,rest,wpStatusFromItems(rest,cell.status),true);
     wpGridRender();
     toast(`Moved to ${WP_DAYS_SHORT[day]}`,'success');
   }catch(err){toast('Could not move','error');if(window.bbReportDbError)window.bbReportDbError('weekly_plan_cells','move',err);}
@@ -5562,6 +5658,24 @@ async function wpCellSave(editor,day){
   const existing=_wpCells[editor+'-'+day];
   const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
   const data={week_start:ws,editor_name:editor,day_of_week:day,content,status:_wpCurStatus,updated_by:currentUser?.name||null,updated_at:new Date().toISOString()};
+  /* The typing in this box is never lost and never silently writes over
+     someone else's. If the day changed elsewhere while it was open, the first
+     Save stops and shows what is stored now. Pressing Save again is then a
+     deliberate choice, made with both versions in view. */
+  try{
+    if(!(await wpGuardCell(editor,day,true))){
+      const now=_wpCells[editor+'-'+day];
+      const box=document.getElementById('wpCellContent');
+      let note=document.getElementById('wpCellConflict');
+      if(box&&!note){note=document.createElement('div');note.id='wpCellConflict';
+        note.style.cssText='margin:0 0 10px;padding:10px 12px;border:1px solid var(--amber);border-radius:9px;background:var(--amber-soft);font-size:12.5px;line-height:1.5;color:var(--text)';
+        box.parentNode.insertBefore(note,box);}
+      if(note)note.innerHTML='<b>This day changed on another device.</b> Saved there now:<div style="white-space:pre-wrap;margin-top:4px;color:var(--text-2)">'+
+        esc((now&&now.content)||'(empty)')+'</div><div style="margin-top:6px">Your text is still below. Press Save again to replace it with yours, or Cancel to keep theirs.</div>';
+      wpGridRender();
+      return;
+    }
+  }catch(e){toast('Could not check the day before saving, try again','error');return;}
   try{
     let row;
     if(existing?.id){
@@ -5578,6 +5692,8 @@ async function wpCellSave(editor,day){
 
 async function wpCellClear(editor,day){
   if(!confirm('Clear this cell?'))return;
+  try{ if(!(await wpGuardCell(editor,day))){closeModal();return;} }
+  catch(e){toast('Could not check the day before clearing, try again','error');return;}
   const existing=_wpCells[editor+'-'+day];
   if(!existing?.id){closeModal();return;}
   const headers={'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY};
@@ -7896,6 +8012,54 @@ async function runSelfTest(){
    if(moved)ok('Topics: ticking a topic keeps the sheet where it was',
       moved.at>0&&Math.abs(moved.now-moved.at)<2,'scrolled to '+Math.round(moved.at)+', after the tap '+Math.round(moved.now));
    else blind('Topics: ticking a topic keeps the sheet where it was','no client has topics this quarter, so there was nothing to tap');
+  })();
+
+  /* ── P · two devices: save a change, never a copy (L-ESTATE-TWO-DEVICES) */
+  await (async function(){
+   /* Functional and SAFE: the reads and writes are stubbed, nothing reaches
+      the database. Screen A holds "1 CF"; the stored day has meanwhile become
+      "1 CF / 2 NEW" on another device. A tick from screen A must write nothing. */
+   const key='HARNESSTWO-1', keepCell=_wpCells[key], keepKey=_wpKeyInUse, keepFetch=window.fetch;
+   let wrote=false, refused=null;
+   try{
+     _wpCells[key]={id:-501,editor_name:'HARNESSTWO',day_of_week:1,content:'1 CF',status:'pending'};
+     window.fetch=async function(u,o){
+       const url=String(u);
+       if(url.indexOf('weekly_plan_cells')>-1&&(!o||!o.method||o.method==='GET'))
+         return new Response(JSON.stringify([{id:-501,editor_name:'HARNESSTWO',day_of_week:1,content:'1 CF\n2 NEW',status:'pending'}]),{status:200});
+       if(url.indexOf('weekly_plan_cells')>-1){wrote=true;return new Response('[]',{status:200});}
+       return keepFetch.apply(this,arguments);
+     };
+     refused=await wpSaveCellRaw('HARNESSTWO',1,[{text:'1 CF',planned:1,done:1,fin:true}],'done');
+   }catch(e){refused='error: '+e.message;}
+   window.fetch=keepFetch;
+   const after=_wpCells[key];
+   if(keepCell)_wpCells[key]=keepCell;else delete _wpCells[key];
+   _wpKeyInUse=keepKey;
+   ok('Plan: a day changed on another device is never written over',
+      refused===false&&!wrote&&after&&/2 NEW/.test(after.content),
+      refused===false&&!wrote?'refused, and the screen now holds the stored day':('wrote='+wrote+', returned '+refused));
+   /* Pillars, pressed for real with the database stubbed: this screen opened
+      with only "team" ticked; the laptop has since ticked "folder" too. A tick
+      on "shoot" here must keep all three. */
+   const keepFrom=sb.from, keepCache=_pillarCache, keepRender=window.renderDashboard;
+   let saved=null;
+   try{
+     _pillarCache={team_check:true};
+     window.renderDashboard=function(){};
+     sb.from=function(t){
+       if(t==='daily_pillar_state')return {
+         select:()=>({eq:()=>({eq:()=>({maybeSingle:async()=>({data:{state:{team_check:true,folder_update:true}},error:null})})})}),
+         upsert:async(row)=>{saved=row.state;return {error:null};}};
+       if(t==='pillars')return {upsert:async()=>({error:null})};
+       return keepFrom.call(sb,t);
+     };
+     await toggleUshanePillar('shoot_check');
+   }catch(e){saved={error:e.message};}
+   sb.from=keepFrom; _pillarCache=keepCache; window.renderDashboard=keepRender;
+   ok('Pillars: a tick keeps every tick made on another device',
+      !!saved&&saved.team_check===true&&saved.folder_update===true&&saved.shoot_check===true,
+      'saved '+JSON.stringify(saved));
   })();
 
   /* ── M · the four production boxes add up ──────────────────────────── */
