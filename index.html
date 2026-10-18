@@ -1890,6 +1890,7 @@ function buildSidebar(){
     html+=`<div class="nav-section">${sec}</div>`;
     sections[sec].forEach(p=>{html+=`<button class="nav-item${currentPage===p.key?' active':''}" data-nav="${p.key}">${navIcon(p.key)}<span>${p.label}</span></button>`});
   });
+  html+=`<div class="nav-section">Assistant</div><button class="nav-item" type="button" id="nav-booster" onclick="openBooster()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg><span>Booster</span></button>`; /* BOOSTER, the Video door (18 Oct 2026) */
   $('#sidebarNav').innerHTML=html;
   $('#sidebarNav').onclick=e=>{const b=e.target.closest('[data-nav]');if(b)navTo(b.dataset.nav)};
 }
@@ -8292,6 +8293,20 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('./sw.js').catch(function(){});
   });
+}
+</script>
+
+<script>
+/* BOOSTER LAUNCHER (18 Oct 2026, decision 452), cast from the SMM Workspace's: loads Booster's drawer once, full screen, on the video door.
+   Each person signs in to Booster as themselves; nothing in this system changes. */
+var BOOSTER_HOST = 'https://booster-production-3b2e.up.railway.app/ask-bb/';
+function openBooster(){
+  try { if (typeof closeMenu === 'function') closeMenu(); } catch(e) {}
+  if (window.AskBBDrawer) { window.AskBBDrawer.open({}); return; }
+  var s = document.createElement('script'); s.src = BOOSTER_HOST + 'embed/drawer.js'; s.dataset.app = 'video'; s.dataset.button = 'none'; s.dataset.size = 'full';
+  s.onload = function(){ if (window.AskBBDrawer) window.AskBBDrawer.open({}); };
+  s.onerror = function(){ window.open(BOOSTER_HOST + '?app=video', '_blank'); };
+  document.body.appendChild(s);
 }
 </script>
 </body>
