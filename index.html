@@ -918,12 +918,16 @@ a:hover{text-decoration:underline}
 // === CONFIG ===
 const SUPABASE_URL = 'https://yyviiwnqgphyklcoijyd.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dmlpd25xZ3BoeWtsY29panlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjE5OTEsImV4cCI6MjA5MTI5Nzk5MX0.I8YiBr-rfLVcc6DE8Z1PxEP2oxXCelv6mxqAY_wY7lc';
+/* PINS ARE NOT IN THIS FILE (19 Oct 2026, decision 521, cast from the Dev System's L-DEV-033). They live bcrypt-scrambled in the
+   database table app_pin, which no public key can read; sign-in asks app_pin_login (five wrong tries lock a name 15 minutes) and keeps
+   a 12 hour pass, a reload restores only through app_session_check. To add a person: one line here, then Thulaib runs in the
+   Supabase SQL editor: select public.app_pin_set('video','NAME','their pin');  Mould: ~/bb-systems/app-pin/ */
 const USERS = [
-  { name: 'THULAIB', pin: '1031', role: 'admin' },
-  { name: 'SHIARA',  pin: '1006', role: 'admin' },
-  { name: 'USHANE',  pin: '628474', role: 'video_head' },
-  { name: 'RAJEEWA', pin: '1212', role: 'editor' },
-  { name: 'RAMANI',  pin: '1717', role: 'editor' },
+  { name: 'THULAIB', role: 'admin' },
+  { name: 'SHIARA',  role: 'admin' },
+  { name: 'USHANE',  role: 'video_head' },
+  { name: 'RAJEEWA', role: 'editor' },
+  { name: 'RAMANI',  role: 'editor' },
   /* SANDUNU and NIDWIN left the team 2026-08-14. Their logins are gone and
      their team_members rows are marked active=false, NOT deleted, so every
      project, stage move and weekly plan cell they ever touched still shows who
@@ -931,7 +935,7 @@ const USERS = [
   /* Added 2026-08-14 on Thulaib's ask. TWO ASSUMPTIONS, both flagged to him:
      the role is `editor` (they see only their own assigned projects), and the
      PINs are TEMPORARY. Change them here and tell the two of them. */
-  { name: 'BAVITH',  pin: '2846', role: 'editor' },
+  { name: 'BAVITH',  role: 'editor' },
   /* Decision 105, 7 Oct 2026: KAVISH left (team_members 21 is active false
      since 21 Sep) and his PIN still opened the app. His login is gone. His
      roster row stays, so his past work still shows who did it. The sign-in
@@ -943,14 +947,14 @@ const USERS = [
      Flagged to Thulaib. `alt` exists because team_members spells him NIRVANA
      and the ask spelled him NIRVAAN, and a name typed at the door is matched
      exactly. One account, two spellings, rather than two accounts. */
-  { name: 'NIRVANA', pin: '6179', role: 'admin', alt: ['NIRVAAN','NIRVAN'] },
+  { name: 'NIRVANA', role: 'admin', alt: ['NIRVAAN','NIRVAN'] },
   /* Added 2026-08-21 on Thulaib's ask, master view, confirmed by him rather than
      assumed: the two plausible roles here produce opposite systems, and an
      `editor` with no team_members row signs in perfectly and sees an EMPTY
      board. TIANA has NO team_members row at all, which is fine for an admin
      (they are not assigned work and H11 exempts them) but does mean she appears
      in no people list in any BB system. Flagged to Thulaib. */
-  { name: 'TIANA',   pin: '7029', role: 'admin', alt: ['TIYANA','THIANA'] },
+  { name: 'TIANA',   role: 'admin', alt: ['TIYANA','THIANA'] },
   /* Added 2026-09-24 on Thulaib's ask: two new video editors. `editor` is the
      right role, not an assumption: they do the work and see only what is
      assigned to them. team_members rows 27 and 28 went in the same day with
@@ -961,12 +965,12 @@ const USERS = [
   /* 18 Oct 2026, Thulaib: MATHUSHAN left on 12 Oct. His PIN is replaced with a random eight digit one that
      nobody holds, and team_members 27 is active false, so the door refuses him either way. The seat stays so
      his past work still shows who did it. */
-  { name: 'MATHUSHAN', pin: '42188689', role: 'editor', alt: ['MADHUSHAN','MATHUSAN'] },
-  { name: 'THARUSHA',  pin: '8351', role: 'editor', alt: ['THARUSHAN','TARUSHA'] },
+  { name: 'MATHUSHAN', role: 'editor', alt: ['MADHUSHAN','MATHUSAN'] },
+  { name: 'THARUSHA',  role: 'editor', alt: ['THARUSHAN','TARUSHA'] },
   /* Added 15 Oct 2026 on Thulaib's ask: the third SMM (team_members 29), `admin` like NIRVANA and TIANA,
      because an `editor` sees only assigned work and an SMM is assigned none. Admin also unlocks New Project,
      Edit, Archive and the permanent Delete on archived projects. Flagged to Thulaib. */
-  { name: 'HITHESH', pin: '3344', role: 'admin', alt: ['HITESH','HITHESHA'] },
+  { name: 'HITHESH', role: 'admin', alt: ['HITESH','HITHESHA'] },
 ];
 const REFRESH_MS = 180000; // 3 min (was 20s — that burned the DB bandwidth quota). Hidden tabs skip entirely; focus triggers an instant refresh.
 const STAGES = [
@@ -1660,19 +1664,30 @@ function setupLogin(){
   const dEl=$('#loginDate');if(dEl)dEl.textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   $('#loginBtn').onclick=doLogin;
   ['#loginName','#loginPin'].forEach(s=>{const el=$(s);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()})});
-  const saved=sessionStorage.getItem('bb_video_user');
-  if(saved){try{const u=JSON.parse(saved);const ex=USERS.find(x=>x.name===u.name||(x.alt||[]).indexOf(u.name)>-1);if(ex){
+  let savedUser=null;let savedPass=null;
+  try{savedUser=sessionStorage.getItem('bb_video_user');savedPass=sessionStorage.getItem('bb_video_pass');}catch(_){}
+  if(savedUser&&savedPass){try{const u=JSON.parse(savedUser);const ex=USERS.find(x=>x.name===u.name||(x.alt||[]).indexOf(u.name)>-1);if(ex){
     /* Decision 105, 7 Oct 2026: a kept session asks the roster first, the
        same as the door, so a person switched off since cannot ride an old tab
        back in. The sign-in screen stays invisible while it asks, so a normal
        reload shows no flash of it. */
     const ls=$('#loginScreen');if(ls)ls.style.visibility='hidden';
-    vidRosterSwitchedOff(ex).then(off=>{
-      if(ls)ls.style.visibility='';
-      if(off){sessionStorage.removeItem('bb_video_user');$('#loginError').textContent=VID_SWITCHED_OFF_MSG;setTimeout(()=>$('#loginName')?.focus(),100);return}
-      onLoginSuccess(ex);
-    });
-    return}}catch(_){}}
+    sb.rpc('app_session_check',{p_app:'video',p_token:savedPass}).then(r=>{
+      if(r.error||r.data!==ex.name){
+        try{sessionStorage.removeItem('bb_video_user');sessionStorage.removeItem('bb_video_pass');}catch(_){}
+        if(ls)ls.style.visibility='';
+        setTimeout(()=>$('#loginName')?.focus(),100);
+        return;
+      }
+      vidRosterSwitchedOff(ex).then(off=>{
+        if(ls)ls.style.visibility='';
+        if(off){try{sessionStorage.removeItem('bb_video_user');sessionStorage.removeItem('bb_video_pass');}catch(_){}$('#loginError').textContent=VID_SWITCHED_OFF_MSG;setTimeout(()=>$('#loginName')?.focus(),100);return}
+        onLoginSuccess(ex);
+      });
+    },function(){ /* by Claude: a network failure must show the sign-in screen again, never a blank page */ if(ls)ls.style.visibility='';setTimeout(()=>$('#loginName')?.focus(),100); });
+    return}}catch(_){}
+    try{sessionStorage.removeItem('bb_video_user');sessionStorage.removeItem('bb_video_pass');}catch(_){}
+  }
   setTimeout(()=>$('#loginName')?.focus(),100);
 }
 /* Decision 105, 7 Oct 2026: the door used to check the name and the PIN only,
@@ -1695,22 +1710,33 @@ function vidRosterSwitchedOff(u){
     .catch(err=>{console.warn('[sign-in] roster check failed, the PIN decides',err&&err.message);return false});
   return Promise.race([ask,late]).finally(()=>clearTimeout(timer));
 }
-function doLogin(){
+async function doLogin(){
   const n=$('#loginName').value.trim().toUpperCase();const p=$('#loginPin').value.trim();const e=$('#loginError');
   if(!n){e.textContent='Enter your name';return}
   if(!p){e.textContent='Enter your PIN';return}
   /* Matched on the canonical name OR a known alternate spelling. A login that
      exists but cannot be typed is the same as no login at all. */
   const u=USERS.find(x=>x.name===n||(x.alt||[]).indexOf(n)>-1);
-  if(!u){e.textContent=`User "${n}" not found`;return}
-  if(u.pin!==p){e.textContent='Wrong PIN';$('#loginPin').value='';return}
-  /* Decision 105, 7 Oct 2026: the right PIN is not enough if the roster says
-     this person is switched off. The button waits while the roster answers. */
+  const KEY=u?u.name:n;
+  if(!u){e.textContent='Name ' + KEY + ' not found';return}
   const btn=$('#loginBtn');if(btn&&btn.disabled)return;
   if(btn)btn.disabled=true;e.textContent='Checking…';
+  let res=null;
+  try{const r=await sb.rpc('app_pin_login',{p_app:'video',p_name:KEY,p_pin:p});if(r.error)throw r.error;res=r.data;}
+  catch(err){console.warn('pin check',err&&err.message);}
+  if(btn)btn.disabled=false;
+  if(!res){e.textContent='Could not reach the database to check your PIN. Try again.';return}
+  if(!res.ok){
+    $('#loginPin').value='';
+    e.textContent=res.why==='locked'?'Too many wrong tries. This name is locked for 15 minutes.':
+      res.why==='unknown'?'No PIN is set for ' + KEY + ' yet. Ask Thulaib.':'Wrong PIN';
+    return;
+  }
+  /* Decision 105, 7 Oct 2026: the right PIN is not enough if the roster says
+     this person is switched off. The button waits while the roster answers. */
   vidRosterSwitchedOff(u).then(off=>{
-    if(btn)btn.disabled=false;
     if(off){e.textContent=VID_SWITCHED_OFF_MSG;$('#loginPin').value='';return}
+    try{sessionStorage.setItem('bb_video_pass',res.token);}catch(_){}
     e.textContent='';onLoginSuccess(u);
   });
 }
@@ -1818,7 +1844,13 @@ function logVideoLogin(u){
       .catch(() => { localStorage.removeItem(key); });
   }catch(e){ localStorage.removeItem(key); }
 }
-function logout(){sessionStorage.removeItem('bb_video_user');if(refreshTimer)clearInterval(refreshTimer);currentUser=null;$('#app').hidden=true;$('#loginScreen').hidden=false;$('#loginPin').value=''}
+function logout(){
+  let pass=null;
+  try{pass=sessionStorage.getItem('bb_video_pass');}catch(_){}
+  if(pass){sb.rpc('app_session_end',{p_app:'video',p_token:pass}).then(function(){},function(){});}
+  try{sessionStorage.removeItem('bb_video_pass');}catch(_){}
+  sessionStorage.removeItem('bb_video_user');if(refreshTimer)clearInterval(refreshTimer);currentUser=null;$('#app').hidden=true;$('#loginScreen').hidden=false;$('#loginPin').value='';
+}
 
 // === BOOT ===
 /* A phone alert about the Weekly Plan links to #weeklyplan. Without this the
@@ -7673,12 +7705,9 @@ async function runSelfTest(){
    }));
    ok('Access: no alternate spelling points at two people',clash.length===0,
       clash.length?clash.join('; '):'aliases are unambiguous');
-   /* PINs are the whole door. Two people sharing one means either can sign in
-      as the other, and the stage history then names the wrong person. */
-   const pins=USERS.map(u=>u.pin);
-   const pdupe=pins.filter((x,i)=>pins.indexOf(x)!==i);
-   ok('Access: no two logins share a PIN',pdupe.length===0,
-      pdupe.length?'a PIN is reused, two people can sign in as each other':(pins.length+' PINs, all distinct'));
+   /* 19 Oct 2026 (decision 521): the PINs left this page. They live scrambled in app_pin and the database checks them, so the
+      page must hold none: no pin field on any USERS line. */
+   ok('Access: no PIN in the page',USERS.every(u=>!('pin' in u)),USERS.length+' people, no PIN on any line');
   })();
 
   /* ── H15 · everything a person is shown can be reached ───────────────── */
