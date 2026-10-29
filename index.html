@@ -210,6 +210,7 @@ a:hover{text-decoration:underline}
 .stage-dot.s-sent_to_client{background:#22c55e}
 .stage-dot.s-video_head_review{background:#7c3aed}
 .stage-dot.s-add_to_drive{background:#14b8a6}
+.stage-dot.s-rejected{background:#9ca3af}
 .stage-dot.s-posted{background:#64748b}
 .stage-count{background:var(--surface-2);color:var(--text-2);font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;min-width:26px;text-align:center}
 .stage-cards{padding:10px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;flex:1}
@@ -1000,6 +1001,7 @@ const STAGES = [
   { key: 'client_review', label: 'Client Review' },
   { key: 'client_changes', label: 'Client Changes' },
   { key: 'add_to_drive', label: 'Add to Drive' },
+  { key: 'rejected', label: 'Rejected' }, // parked, 29 Oct 2026: never finished, never active work
 ];
 // Retired stages kept for label lookups on historical/archived data (no longer shown on the board)
 const RETIRED_STAGE_LABELS={ sent_to_client:'Sent to Client', posted:'Posted' };
@@ -1013,7 +1015,9 @@ const SHOOT_STAGES = [
   { key: 'Date Confirmed', label: 'Date Confirmed', alt: 'date_confirmed' },
   { key: 'Shot', label: 'Shot', alt: 'shot' },
 ];
-const COMPLETED_STAGES=['add_to_drive'];
+const COMPLETED_STAGES=['add_to_drive'];          // finished: completion counts and completed_at only
+const CLOSED_STAGES=['add_to_drive','rejected'];  // not active work: load, overdue, stuck, unassigned
+const PARKED_STAGES=['rejected'];                 // neither finished nor open (29 Oct 2026)
 // === STROKE ICONS, NEVER EMOJI ==============================================
 // bb-anti-ai-tells rule 2. One set, currentColor, so an icon inherits the
 // colour of whatever it sits in and needs no per-use styling. Matches the
@@ -1559,7 +1563,7 @@ function deriveNotifications(){
     events.push({t,kind:'comment',pid:p.id,projectTitle:p.title,who:c.author||'Someone',preview:(c.body||'').slice(0,80)||(IMG_HAS.has(imgHasKey('video_project_comments',c.id))?'[image]':'')});
   });
   // 2) Stage moves (Changes / Editing / video_head_review only — high-signal stages)
-  const NOTIFY_STAGES=['changes','client_changes','editing','video_head_review'];
+  const NOTIFY_STAGES=['changes','client_changes','editing','video_head_review','rejected'];
   (DATA.stageHistory||[]).forEach(h=>{
     const t=h.entered_at?new Date(h.entered_at).getTime():0;
     if(!t||t<cutoff)return;
@@ -2157,7 +2161,7 @@ function renderMyDashboard(){
   const lastMonthEnd=new Date(thisMonthStart);
   const weekStart=startOfWeek();
   // Counts
-  const active=mine.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
+  const active=mine.filter(p=>!CLOSED_STAGES.includes(p.current_stage));
   const doneThisMonth=mine.filter(p=>p.completed_at&&new Date(p.completed_at)>=thisMonthStart);
   const doneLastMonth=mine.filter(p=>p.completed_at&&new Date(p.completed_at)>=lastMonthStart&&new Date(p.completed_at)<lastMonthEnd);
   const doneThisWeek=mine.filter(p=>p.completed_at&&new Date(p.completed_at)>=weekStart);
@@ -2229,16 +2233,16 @@ function renderMyDashboard(){
 // === PAGE: DASHBOARD ===
 function renderDashboard(){
   const ps=DATA.projects;
-  const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
+  const active=ps.filter(p=>!CLOSED_STAGES.includes(p.current_stage)).length;
   const completed=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)).length;
-  const overdue=ps.filter(p=>p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage)).length;
+  const overdue=ps.filter(p=>p.deadline&&isOverdue(p.deadline)&&!CLOSED_STAGES.includes(p.current_stage)).length;
   const weekStart=startOfWeek();
   const doneThisWeek=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)&&p.updated_at&&new Date(p.updated_at)>=weekStart).length;
   const inEditing=ps.filter(p=>p.current_stage==='editing').length;
   const sentToClient=ps.filter(p=>p.current_stage==='client_review').length;
   const inReview=ps.filter(p=>['team_review','coo_check'].includes(p.current_stage)).length;
   // 5 pillars based on real data
-  const stuckCount=ps.filter(p=>{if(COMPLETED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(Date.now()-upd.getTime())>3*86400000}).length;
+  const stuckCount=ps.filter(p=>{if(CLOSED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(Date.now()-upd.getTime())>3*86400000}).length;
   const pillarPipeline=stuckCount===0?'green':(stuckCount<=2?'amber':'red');
   const pillarQuality=inReview>=0?'green':'amber';
   const pillarTeam=overdue===0?'green':(overdue<=2?'amber':'red');
@@ -2250,7 +2254,7 @@ function renderDashboard(){
      fact about the video team. Note this does not always change the reading:
      today BAVITH and KAVISH also sit at 0, so the spread is 31 either way. It
      changes what the number MEANS, which is what makes it worth trusting. */
-  videoMembers().forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length});
+  videoMembers().forEach(m=>{editorLoad[m.id]=ps.filter(p=>p.assigned_editor_id===m.id&&!CLOSED_STAGES.includes(p.current_stage)).length});
   const loads=Object.values(editorLoad);
   const maxLoad=Math.max(...loads,0),minLoad=Math.min(...loads,0);
   const pillarCap=(maxLoad-minLoad)<=2?'green':((maxLoad-minLoad)<=4?'amber':'red');
@@ -2258,10 +2262,10 @@ function renderDashboard(){
   const stageDist=STAGES.map(s=>({label:s.label,count:ps.filter(p=>p.current_stage===s.key).length}));
   const maxStage=Math.max(...stageDist.map(s=>s.count),1);
   // Upcoming deadlines
-  const upcoming=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
+  const upcoming=ps.filter(p=>p.deadline&&!CLOSED_STAGES.includes(p.current_stage)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline)).slice(0,8);
   // Workload bars
   const editors=videoMembers();
-  const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&!COMPLETED_STAGES.includes(p.current_stage)).length}));
+  const editorBars=editors.map(m=>({name:m.name,count:ps.filter(p=>p.assigned_editor_id===m.id&&!CLOSED_STAGES.includes(p.current_stage)).length}));
   editorBars.sort((a,b)=>b.count-a.count);
   const maxEd=Math.max(...editorBars.map(e=>e.count),1);
   // Recent activity
@@ -2270,12 +2274,12 @@ function renderDashboard(){
   // === NEEDS ATTENTION — video head command center ===
   const now=Date.now();
   const todayStr=localDateStr();
-  const overdueList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
-  const dueTodayList=ps.filter(p=>p.deadline&&!COMPLETED_STAGES.includes(p.current_stage)&&p.deadline.slice(0,10)===todayStr);
-  const dueSoonList=ps.filter(p=>{if(!p.deadline||COMPLETED_STAGES.includes(p.current_stage))return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
-  const stuckList=ps.filter(p=>{if(COMPLETED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
+  const overdueList=ps.filter(p=>p.deadline&&!CLOSED_STAGES.includes(p.current_stage)&&new Date(p.deadline)<new Date(todayStr)).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const dueTodayList=ps.filter(p=>p.deadline&&!CLOSED_STAGES.includes(p.current_stage)&&p.deadline.slice(0,10)===todayStr);
+  const dueSoonList=ps.filter(p=>{if(!p.deadline||CLOSED_STAGES.includes(p.current_stage))return false;const d=new Date(p.deadline);const days=(d-new Date(todayStr))/86400000;return days>0&&days<=2}).sort((a,b)=>new Date(a.deadline)-new Date(b.deadline));
+  const stuckList=ps.filter(p=>{if(CLOSED_STAGES.includes(p.current_stage))return false;const upd=new Date(p.updated_at||p.created_at);return(now-upd.getTime())>7*86400000}).sort((a,b)=>new Date(a.updated_at||a.created_at)-new Date(b.updated_at||b.created_at));
   const clientWaitList=ps.filter(p=>p.current_stage==='client_review'&&p.updated_at&&(now-new Date(p.updated_at).getTime())>5*86400000).sort((a,b)=>new Date(a.updated_at)-new Date(b.updated_at));
-  const unassignedList=ps.filter(p=>!p.assigned_editor_id&&!COMPLETED_STAGES.includes(p.current_stage));
+  const unassignedList=ps.filter(p=>!p.assigned_editor_id&&!CLOSED_STAGES.includes(p.current_stage));
   // Untagged: missing the month/year that makes a video count toward client readiness — open to back-fill.
   const untaggedList=ps.filter(p=>!p.target_month||!p.target_year);
   const attnTotal=overdueList.length+dueTodayList.length+stuckList.length+clientWaitList.length+unassignedList.length+untaggedList.length;
@@ -2693,7 +2697,7 @@ function renderPipeline(){
       return {
         name:cl?cl.name:(cid==='none'?'(No client)':'Unknown'),
         done,
-        prog:mine.length-done,
+        prog:mine.length-done-mine.filter(p=>PARKED_STAGES.includes(p.current_stage)).length,
         archived:mine.filter(p=>p.is_archived&&isDelivered(p)).length,
         target:cl?videoTarget(cl,smY,smM):0,
         total:mine.length
@@ -2719,7 +2723,7 @@ function renderPipeline(){
      or a filter, navigating, hitting refresh) re-sorts properly. */
   const _recency=p=>new Date(p.updated_at||p.created_at||0).getTime();
   const _deadlineMs=p=>p.deadline?new Date(p.deadline).getTime():Infinity; // no deadline sorts last
-  const _isOverdue=p=>p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
+  const _isOverdue=p=>p.deadline&&isOverdue(p.deadline)&&!CLOSED_STAGES.includes(p.current_stage);
   const _prioRank={urgent:0,high:1,medium:2,low:3};
   const _sortMode=f.sort||'recent';
   function _colSort(a,b){
@@ -2799,7 +2803,7 @@ function renderPipeline(){
 }
 function cardHtml(p){
   const cl=getClient(p.client_id),ed=getMember(p.assigned_editor_id);
-  const ov=p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
+  const ov=p.deadline&&isOverdue(p.deadline)&&!CLOSED_STAGES.includes(p.current_stage);
   /* Decision 105, 7 Oct 2026: editors still pick up any card they can see;
      the drop is where vidMoveRefusal says yes or names the video head. */
   const canDrag=isAdmin()||isVideoHead()||isEditor();
@@ -3453,7 +3457,7 @@ async function openProjectDetail(id){
   const rawLinks=allLinks.filter(l=>l.tag==='raw_footage');
   const finalLinks=allLinks.filter(l=>l.tag==='final_cut');
   const otherLinks=allLinks.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
-  const ov=p.deadline&&isOverdue(p.deadline)&&!COMPLETED_STAGES.includes(p.current_stage);
+  const ov=p.deadline&&isOverdue(p.deadline)&&!CLOSED_STAGES.includes(p.current_stage);
   const html=`<div class="modal-backdrop" id="modal"><div class="modal modal-large"><div class="modal-header"><div><div class="modal-title">${esc(p.title)}</div><div class="modal-sub">${esc(cl?.name||'No client')} · ${st?.label||p.current_stage}</div></div><button class="modal-close" data-close>&times;</button></div><div class="modal-body">
     <div class="detail-section"><div class="detail-section-title">Overview</div><div class="detail-meta-grid">
       <div class="detail-meta-item"><div class="detail-meta-label">Added</div><div class="detail-meta-value">${p.created_at?fmtDate(p.created_at):'—'}<div class="timestamp-tag" style="margin-top:3px">${p.created_at?timeAgo(p.created_at):''}</div></div></div>
@@ -3784,7 +3788,7 @@ function openTimeForm(){
   const html=`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-header"><div class="modal-title">Log Time</div><button class="modal-close" data-close>&times;</button></div><form id="timeForm" class="modal-body"><div class="form-grid">
     <div><label class="field-label">Project</label><select class="field-select" name="video_project_id" required><option value="">Select project...</option>${DATA.projects.map(p=>`<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select></div>
     <div><label class="field-label">Editor</label><select class="field-select" name="team_member_id" required><option value="">Select editor...</option>${assignableEditors().map(m=>`<option value="${m.id}" ${m.name?.toUpperCase()===currentUser.name.toUpperCase()?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
-    <div><label class="field-label">Stage</label><select class="field-select" name="stage">${STAGES.map(s=>`<option value="${s.key}">${s.label}</option>`).join('')}</select></div>
+    <div><label class="field-label">Stage</label><select class="field-select" name="stage">${STAGES.filter(s=>!PARKED_STAGES.includes(s.key)).map(s=>`<option value="${s.key}">${s.label}</option>`).join('')}</select></div>
     <div class="form-row"><div><label class="field-label">Hours</label><input class="field-input" type="number" name="hours" min="0" step="0.25" value="1"></div><div><label class="field-label">Minutes</label><input class="field-input" type="number" name="mins" min="0" max="59" step="5" value="0"></div></div>
     <div><label class="field-label">Started At</label><input class="field-input" type="datetime-local" name="started_at" value="${new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16)}"></div>
     <div><label class="field-label">Notes</label><textarea class="field-textarea" name="notes"></textarea></div>
@@ -3856,7 +3860,7 @@ function clientMonthStrip(clientId){
    switches the type tab to Final Videos by itself, and picking an early one
    goes back to Raw Clips. Thulaib's rule, 7 September. */
 const DRIVE_FINAL_STAGES=['video_head_review','team_review','changes','coo_check',
-                          'client_review','client_changes','add_to_drive','posted'];
+                          'client_review','client_changes','add_to_drive','rejected','posted'];
 function driveWantsFinal(stageKey){return DRIVE_FINAL_STAGES.indexOf(stageKey)>-1}
 function renderDriveLinks(){
   /* 6 Oct 2026: the refresh symbol glyph replaced with a vicon stroke. */
@@ -4092,6 +4096,7 @@ async function renderRecap(){
         const prev=_from[h.video_project_id];
         _from[h.video_project_id]=h.stage;
         if(!h.entered_at||new Date(h.entered_at)<new Date(mf))return;
+        if(h.stage==='rejected'||prev==='rejected')return; /* parking a video is not progress */
         if(prev==null||_rk(h.stage)<=_rk(prev))return;
         if(!h.moved_by||!h.entered_at)return;
         const d=new Date(h.entered_at);
@@ -4221,7 +4226,7 @@ function renderClients(){
   for(let i=0;i<12;i++){const d=new Date(_mNow.getFullYear(),_mNow.getMonth()-i,1);const v=localMonthStr(d);const lbl=d.toLocaleDateString('en-GB',{month:'long',year:'numeric'});monthOpts.push({v,lbl})}
   const rows=DATA.clients.map(c=>{
     const proj=DATA.projects.filter(p=>p.client_id===c.id);
-    const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
+    const active=proj.filter(p=>!CLOSED_STAGES.includes(p.current_stage)).length;
     // THE FIX (L-VID-003). This used to count by completed_at inside the calendar
     // month, so a video tagged for May but finished in June counted for neither.
     // Now it goes through the one month rule: tagged month, archived included.
@@ -4387,7 +4392,7 @@ function computeMonthStats(clientProjects,year,month,contracted,nextMonthContrac
   const inMonth=clientProjects.filter(p=>Number(p.target_year)===Number(year)&&Number(p.target_month)===Number(month));
   const PUBLISHED=['add_to_drive','posted']; // readiness counts add_to_drive + legacy posted
   const published=inMonth.filter(p=>PUBLISHED.includes(p.current_stage)).length;
-  const inPipeline=inMonth.filter(p=>!PUBLISHED.includes(p.current_stage)).length;
+  const inPipeline=inMonth.filter(p=>!PUBLISHED.includes(p.current_stage)&&!PARKED_STAGES.includes(p.current_stage)).length;
   const remaining=Math.max(0,contracted-published);
   const carryFromPipeline=Math.min(inPipeline,remaining);
   const needNewShoots=Math.max(0,remaining-carryFromPipeline);
@@ -4581,7 +4586,7 @@ async function saveQuarterlyTargets(clientId,inputs){
 function openClientDetail(cid){
   const c=DATA.clients.find(x=>x.id===cid);if(!c)return;
   const proj=DATA.projects.filter(p=>p.client_id===cid).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  const active=proj.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
+  const active=proj.filter(p=>!CLOSED_STAGES.includes(p.current_stage));
   const done=proj.filter(p=>p.current_stage==='add_to_drive');
   // Q2 plan needs to count archived "published" videos too (auto-archive moves them out of DATA.projects)
   const archivedForClient=(DATA.archivedProjects||[]).filter(p=>Number(p.client_id)===Number(cid));
@@ -4630,7 +4635,7 @@ function renderTeam(){
   $('#pageSub').textContent=`${members.length} team member${members.length===1?'':'s'}`;
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Team</div><div class="page-sub">Click any member to see full history and current work</div></div></div>
     <div class="team-grid">
-      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)&&p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(roleLabel(m.role))}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value" data-bbw-done="${m.id}">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
+      ${members.map(m=>{const ps=DATA.projects.filter(p=>p.assigned_editor_id===m.id);const active=ps.filter(p=>!CLOSED_STAGES.includes(p.current_stage)).length;const monthStart=startOfMonth();const doneMonth=ps.filter(p=>COMPLETED_STAGES.includes(p.current_stage)&&p.completed_at&&new Date(p.completed_at)>=monthStart).length;return `<div class="team-card" data-mid="${m.id}"><div class="team-card-avatar">${initials(m.name)}</div><div class="team-card-name">${esc(m.name)}</div><div class="team-card-role">${esc(roleLabel(m.role))}</div><div class="team-card-stats"><div class="team-card-stat"><div class="team-card-stat-value">${active}</div><div class="team-card-stat-label">Active</div></div><div class="team-card-stat"><div class="team-card-stat-value" data-bbw-done="${m.id}">${doneMonth}</div><div class="team-card-stat-label">Done · Month</div></div></div></div>`}).join('')}
     </div>`;
   $('#pageContent').onclick=e=>{const c=e.target.closest('[data-mid]');if(c)openMemberDetail(parseInt(c.dataset.mid))};
   /* The card's own count only sees videos not yet archived, and finished videos are
@@ -4645,7 +4650,7 @@ async function openMemberDetail(mid){
      it. It stays only as the fallback if the block fails to load. 2026-09-30. */
   if(window.BBWORK){BBWORK.openPerson({sys:'video',personId:mid,personName:m.name});return;}
   const ps=DATA.projects.filter(p=>p.assigned_editor_id===mid);
-  const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage));
+  const active=ps.filter(p=>!CLOSED_STAGES.includes(p.current_stage));
   const monthStart=startOfMonth();
   const doneMonth=ps.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
   // Avg time: from stage_history
@@ -4679,7 +4684,7 @@ async function renderAnalytics(){
   const psAll=allProjects();
   const completed=psAll.filter(p=>p.completed_at&&new Date(p.completed_at)>=monthStart);
   const completedLastMonth=psAll.filter(p=>p.completed_at&&new Date(p.completed_at)>=lastMonthStart&&new Date(p.completed_at)<lastMonthEnd);
-  const active=ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).length;
+  const active=ps.filter(p=>!CLOSED_STAGES.includes(p.current_stage)).length;
   const turn=completed.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
   const avgTurn=turn.length?(turn.reduce((s,t)=>s+t,0)/turn.length).toFixed(1):'—';
   const turnLast=completedLastMonth.map(p=>(new Date(p.completed_at)-new Date(p.created_at))/86400000);
@@ -4691,11 +4696,11 @@ async function renderAnalytics(){
   // Per editor
   const editorStats={};
   videoMembers().forEach(m=>{editorStats[m.id]={name:m.name,active:0,doneMonth:0,doneLastMonth:0,sumDays:0,countDays:0}});
-  psAll.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(!p.is_archived&&!COMPLETED_STAGES.includes(p.current_stage))s.active++;if(p.completed_at){const d=new Date(p.completed_at);if(d>=monthStart){s.doneMonth++;s.sumDays+=(d-new Date(p.created_at))/86400000;s.countDays++}else if(d>=lastMonthStart&&d<lastMonthEnd){s.doneLastMonth++}}});
+  psAll.forEach(p=>{if(!p.assigned_editor_id)return;const s=editorStats[p.assigned_editor_id];if(!s)return;if(!p.is_archived&&!CLOSED_STAGES.includes(p.current_stage))s.active++;if(p.completed_at){const d=new Date(p.completed_at);if(d>=monthStart){s.doneMonth++;s.sumDays+=(d-new Date(p.created_at))/86400000;s.countDays++}else if(d>=lastMonthStart&&d<lastMonthEnd){s.doneLastMonth++}}});
   // Per client
   const clientStats={};
   DATA.clients.forEach(c=>{clientStats[c.id]={name:c.name,active:0,doneMonth:0,target:c.videos_per_month||c.monthly_videos||c.video_target||null}});
-  psAll.forEach(p=>{if(!p.client_id||!clientStats[p.client_id])return;if(!p.is_archived&&!COMPLETED_STAGES.includes(p.current_stage))clientStats[p.client_id].active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart)clientStats[p.client_id].doneMonth++});
+  psAll.forEach(p=>{if(!p.client_id||!clientStats[p.client_id])return;if(!p.is_archived&&!CLOSED_STAGES.includes(p.current_stage))clientStats[p.client_id].active++;if(p.completed_at&&new Date(p.completed_at)>=monthStart)clientStats[p.client_id].doneMonth++});
   // Stage time analysis — from video_stage_history
   let stageAvgs={};
   try{
@@ -4704,7 +4709,7 @@ async function renderAnalytics(){
   }catch(_){}
   // Pipeline bottleneck — which stage has most stuck projects (oldest)
   const stuckByStage={};
-  ps.filter(p=>!COMPLETED_STAGES.includes(p.current_stage)).forEach(p=>{
+  ps.filter(p=>!CLOSED_STAGES.includes(p.current_stage)).forEach(p=>{
     const stage=p.current_stage;
     if(!stuckByStage[stage])stuckByStage[stage]={count:0,oldest:null,label:STAGES.find(s=>s.key===stage)?.label||stage};
     stuckByStage[stage].count++;
@@ -5201,7 +5206,7 @@ async function wpGridLoad(){
 }
 
 /* Which stages feed which box. Every open stage is in EXACTLY one box, and
-   Add to Drive is finished so it is in none. The harness proves both. */
+   Add to Drive is finished and Rejected is parked, so neither is in a box. The harness proves both. */
 const WP_BOXES={
   cut:  ['video_shot'],
   ready:['rendering'],
@@ -6228,7 +6233,7 @@ function vsUpdateCheckinBadge(){
 
   // Agent 4: Deadline Alert
   function runDeadlineAgent() {
-    sbFetch('video_projects', 'select=id,title,deadline,current_stage&is_archived=eq.false&current_stage=neq.add_to_drive&deadline=gte.' + todayStr() + '&deadline=lte.' + daysFromNow(2) + '&deadline=not.is.null').then(function(data) {
+    sbFetch('video_projects', 'select=id,title,deadline,current_stage&is_archived=eq.false&current_stage=not.in.(add_to_drive,rejected)&deadline=gte.' + todayStr() + '&deadline=lte.' + daysFromNow(2) + '&deadline=not.is.null').then(function(data) {
       if (!Array.isArray(data)) return;
       if (data.length > 0) {
         var items = data.slice(0,3).map(function(p){ return '"' + p.title + '" due ' + p.deadline; }).join(', ');
@@ -7875,13 +7880,19 @@ async function runSelfTest(){
    const ed={name:'SELFTEST',role:'editor'}, hd={name:'SELFTEST',role:'video_head'};
    const allow=[['editing','video_head_review'],['changes','video_head_review'],['video_shot','video_head_review'],
                 ['video_head_review','changes'],['video_head_review','editing'],['changes','editing']];
-   const refuse=[['editing','add_to_drive'],['changes','team_review'],['team_review','video_head_review'],
+   const refuse=[['editing','add_to_drive'],['editing','rejected'],['changes','team_review'],['team_review','video_head_review'],
                  ['video_head_review','client_review'],['editing','rendering'],['client_review','changes']];
    const badA=allow.filter(m=>vidMoveRefusal(m[0],m[1],ed)!==null).map(m=>m.join(' to '));
    const badR=refuse.filter(m=>vidMoveRefusal(m[0],m[1],ed)===null).map(m=>m.join(' to '));
    ok('Moves: an editor sends a video to review and takes it back, nothing else',!badA.length&&!badR.length,
       ((badA.length?'wrongly refused '+badA.join('; ')+'. ':'')+(badR.length?'wrongly allowed '+badR.join('; '):''))||
       (allow.length+' moves allowed, '+refuse.length+' refused'));
+   /* 29 Oct 2026: Rejected is the last column and parked. It never counts as done, never sets
+      completed_at and never counts as load, overdue, stuck or unassigned work. */
+   const rjLast=STAGES.length&&STAGES[STAGES.length-1].key==='rejected';
+   const rjOk=rjLast&&CLOSED_STAGES.includes('rejected')&&!COMPLETED_STAGES.includes('rejected')&&!DELIVERED_STAGES.includes('rejected')&&!isDelivered({current_stage:'rejected'});
+   ok('Rejected: the last column, parked, never finished and never active work',rjOk,
+      rjOk?'last of '+STAGES.length+' columns':'Rejected is not last or is counted as finished or open');
    const headFree=STAGES.every(a=>STAGES.every(b=>vidMoveRefusal(a.key,b.key,hd)===null))&&
       vidMoveRefusal('editing','add_to_drive',{name:'SELFTEST',role:'admin'})===null;
    ok('Moves: the video head and admins move freely',headFree,headFree?'every stage pair open to both':'a head or admin move was refused');
@@ -8041,7 +8052,7 @@ async function runSelfTest(){
       doing. */
    const live=(DATA.teamMembers||[]).filter(m=>m.active===false).map(m=>({id:Number(m.id),name:m.name}));
    const byId={}; live.forEach(m=>byId[m.id]=m.name);
-   const stranded=(DATA.projects||[]).filter(p=>p.assigned_editor_id!=null&&byId[Number(p.assigned_editor_id)]&&!DELIVERED_STAGES.includes(p.current_stage));
+   const stranded=(DATA.projects||[]).filter(p=>p.assigned_editor_id!=null&&byId[Number(p.assigned_editor_id)]&&!DELIVERED_STAGES.includes(p.current_stage)&&!PARKED_STAGES.includes(p.current_stage));
    okData('Team: no open video is left in the name of somebody inactive',
       stranded.length===0,
       stranded.length?(stranded.length+' to reassign: '+stranded.map(p=>'#'+p.id+' '+byId[Number(p.assigned_editor_id)]).join(', ')):'every open card is with somebody active');
@@ -8199,12 +8210,12 @@ async function runSelfTest(){
       must count what the pipeline holds, card for card. */
    const all=[].concat(WP_BOXES.cut,WP_BOXES.ready,WP_BOXES.hands,WP_BOXES.wait);
    const dup=all.filter((k,i)=>all.indexOf(k)!==i);
-   const open=STAGES.map(s=>s.key).filter(k=>!DELIVERED_STAGES.includes(k));
+   const open=STAGES.map(s=>s.key).filter(k=>!DELIVERED_STAGES.includes(k)&&!PARKED_STAGES.includes(k));
    const missing=open.filter(k=>all.indexOf(k)===-1);
    ok('Boxes: every open stage is in exactly one box',dup.length===0&&missing.length===0,
       (dup.length?'twice: '+dup.join(', ')+'. ':'')+(missing.length?'in no box: '+missing.join(', '):'')||all.length+' stages, each once');
    const inBoxes=(DATA.projects||[]).filter(p=>all.indexOf(p.current_stage)>-1).length;
-   const openCards=(DATA.projects||[]).filter(p=>!DELIVERED_STAGES.includes(p.current_stage)).length;
+   const openCards=(DATA.projects||[]).filter(p=>!DELIVERED_STAGES.includes(p.current_stage)&&!PARKED_STAGES.includes(p.current_stage)).length;
    okData('Boxes: the four boxes hold every open card, once',inBoxes===openCards,
       inBoxes+' in boxes, '+openCards+' open in the pipeline');
    /* A topic whose month already has its card is never counted again. */
@@ -8561,7 +8572,7 @@ function openBooster(){
     });
 
     sbFetch('video_projects',
-      'is_archived=eq.false&current_stage=neq.add_to_drive&deadline=lte.' + threeDaysAhead + '&deadline=gte.' + today + '&select=id,title,deadline,current_stage,client_id'
+      'is_archived=eq.false&current_stage=not.in.(add_to_drive,rejected)&deadline=lte.' + threeDaysAhead + '&deadline=gte.' + today + '&select=id,title,deadline,current_stage,client_id'
     ).then(function (rows) {
       window.BB_VIDEO_DETAIL['deadline-alert'] = {
         label: ' Deadline in 3 Days',
@@ -8574,7 +8585,7 @@ function openBooster(){
     });
 
     sbFetch('video_projects',
-      'is_archived=eq.false&assigned_editor_id=is.null&current_stage=neq.add_to_drive&select=id,title,current_stage,client_id&limit=30'
+      'is_archived=eq.false&assigned_editor_id=is.null&current_stage=not.in.(add_to_drive,rejected)&select=id,title,current_stage,client_id&limit=30'
     ).then(function (rows) {
       window.BB_VIDEO_DETAIL['unassigned'] = {
         label: ' Unassigned Videos',
@@ -8727,7 +8738,7 @@ function openBooster(){
   var LABELS={
     video:{video_shot:'Video Shot',cutting_color_grading:'Cutting and Colour',rendering:'Rendering',editing:'Editing',
       video_head_review:'Video Head Review',team_review:'Team Review',changes:'Changes',coo_check:'COO Check',
-      client_review:'Client Review',client_changes:'Client Changes',add_to_drive:'Add to Drive',sent_to_client:'Sent to Client',posted:'Posted'},
+      client_review:'Client Review',client_changes:'Client Changes',add_to_drive:'Add to Drive',rejected:'Rejected',sent_to_client:'Sent to Client',posted:'Posted'},
     graphic:{brief:'Brief',in_progress:'In Progress',first_draft:'First Draft',revisions:'Revisions',head_review:'Head Review',
       sent_to_client:'Sent to Client',client_changes:'Client Changes',approved:'Approved'}
   };
@@ -8944,7 +8955,10 @@ function openBooster(){
      Never edit this block inside an app: edit the canon and cast again.
      A tile that has sat 24 working hours in one stage turns orange, 48 turns it
      red. A tile in a finished stage turns green. The clock is the stage history row, never
-     updated_at, because editing a title must not make a late tile look fresh. -->
+     updated_at, because editing a title must not make a late tile look fresh.
+     29 Oct 2026: a video handed from one editor to another in a making stage counts from the
+     handover, and a quiet line under the chip names who had it before. A PARKED stage (the
+     Video System's Rejected) is never coloured and never late. -->
 <style>
 .bb-age-amber{--bb-age-c:#f97316;--bb-age-s:rgba(249,115,22,.14)}
 .bb-age-red{--bb-age-c:var(--red);--bb-age-s:var(--red-soft)}
@@ -8956,6 +8970,10 @@ function openBooster(){
 .bb-age-red .bb-age-chip{color:var(--red);background:transparent;padding-left:0}
 .bb-age-green .bb-age-chip{color:var(--green);background:transparent;padding-left:0}
 .bb-age-head{display:flex;align-items:center;gap:8px}
+.bb-age-note{margin-top:4px;font-size:11px;line-height:1.3;font-weight:500;color:var(--text-3)}
+.bb-age-note:empty{display:none}
+.card.bb-age-parked{opacity:.62}
+.card.bb-age-parked:hover,.card.bb-age-parked:focus-within{opacity:1}
 .bb-age-late{font-size:11px;line-height:1.2;font-weight:700;color:var(--red);white-space:nowrap}
 .bb-age-late:empty{display:none}
 </style>
@@ -8966,14 +8984,20 @@ function openBooster(){
   var OFF=19800000, DAY=86400000, HOUR=3600000;   /* Colombo is UTC+5:30 all year */
   var RED_H=48, AMBER_H=24;
   var DONE=['add_to_drive','posted'];
+  var MAKER=['video_shot','cutting_color_grading','rendering','editing','changes','client_changes'];     /* stages where a handover restarts the clock */
+  var PARKED=['rejected'];   /* stages that are never coloured, never late, never finished */
   var MAP={};            /* id -> {stage, at, src} */
+  var HOLDS={};          /* id -> [{ed, at, end, src}] oldest first, end null on the open spell */
   var loadedAt=0, loading=false, lastTry=0, truncated=false, wanted=false;
+  var holdsAt=0, holdsOff=false, holdsLoading=false;
 
   function live(){ try{ return ((typeof DATA!=='undefined'&&DATA.projects)||[]).filter(function(p){return !p.is_archived;}); }catch(e){ return []; } }
   function stageLabel(k){ try{ var s=STAGES.find(function(x){return x.key===k;}); return (s&&s.label)||((typeof RETIRED_STAGE_LABELS!=='undefined'&&RETIRED_STAGE_LABELS[k])||''); }catch(e){ return ''; } }
   function fetchEntries(ids){ return sb.from('video_stage_history').select('video_project_id,stage,entered_at').is('exited_at',null).in('video_project_id',ids).order('entered_at',{ascending:false}).limit(1000).then(function(r){ if(r.error)throw r.error; return (r.data||[]).map(function(x){return {id:x.video_project_id,stage:x.stage,at:x.entered_at};}); }); }
   function stages(){ return STAGES.map(function(s){return s.key;}); }
   function renderCard(p){ return cardHtml(p); }
+  function fetchHandovers(ids){ var out=[]; function page(off){ return sb.from('video_assignment_history').select('video_project_id,editor_id,assigned_at,ended_at').in('video_project_id',ids).order('video_project_id',{ascending:true}).order('assigned_at',{ascending:true}).order('id',{ascending:true}).range(off,off+999).then(function(r){ if(r.error)throw r.error; var d=r.data||[]; d.forEach(function(x){out.push({id:x.video_project_id,ed:x.editor_id,at:x.assigned_at,end:x.ended_at});}); return (d.length===1000&&off<9000)?page(off+1000):out; }); } return page(0); }
+  function personName(id){ try{ var m=getMember(Number(id)); return (m&&m.name)||''; }catch(e){ return ''; } }
 
   /* Hours between two instants that fall on Monday to Friday, Colombo time.
      A tile that arrives at five on a Friday has had seven working hours by
@@ -9000,12 +9024,45 @@ function openBooster(){
     wanted=true;
     return {stage:p.current_stage,at:ms(p.updated_at)||ms(p.created_at)||Date.now(),src:'fallback'};
   }
+  /* The open spell, kept in step with the board: if the app shows another editor than the
+     read did, the handover happened since and counts from when we saw it. */
+  function holds(p){
+    var a=HOLDS[p.id];if(!a||!a.length||!holdsAt)return a||[];
+    var last=a[a.length-1],want=p.assigned_editor_id==null?'':String(p.assigned_editor_id);
+    if(last.end==null&&(last.ed==null?'':String(last.ed))!==want){
+      var t=Date.now();last.end=t;a.push({ed:p.assigned_editor_id==null?null:p.assigned_editor_id,at:t,end:null,src:'seen'});wanted=true;
+    }
+    return a;
+  }
+  /* Rule A. In a making stage with an editor on it, the clock starts at the later of the
+     stage entry and the moment this editor got it. Anywhere else the stage entry stands. */
+  function holdStart(stage,stageAt,hs,edId){
+    if(MAKER.indexOf(stage)<0||edId==null||!hs||!hs.length)return stageAt;
+    var last=hs[hs.length-1];
+    if(last.end!=null||String(last.ed)!==String(edId))return stageAt;
+    return Math.max(stageAt,last.at);
+  }
+  /* Rule B. Who had it earlier inside this stage, working hours clipped to the stage. */
+  function holdNote(stageAt,start,hs,nowMs,nameOf){
+    if(!(start>stageAt)||!hs)return '';
+    var parts=[];
+    hs.forEach(function(r){
+      var a=Math.max(r.at,stageAt),b=Math.min(r.end==null?nowMs:r.end,start);
+      if(!(b>a))return;
+      var n=r.ed==null?'unassigned':(nameOf(r.ed)||'another editor'),last=parts[parts.length-1];
+      if(last&&last.n===n)last.h+=wkHours(a,b);else parts.push({n:n,h:wkHours(a,b)});
+    });
+    return parts.length?'Before: '+parts.map(function(x){return x.n+' '+span(x.h);}).join(', '):'';
+  }
+  function start(p){return holdStart(p.current_stage,entered(p).at,holds(p),p.assigned_editor_id);}
+  function noteText(p){var e=entered(p);return holdNote(e.at,start(p),holds(p),Date.now(),personName);}
   function stateFor(stage,atMs,nowMs){
+    if(PARKED.indexOf(stage)>-1)return 'parked';
     if(DONE.indexOf(stage)>-1)return 'green';
     var h=wkHours(atMs,nowMs);
     return h>=RED_H?'red':(h>=AMBER_H?'amber':'');
   }
-  function state(p){return stateFor(p.current_stage,entered(p).at,Date.now());}
+  function state(p){return stateFor(p.current_stage,start(p),Date.now());}
   function span(h){
     if(h<1)return 'under 1h';
     if(h<24)return Math.floor(h)+'h';
@@ -9015,16 +9072,16 @@ function openBooster(){
   function day(t){return new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Asia/Colombo'});}
   function chipText(p){
     var e=entered(p);
-    if(DONE.indexOf(p.current_stage)>-1)return stageLabel(p.current_stage)+' '+day(e.at);
-    return span(wkHours(e.at,Date.now()))+' in this stage';
+    if(DONE.indexOf(p.current_stage)>-1||PARKED.indexOf(p.current_stage)>-1)return stageLabel(p.current_stage)+' '+day(e.at);
+    return span(wkHours(start(p),Date.now()))+' in this stage';
   }
   function chipTitle(p){
-    var e=entered(p);
-    return 'Entered '+stageLabel(p.current_stage)+' on '+day(e.at)+'. Saturday and Sunday are not counted.';
+    var e=entered(p),s=start(p);
+    return 'Entered '+stageLabel(p.current_stage)+' on '+day(e.at)+'.'+(s>e.at?' Handed over on '+day(s)+', so the clock counts from then.':'')+' Saturday and Sunday are not counted.';
   }
   function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function cls(p){ensure();var s=state(p);return s?' bb-age-'+s:'';}
-  function chip(p){return '<div class="bb-age-chip" title="'+esc(chipTitle(p))+'">'+esc(chipText(p))+'</div>';}
+  function chip(p){return '<div class="bb-age-chip" title="'+esc(chipTitle(p))+'">'+esc(chipText(p))+'</div><div class="bb-age-note">'+esc(noteText(p))+'</div>';}
   function late(cards){
     var n=0;(cards||[]).forEach(function(p){if(state(p)==='red')n++;});
     return '<span class="bb-age-late">'+(n?n+' late':'')+'</span>';
@@ -9037,9 +9094,11 @@ function openBooster(){
     document.querySelectorAll('.card').forEach(function(el){
       var p=byId[String(el.getAttribute('data-pid'))];if(!p)return;
       var s=state(p);
-      ['red','amber','green'].forEach(function(k){el.classList.toggle('bb-age-'+k,s===k);});
+      ['red','amber','green','parked'].forEach(function(k){el.classList.toggle('bb-age-'+k,s===k);});
       var c=el.querySelector('.bb-age-chip');
       if(c){c.textContent=chipText(p);c.title=chipTitle(p);}
+      var nt=el.querySelector('.bb-age-note');
+      if(nt)nt.textContent=noteText(p);
     });
     document.querySelectorAll('.bb-age-late').forEach(function(el){
       var col=el.closest('.stage-col');if(!col)return;
@@ -9052,6 +9111,7 @@ function openBooster(){
     var ids=live().map(function(p){return p.id;}).filter(function(x){return x!=null;});
     if(!ids.length)return Promise.resolve(false);
     loading=true;lastTry=Date.now();wanted=false;
+    loadHolds(ids);
     return fetchEntries(ids).then(function(rows){
       if(!Array.isArray(rows))throw new Error('history read returned no list');
       truncated=rows.length>=1000;
@@ -9067,6 +9127,27 @@ function openBooster(){
       try{paint();}catch(e){console.error('BBAGE paint',e);}
       return true;
     }).catch(function(e){loading=false;console.error('BBAGE load',e);return false;});
+  }
+  /* The handover read is optional. If it fails (the table is not there yet) it is dropped
+     for this page load, once, without a word, and every tile keeps the stage clock. */
+  function loadHolds(ids){
+    if(holdsOff||holdsLoading)return;
+    holdsLoading=true;
+    var done=function(){holdsLoading=false;};
+    try{
+      Promise.resolve(fetchHandovers(ids)).then(function(rows){
+        done();
+        if(!Array.isArray(rows))throw new Error('no list');
+        var next={};
+        rows.forEach(function(r){
+          var t=ms(r.at);if(!t)return;
+          (next[String(r.id)]=next[String(r.id)]||[]).push({ed:r.ed==null?null:r.ed,at:t,end:r.end?ms(r.end):null,src:'history'});
+        });
+        Object.keys(next).forEach(function(k){next[k].sort(function(a,b){return a.at-b.at;});});
+        HOLDS=next;holdsAt=Date.now();
+        try{paint();}catch(e){}
+      }).catch(function(){done();holdsOff=true;HOLDS={};holdsAt=0;});
+    }catch(e){done();holdsOff=true;}
   }
   function ensure(){
     var now=Date.now();
@@ -9108,7 +9189,42 @@ function openBooster(){
       ok('a tile past 24 working hours is drawn orange',/bb-age-amber/.test(ho)&&!/bb-age-red/.test(ho),
          /bb-age-amber/.test(ho)?'orange at '+Math.round(wkHours(t30,Date.now()))+' working hours':'class missing');
       ok('a finished tile is drawn green',/bb-age-green/.test(html)&&!/bb-age-red/.test(html),/bb-age-green/.test(html)?'green':'class missing');
+      if(MAKER.length){
+        var keepH=HOLDS[-999],tA=Date.now()-30*DAY,tB=Date.now()-2*HOUR;
+        fake.current_stage=MAKER[0];fake.assigned_editor_id=-2;MAP[-999]={stage:MAKER[0],at:tA,src:'history'};
+        HOLDS[-999]=[{ed:-1,at:tA,end:tB,src:'history'},{ed:-2,at:tB,end:null,src:'history'}];
+        var hh=renderCard(fake);delete MAP[-999];if(keep)MAP[-999]=keep;if(keepH)HOLDS[-999]=keepH;else delete HOLDS[-999];
+        ok('a handed over tile is drawn fresh with the earlier holder under the chip',!/bb-age-red|bb-age-amber/.test(hh)&&/bb-age-note">Before: /.test(hh),
+           /Before: /.test(hh)?'fresh, note present':'note missing or tile still late');
+      }
+      if(PARKED.length){
+        fake.current_stage=PARKED[0];fake.assigned_editor_id=null;MAP[-999]={stage:PARKED[0],at:Date.now()-30*DAY,src:'history'};
+        var hp=renderCard(fake);delete MAP[-999];if(keep)MAP[-999]=keep;
+        ok('a parked tile is drawn muted with its date, never red',/bb-age-parked/.test(hp)&&!/bb-age-red|bb-age-green|in this stage/.test(hp),/bb-age-parked/.test(hp)?'muted':'class missing');
+      }
     }catch(e){ok('a late tile is drawn red with its age',false,e.message);}
+    /* Handover and parked checks. Pure arithmetic on made up instants, nothing read. */
+    var mon9=C(2026,10,26,9),tue9=C(2026,10,27,9),wed9=C(2026,10,28,9),wed13=C(2026,10,28,13);
+    var nm=function(id){return {1:'RAJEEWA',2:'RAMANI'}[id]||'';};
+    var hsAB=[{ed:1,at:mon9,end:tue9},{ed:2,at:tue9,end:null}];
+    if(MAKER.length){
+      var mk=MAKER[0],st=holdStart(mk,mon9,hsAB,2);
+      ok('a handed over tile counts from the handover, not the stage entry',st===tue9,
+         st===tue9?'clock from the handover':'clock from '+new Date(st).toISOString()+', wanted '+new Date(tue9).toISOString());
+      var nt=holdNote(mon9,st,hsAB,wed13,nm);
+      ok('the note names who had it before and for how long',nt==='Before: RAJEEWA 1d',nt);
+      var three=holdNote(mon9,wed9,[{ed:1,at:mon9,end:C(2026,10,26,12)},{ed:null,at:C(2026,10,26,12),end:wed9},{ed:2,at:wed9,end:null}],wed13,nm);
+      ok('an unassigned spell is named as unassigned',three==='Before: RAJEEWA 3h, unassigned 1d 21h',three);
+      ok('an unassigned tile keeps the stage clock',holdStart(mk,mon9,[{ed:1,at:mon9,end:tue9},{ed:null,at:tue9,end:null}],null)===mon9);
+      var notMk=stages().filter(function(s){return MAKER.indexOf(s)<0&&DONE.indexOf(s)<0&&PARKED.indexOf(s)<0;})[0];
+      if(notMk)ok('a handover outside a making stage keeps the stage clock',holdStart(notMk,mon9,hsAB,2)===mon9,notMk);
+      ok('a handover before the stage began changes nothing',holdStart(mk,wed9,hsAB,2)===wed9&&holdNote(wed9,wed9,hsAB,wed13,nm)==='');
+    }else{
+      ok('this app has no handover clock, the stage entry stands',holdStart(stages()[0],mon9,hsAB,2)===mon9);
+    }
+    PARKED.forEach(function(s){
+      ok('a parked tile has no colour however old ('+s+')',stateFor(s,now-5000*HOUR,now)==='parked'&&DONE.indexOf(s)<0&&!!stageLabel(s),stateFor(s,now-5000*HOUR,now));
+    });
     var liveNow=live();
     if(loadedAt&&liveNow.length){
       var hit=liveNow.filter(function(p){var e=MAP[p.id];return e&&e.src==='history'&&e.stage===p.current_stage;}).length;
@@ -9117,7 +9233,9 @@ function openBooster(){
     return out;
   }
   window.BBAGE={cls:cls,chip:chip,late:late,state:state,paint:paint,load:load,selfcheck:selfcheck,wkHours:wkHours,stateFor:stateFor,
-    info:function(){return {app:APP,loadedAt:loadedAt,entries:Object.keys(MAP).length,truncated:truncated};}};
+    holdStart:holdStart,holdNote:holdNote,
+    info:function(){return {app:APP,loadedAt:loadedAt,entries:Object.keys(MAP).length,truncated:truncated,
+      holds:Object.keys(HOLDS).length,holdsAt:holdsAt,holdsOff:holdsOff};}};
 })();
 </script>
 <!-- @@BB_STAGEAGE_END@@ -->
