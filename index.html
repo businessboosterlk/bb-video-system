@@ -545,6 +545,11 @@ a:hover{text-decoration:underline}
 }
 .m-nav-overlay{display:none}
 .card-move{display:none}
+.vteam-wrap{margin:-8px -12px -24px}
+.vteam-frame{display:block;width:100%;height:calc(100vh - 132px);height:calc(100dvh - 132px);min-height:420px;border:0;border-radius:12px;background:#09090b}
+.card-thread{display:flex;align-items:center;justify-content:center;width:100%;margin-top:8px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--accent);font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.card-thread:hover{border-color:var(--border-strong)}
+.card-thread:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .card-menu-btn{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-3);font-size:16px;font-weight:700;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1;z-index:2;transition:all .12s}
 .card-menu-btn:hover{background:var(--surface-3);color:var(--text)}
 .card-menu-dropdown{position:fixed;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 12px 36px var(--shadow-modal);z-index:300;min-width:160px;padding:6px;display:flex;flex-direction:column;gap:2px}
@@ -581,6 +586,9 @@ a:hover{text-decoration:underline}
   .card{cursor:default}
   .card:hover{transform:none;box-shadow:none;border-color:var(--border)}
   .card-move{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:8px 10px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .card-thread{min-height:44px}
+  .vteam-wrap{margin:-6px -8px -20px}
+  .vteam-frame{height:calc(100vh - 112px);height:calc(100dvh - 112px);border-radius:10px}
   .tbl{display:block;width:100%;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
   .modal-backdrop{padding:10px}
   .modal,.modal-large,.modal-xl{max-width:100%;max-height:92dvh}
@@ -620,6 +628,9 @@ a:hover{text-decoration:underline}
   .card{cursor:default}
   .card:hover{transform:none;box-shadow:none;border-color:var(--border)}
   .card-move{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;padding:7px 10px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .card-thread{min-height:44px}
+  .vteam-wrap{margin:-6px -8px -20px}
+  .vteam-frame{height:calc(100vh - 112px);height:calc(100dvh - 112px);border-radius:10px}
   .tbl{display:block;width:100%;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
   .modal,.modal-large,.modal-xl{max-width:100%;max-height:94dvh}
   .modal-body{padding:14px 18px}
@@ -1249,6 +1260,7 @@ const PAGES_EDITOR = [
   { key: 'tasks',        label: 'Task Book',     section: 'WORKSPACE' },
   { key: 'time_tracker', label: 'My Time',       section: 'WORKSPACE' },
   { key: 'weeklyplan',  label: 'Weekly Plan',   section: 'WORKSPACE' },
+  { key: 'team_chat',    label: 'Team Chat',     section: 'WORKSPACE' }, /* P1-23: editors share work from the video team chat */
   { key: 'inspo',        label: 'Inspo Hub ↗',   section: 'EXTRA' },
   { key: 'agents',       label: 'Agents',     section: 'EXTRA' },
 ];
@@ -2801,7 +2813,8 @@ function cardHtml(p){
   const menuBtn=(canDrag&&!PIPELINE_STATE.bulkMode)?`<button class="card-menu-btn" data-card-menu="${p.id}" title="Actions">⋮</button>`:'';
   const checkbox=PIPELINE_STATE.bulkMode?'<div class="card-checkbox"></div>':'';
   const age=(window.BBAGE?BBAGE.cls(p):''),ageChip=(window.BBAGE?BBAGE.chip(p):'');
-  return `<div class="card pr-${pr} ${bulkClass} ${selClass}${age}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${ageChip}${mv}</div>`;
+  const threadBtn=(!PIPELINE_STATE.bulkMode&&/^[1-9][0-9]{0,14}$/.test(String(p.id)))?`<button type="button" class="card-thread" draggable="false" data-thread-link="${Number(p.id)}">Open thread</button>`:''; /* P1-23 */
+  return `<div class="card pr-${pr} ${bulkClass} ${selClass}${age}" data-pid="${p.id}" ${dr}>${checkbox}${menuBtn}<div class="card-title">${esc(p.title)}</div><div class="card-client">${esc(cl?.name||'— No client —')}</div>${smm?`<div class="card-smm">SMM: ${esc(smm)}</div>`:''}<div class="card-meta"><div class="card-meta-left"><div class="priority-dot priority-${pr}"></div>${p.deadline?`<div class="card-deadline ${ov?'overdue':''}">${fmtDate(p.deadline)}</div>`:''}</div>${ed?`<div class="card-editor-name">${esc(ed.name)}</div>`:'<div class="card-editor-name unassigned">Unassigned</div>'}</div>${ageChip}${threadBtn}${mv}</div>`;
 }
 function openCardMenu(pid,btn){
   // Close any existing menu
@@ -2843,6 +2856,7 @@ function openCardMenu(pid,btn){
 function attachCardListeners(){
   $$('.card[data-pid]').forEach(c=>{
     c.addEventListener('click',e=>{
+      const tl=e.target.closest('[data-thread-link]');if(tl){e.stopPropagation();openVideoThread(Number(tl.dataset.threadLink));return;}
       if(e.target.closest('[data-move]')){e.stopPropagation();openStageMenu(parseInt(c.dataset.pid));return;}
       if(e.target.closest('[data-card-menu]')){e.stopPropagation();openCardMenu(parseInt(c.dataset.pid),e.target.closest('[data-card-menu]'));return;}
       if(c.classList.contains('dragging'))return;
@@ -2859,7 +2873,7 @@ function attachCardListeners(){
       openProjectDetail(pid);
     });
     if((isAdmin()||isVideoHead()||isEditor())&&!PIPELINE_STATE.bulkMode){
-      c.addEventListener('dragstart',e=>{c.classList.add('dragging');e.dataTransfer.setData('text/pid',c.dataset.pid)});
+      c.addEventListener('dragstart',e=>{if(e.target.closest&&e.target.closest('[data-thread-link]')){e.preventDefault();return;}c.classList.add('dragging');e.dataTransfer.setData('text/pid',c.dataset.pid)});
       c.addEventListener('dragend',()=>c.classList.remove('dragging'));
     }
   });
@@ -4723,10 +4737,34 @@ async function renderAnalytics(){
   `;
 }
 
-// === PAGE: TEAM CHAT ===
+// === PAGE: TEAM CHAT (team chat P1-23, 29 Oct 2026) ===
+// Thulaib, 29 Oct: each system keeps its own chat in its left menu. Team Chat shows the video team chat (Booster's Team page) in a
+// frame, so Share for review, Approve, Ask for changes and talk all happen inside the Video System. The person signs in once in
+// that frame with their name and PIN. The old one chat per client page stays behind one button for the full roles, unchanged.
+// The 3 minute auto refresh repaints the page: an open chat frame is left alone so it keeps its place, its draft and its sign in.
+var VTEAM={old:false,video:null};
+function vteamSrc(host,vid){
+  var base=(typeof host==='string'&&/^https:\/\/[^\s"'<>]+\/$/.test(host))?host:'https://booster-production-3b2e.up.railway.app/ask-bb/';
+  var v=Number(vid);
+  return base+'team/?app=video&embed=1'+((vid!==null&&vid!==''&&Number.isSafeInteger(v)&&v>0)?'#video='+v:'');
+}
+function openVideoThread(vid){VTEAM.old=false;VTEAM.video=vid;navTo('team_chat');}
 function renderTeamChat(){
-  $('#pageActions').innerHTML='<button class="btn btn-ghost" data-action="refresh">↻</button>';
-  $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="refresh"]'))fetchAll()};
+  if(VTEAM.old&&!isEditor())return renderOldTeamChat();
+  VTEAM.old=false;
+  var pc=$('#pageContent'),fr=$('#vteamFrame'),want=VTEAM.video;VTEAM.video=null;
+  $('#pageSub').textContent='Shares, reviews and talk for every video';
+  $('#pageActions').innerHTML=isEditor()?'':'<button class="btn btn-ghost" type="button" data-action="old-chat">Old client chat</button>';
+  $('#pageActions').onclick=function(e){if(e.target.closest('[data-action="old-chat"]')){VTEAM.old=true;renderOldTeamChat();}};
+  if(fr&&pc.contains(fr)&&want==null)return;
+  pc.onclick=null;
+  pc.innerHTML='<div class="vteam-wrap"><iframe id="vteamFrame" class="vteam-frame" title="Video team chat" allow="clipboard-write; microphone" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+  $('#vteamFrame').src=vteamSrc(BOOSTER_HOST,want);
+}
+// === PAGE: OLD CLIENT CHAT (one chat per client, before 29 Oct 2026) ===
+function renderOldTeamChat(){
+  $('#pageActions').innerHTML='<button class="btn btn-ghost" type="button" data-action="new-chat">Video team chat</button><button class="btn btn-ghost" data-action="refresh">↻</button>';
+  $('#pageActions').onclick=e=>{if(e.target.closest('[data-action="new-chat"]')){VTEAM.old=false;renderTeamChat();return;}if(e.target.closest('[data-action="refresh"]'))fetchAll()};
   if(!FILTERS.chatClient&&DATA.clients.length)FILTERS.chatClient=DATA.clients[0].id;
   // Direct chat messages for this client
   const chatMsgs=(DATA.chats||[]).filter(m=>m.client_id===FILTERS.chatClient).map(m=>({...m,_kind:'chat'}));
@@ -4762,7 +4800,7 @@ function renderTeamChat(){
         </div>
       </div>
     </div>`;
-  $('#chatClientPick').onchange=e=>{FILTERS.chatClient=parseInt(e.target.value);renderTeamChat()};
+  $('#chatClientPick').onchange=e=>{FILTERS.chatClient=parseInt(e.target.value);renderOldTeamChat()};
   wireImageAttach('chat','#chatBody');
   $('#pageContent').onclick=async e=>{
     const ci=e.target.closest('[data-clear-img]');if(ci){clearPendingImg(ci.dataset.clearImg);return}
@@ -7862,6 +7900,18 @@ async function runSelfTest(){
       !bbuOwnReverse(_theirs,_it,_here,ed)&&!bbuOwnReverse(_mine,_it,_gone,ed);
    ok('Undo: an editor can take back their own move and only that',_ownOk,
       _ownOk?'own move back, a colleague\'s entry and a card moved on since both refused':'the own move undo rule is wrong');
+  })();
+
+  /* ── H24 · team chat P1-23, 29 Oct 2026: the chat lives in the Video System ── */
+  (function(){
+   const H='https://booster-production-3b2e.up.railway.app/ask-bb/';
+   const src=[[H,null,H+'team/?app=video&embed=1'],[H,905,H+'team/?app=video&embed=1#video=905'],[H,'905',H+'team/?app=video&embed=1#video=905'],
+              [H,0,H+'team/?app=video&embed=1'],[H,-3,H+'team/?app=video&embed=1'],[H,'12abc',H+'team/?app=video&embed=1'],[H,1.5,H+'team/?app=video&embed=1'],
+              ['javascript:alert(1)//',7,H+'team/?app=video&embed=1#video=7'],['http://evil.com/',7,H+'team/?app=video&embed=1#video=7']];
+   const bad=src.filter(t=>vteamSrc(t[0],t[1])!==t[2]).map(t=>String(t[0]).slice(0,20)+' '+t[1]);
+   ok('Team Chat: the frame address is the video team chat, only a whole video id rides along',!bad.length,bad.join('; ')||'');
+   ok('Team Chat: editors and full roles both have it in the menu',
+      PAGES_EDITOR.some(p=>p.key==='team_chat')&&PAGES_FULL.some(p=>p.key==='team_chat'),'');
   })();
 
   /* ── H23 · decision 105, 7 Oct 2026: nobody who has left can sign in ── */
