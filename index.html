@@ -317,6 +317,21 @@ a:hover{text-decoration:underline}
 .spark-fill{height:100%;background:linear-gradient(90deg,var(--accent) 0%,var(--accent-2) 100%);border-radius:3px;transition:width 0.3s}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* MOVE STAGE SHEET, every screen (bb_pending 881, 29 Oct 2026). Its styles lived only inside the two phone media
+   queries, so on a laptop the card menu's Move stage dropped an unstyled list below the fold. These are the base;
+   the phone blocks below turn it into a bottom sheet. */
+.m-sheet{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);animation:fadeIn .15s}
+.m-sheet-inner{background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;width:100%;max-width:420px;max-height:86vh;max-height:86dvh;overflow-y:auto;padding:16px 16px 18px;animation:slideUp .2s}
+.m-sheet-grip{display:none}
+.m-sheet-title{font-size:13px;font-weight:700;color:var(--text);text-align:center;margin-bottom:4px}
+.m-sheet-sub{font-size:11px;color:var(--text-3);text-align:center;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.m-stage-opt{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:11px 13px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:600;margin-bottom:7px;cursor:pointer;text-align:left;font-family:inherit}
+@media (hover:hover){.m-stage-opt:hover{border-color:var(--border-strong);background:var(--surface-3)}}
+.m-stage-opt.cur{border-color:var(--accent);color:var(--accent)}
+.m-stage-opt .sd{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* The Alerts pill sits on z-index 99998 and covered the last option of the sheet on a phone. While a sheet or a
+   modal is open, it steps aside; it comes back when the sheet closes. */
+body:has(.m-sheet,.modal-backdrop) #bbpush-pill{display:none!important}
 @keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 .image-attach{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border:1px dashed var(--border-strong);border-radius:8px;flex-wrap:wrap}
 .image-attach.img-drop-hot{border-color:var(--accent);background:var(--accent-soft);border-style:solid}
@@ -596,8 +611,8 @@ a:hover{text-decoration:underline}
   .modal-body{padding:16px}
   .bulk-action-bar{left:10px;right:10px;transform:none;bottom:14px;flex-wrap:wrap;justify-content:center;gap:10px}
   .login-card{padding:40px 26px 30px}
-  .m-sheet{position:fixed;inset:0;z-index:300;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);animation:fadeIn .15s}
-  .m-sheet-inner{background:var(--surface);border:1px solid var(--border-strong);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:80dvh;overflow-y:auto;padding:8px 14px 22px;animation:slideUp .22s}
+  .m-sheet{position:fixed;inset:0;z-index:300;display:flex;align-items:flex-end;justify-content:center;padding:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);animation:fadeIn .15s}
+  .m-sheet-inner{background:var(--surface);border:1px solid var(--border-strong);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:80dvh;overflow-y:auto;padding:8px 14px calc(22px + var(--sab,0px));animation:slideUp .22s}
   .m-sheet-grip{width:38px;height:4px;border-radius:3px;background:var(--surface-3);margin:8px auto 6px}
   .m-sheet-title{font-size:13px;font-weight:700;color:var(--text);text-align:center;margin-bottom:4px}
   .m-sheet-sub{font-size:11px;color:var(--text-3);text-align:center;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px}
