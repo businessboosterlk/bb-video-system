@@ -9073,7 +9073,8 @@ function openBooster(){
   function chipText(p){
     var e=entered(p);
     if(DONE.indexOf(p.current_stage)>-1||PARKED.indexOf(p.current_stage)>-1)return stageLabel(p.current_stage)+' '+day(e.at);
-    return span(wkHours(start(p),Date.now()))+' in this stage';
+    var s=start(p),who=(s>e.at&&p.assigned_editor_id!=null)?personName(p.assigned_editor_id):'';
+    return span(wkHours(s,Date.now()))+(who?' with '+who:' in this stage');
   }
   function chipTitle(p){
     var e=entered(p),s=start(p);
