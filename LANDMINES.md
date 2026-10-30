@@ -2293,3 +2293,17 @@ Automated by `~/bb-systems/qa/walk-links.mjs`: 2 of 10 on the old code (every fa
 **Rule.** Any list that two refreshes can write must keep the newest STARTED answer, never the last ARRIVED one. A
 detail view that people act on reads its own rows fresh. A read cache never serves a page that shows another app's
 writes.
+
+## L-VID-059 · The team chat frame wore its own colours (30 Oct 2026)
+
+**What broke.** The Team Chat page framed Booster's team chat in a dark page with fixed colours, whatever the Video System
+was set to. Thulaib: "The UI UX is so bad... I want it to be like the client one." The frame also painted #09090b behind a
+light app while loading.
+
+**The block.** `vteamSrc(host, vid, theme)` adds `&theme=light|dark` (only those two words, before the `#video=` hash) and
+`renderTeamChat` passes `vteamTheme()`. `applyTheme` posts `{type:'bb-theme', theme}` to the open frame at the frame's own
+origin, so a switch is followed with no reload (a reload would lose a half typed message). The chat page only accepts that
+message from its parent window and only light or dark. The frame background is `var(--bg)`. Self-test H24 has a row for
+the theme argument; Booster's `scripts/walk-team.mjs` section 13 checks the frame follows a switch and ignores anything else.
+
+**Rule.** A page shown inside another system takes that system's light or dark from it, at load and on every switch.

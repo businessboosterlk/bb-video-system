@@ -562,7 +562,7 @@ body:has(.m-sheet,.modal-backdrop) #bbpush-pill{display:none!important}
 .m-nav-overlay{display:none}
 .card-move{display:none}
 .vteam-wrap{margin:-8px -12px -24px}
-.vteam-frame{display:block;width:100%;height:calc(100vh - 132px);height:calc(100dvh - 132px);min-height:420px;border:0;border-radius:12px;background:#09090b}
+.vteam-frame{display:block;width:100%;height:calc(100vh - 132px);height:calc(100dvh - 132px);min-height:420px;border:0;border-radius:12px;background:var(--bg)}
 .card-thread{display:flex;align-items:center;justify-content:center;width:100%;margin-top:8px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--accent);font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .card-thread:hover{border-color:var(--border-strong)}
 .card-thread:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -4808,10 +4808,17 @@ async function renderAnalytics(){
 // that frame with their name and PIN. The old one chat per client page stays behind one button for the full roles, unchanged.
 // The 3 minute auto refresh repaints the page: an open chat frame is left alone so it keeps its place, its draft and its sign in.
 var VTEAM={old:false,video:null};
-function vteamSrc(host,vid){
+// Hub look (30 Oct 2026): the chat wears the Video System's own light or dark. Only 'light' or 'dark' ride along, before the #video hash;
+// a theme change while the chat is open is posted to the frame (applyTheme), so it follows without a reload that would lose a draft.
+function vteamSrc(host,vid,theme){
   var base=(typeof host==='string'&&/^https:\/\/[^\s"'<>]+\/$/.test(host))?host:'https://booster-production-3b2e.up.railway.app/ask-bb/';
   var v=Number(vid);
-  return base+'team/?app=video&embed=1'+((vid!==null&&vid!==''&&Number.isSafeInteger(v)&&v>0)?'#video='+v:'');
+  return base+'team/?app=video&embed=1'+((theme==='light'||theme==='dark')?'&theme='+theme:'')+((vid!==null&&vid!==''&&Number.isSafeInteger(v)&&v>0)?'#video='+v:'');
+}
+function vteamTheme(){return document.documentElement.getAttribute('data-theme')==='light'?'light':'dark';}
+function vteamPostTheme(t){
+  var f=document.getElementById('vteamFrame');if(!f||!f.contentWindow||!f.src)return;
+  try{f.contentWindow.postMessage({type:'bb-theme',theme:t==='light'?'light':'dark'},new URL(f.src).origin);}catch(_){}
 }
 function openVideoThread(vid){VTEAM.old=false;VTEAM.video=vid;navTo('team_chat');}
 function renderTeamChat(){
@@ -4824,7 +4831,7 @@ function renderTeamChat(){
   if(fr&&pc.contains(fr)&&want==null)return;
   pc.onclick=null;
   pc.innerHTML='<div class="vteam-wrap"><iframe id="vteamFrame" class="vteam-frame" title="Video team chat" allow="clipboard-write; microphone" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
-  $('#vteamFrame').src=vteamSrc(BOOSTER_HOST,want);
+  $('#vteamFrame').src=vteamSrc(BOOSTER_HOST,want,vteamTheme());
 }
 // === PAGE: OLD CLIENT CHAT (one chat per client, before 29 Oct 2026) ===
 function renderOldTeamChat(){
@@ -4959,7 +4966,7 @@ function openInspoDetail(iid){
 }
 
 // === INIT ===
-function applyTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('bb_theme',t)}catch(_){}}
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('bb_theme',t)}catch(_){}if(typeof vteamPostTheme==='function')vteamPostTheme(t);}
 function initTheme(){let t='dark';try{t=localStorage.getItem('bb_theme')||'dark'}catch(_){}applyTheme(t)}
 function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme')||'dark';applyTheme(cur==='dark'?'light':'dark')}
 window.addEventListener('DOMContentLoaded',async ()=>{initTheme();await initSupabase();setupLogin();document.addEventListener('click',e=>{if(e.target.closest('#themeToggle'))toggleTheme()})});
@@ -7981,6 +7988,10 @@ async function runSelfTest(){
               ['javascript:alert(1)//',7,H+'team/?app=video&embed=1#video=7'],['http://evil.com/',7,H+'team/?app=video&embed=1#video=7']];
    const bad=src.filter(t=>vteamSrc(t[0],t[1])!==t[2]).map(t=>String(t[0]).slice(0,20)+' '+t[1]);
    ok('Team Chat: the frame address is the video team chat, only a whole video id rides along',!bad.length,bad.join('; ')||'');
+   const th=[[H,null,'light',H+'team/?app=video&embed=1&theme=light'],[H,905,'dark',H+'team/?app=video&embed=1&theme=dark#video=905'],
+             [H,905,'blue',H+'team/?app=video&embed=1#video=905'],[H,null,'"><script>',H+'team/?app=video&embed=1'],[H,7,undefined,H+'team/?app=video&embed=1#video=7']];
+   const badT=th.filter(t=>vteamSrc(t[0],t[1],t[2])!==t[3]).map(t=>String(t[2])+' '+t[1]);
+   ok('Team Chat: only light or dark rides along, before the video hash (Hub look, 30 Oct 2026)',!badT.length,badT.join('; ')||'');
    ok('Team Chat: editors and full roles both have it in the menu',
       PAGES_EDITOR.some(p=>p.key==='team_chat')&&PAGES_FULL.some(p=>p.key==='team_chat'),'');
   })();
