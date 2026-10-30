@@ -2307,3 +2307,16 @@ message from its parent window and only light or dark. The frame background is `
 the theme argument; Booster's `scripts/walk-team.mjs` section 13 checks the frame follows a switch and ignores anything else.
 
 **Rule.** A page shown inside another system takes that system's light or dark from it, at load and on every switch.
+
+## L-VID-060 · Only Ushane ticks his own Daily Pillars (30 Oct 2026)
+
+**What broke.** The Daily Pillars card shows for every admin (Thulaib, Shiara, the SMMs) and the video head, and any of
+them could tick or Reset Ushane's pillars. Thulaib: "they can see if he has ticked it or not". The ticks are Ushane's own
+report on his day, so a tap from anyone else wrote a false one.
+
+**The block.** `canTickPillars()` is `isVideoHead()`. `toggleUshanePillar` and `resetUshanePillars` return at once for
+anyone else, and `ushaneDailyPillarsHtml` gives them no `data-ushane-pillar`, no Reset and a "View only" label. Self-test
+row "Pillars: an admin sees the ticks but a tap or Reset writes nothing"; walk `~/bb-systems/qa/walk-pillars.mjs` 9 of 9
+on the new code, 5 of 9 on the old (the admin checks fail there, as they must).
+
+**Rule.** A record that is one person's own report is written by that person only; everyone else gets a read.

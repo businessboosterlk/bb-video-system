@@ -2448,7 +2448,12 @@ async function pillarReadFresh(){
   if(r.error)throw r.error;
   return (r.data&&r.data.state)||{};
 }
+/* ONLY USHANE TICKS HIS OWN PILLARS (Thulaib, 30 Oct 2026). Thulaib, Shiara and
+   the SMMs see the same card and whether each pillar is done, but a tap from
+   them changes nothing: the ticks are Ushane's own report on his day. */
+function canTickPillars(){return isVideoHead()}
 async function toggleUshanePillar(k){
+  if(!canTickPillars())return;
   const want=!_pillarCache[k];
   _pillarCache=Object.assign({},_pillarCache,{[k]:want});
   renderDashboard();                                   /* the screen changes at the tap */
@@ -2464,14 +2469,15 @@ async function toggleUshanePillar(k){
   }finally{_pendingOps--;}
   renderDashboard();
 }
-async function resetUshanePillars(){_pillarCache={};_pendingOps++;try{await savePillarState({});}finally{_pendingOps--;}renderDashboard()}
+async function resetUshanePillars(){if(!canTickPillars())return;_pillarCache={};_pendingOps++;try{await savePillarState({});}finally{_pendingOps--;}renderDashboard()}
 function ushaneDailyPillarsHtml(){
   const s=_pillarCache;
   const done=USHANE_PILLARS.filter(p=>s[p.key]).length;
+  const mine=canTickPillars();
   return `<div class="panel" style="margin-bottom:22px;border:1px solid var(--accent);background:linear-gradient(180deg,var(--accent-soft) 0%,var(--surface) 50%)">
-    <div class="panel-head"><div class="panel-title" style="display:flex;align-items:center;gap:10px"><svg class="daily-pillars-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></svg>Daily Pillars — Ushane</div><div style="display:flex;align-items:center;gap:10px"><span class="text-3 fs-11">${done}/${USHANE_PILLARS.length} done today</span><button class="btn btn-ghost btn-sm" data-ushane-reset>Reset</button></div></div>
+    <div class="panel-head"><div class="panel-title" style="display:flex;align-items:center;gap:10px"><svg class="daily-pillars-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></svg>Ushane's Daily Pillars</div><div style="display:flex;align-items:center;gap:10px"><span class="text-3 fs-11">${done}/${USHANE_PILLARS.length} done today</span>${mine?'<button class="btn btn-ghost btn-sm" data-ushane-reset>Reset</button>':'<span class="text-3 fs-11" data-pillars-view-only>View only</span>'}</div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;padding:14px">
-      ${USHANE_PILLARS.map(p=>{const checked=!!s[p.key];return `<div class="up-card ${checked?'up-done':''}" data-ushane-pillar="${p.key}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:all 0.15s;${checked?'opacity:0.55':''}"><div style="width:22px;height:22px;border-radius:50%;border:2px solid ${checked?'var(--accent)':'var(--border-strong)'};background:${checked?'var(--accent)':'transparent'};display:grid;place-items:center;flex-shrink:0;color:white;font-size:13px;font-weight:700">${checked?'✓':''}</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text);${checked?'text-decoration:line-through':''}">${esc(p.label)}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${esc(p.sub)}</div></div></div>`}).join('')}
+      ${USHANE_PILLARS.map(p=>{const checked=!!s[p.key];return `<div class="up-card ${checked?'up-done':''}" ${mine?`data-ushane-pillar="${p.key}"`:'aria-disabled="true"'} style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;cursor:${mine?'pointer':'default'};transition:all 0.15s;${checked?'opacity:0.55':''}"><div style="width:22px;height:22px;border-radius:50%;border:2px solid ${checked?'var(--accent)':'var(--border-strong)'};background:${checked?'var(--accent)':'transparent'};display:grid;place-items:center;flex-shrink:0;color:white;font-size:13px;font-weight:700">${checked?'✓':''}</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text);${checked?'text-decoration:line-through':''}">${esc(p.label)}</div><div style="font-size:11px;color:var(--text-3);margin-top:2px">${esc(p.sub)}</div></div></div>`}).join('')}
     </div>
   </div>`;
 }
@@ -8254,11 +8260,12 @@ async function runSelfTest(){
    /* Pillars, pressed for real with the database stubbed: this screen opened
       with only "team" ticked; the laptop has since ticked "folder" too. A tick
       on "shoot" here must keep all three. */
-   const keepFrom=sb.from, keepCache=_pillarCache, keepRender=window.renderDashboard;
-   let saved=null;
+   const keepFrom=sb.from, keepCache=_pillarCache, keepRender=window.renderDashboard, keepUser=currentUser;
+   let saved=null, adminWrites=0, adminHtml='';
    try{
      _pillarCache={team_check:true};
      window.renderDashboard=function(){};
+     currentUser=Object.assign({},keepUser,{role:'video_head'});  /* only the video head may tick (30 Oct) */
      sb.from=function(t){
        if(t==='daily_pillar_state')return {
          select:()=>({eq:()=>({eq:()=>({maybeSingle:async()=>({data:{state:{team_check:true,folder_update:true}},error:null})})})}),
@@ -8267,11 +8274,26 @@ async function runSelfTest(){
        return keepFrom.call(sb,t);
      };
      await toggleUshanePillar('shoot_check');
+     /* Now an admin (Thulaib, Shiara, an SMM) presses a pillar and Reset: nothing may be written. */
+     currentUser=Object.assign({},keepUser,{role:'admin'});
+     sb.from=function(t){
+       if(t==='daily_pillar_state'||t==='pillars')return {
+         select:()=>({eq:()=>({eq:()=>({maybeSingle:async()=>({data:{state:{}},error:null})})})}),
+         upsert:async()=>{adminWrites++;return {error:null};}};
+       return keepFrom.call(sb,t);
+     };
+     _pillarCache={team_check:true};
+     await toggleUshanePillar('close_day');
+     await resetUshanePillars();
+     adminHtml=ushaneDailyPillarsHtml();
    }catch(e){saved={error:e.message};}
-   sb.from=keepFrom; _pillarCache=keepCache; window.renderDashboard=keepRender;
+   sb.from=keepFrom; _pillarCache=keepCache; window.renderDashboard=keepRender; currentUser=keepUser;
    ok('Pillars: a tick keeps every tick made on another device',
       !!saved&&saved.team_check===true&&saved.folder_update===true&&saved.shoot_check===true,
       'saved '+JSON.stringify(saved));
+   ok('Pillars: an admin sees the ticks but a tap or Reset writes nothing',
+      adminWrites===0&&!/data-ushane-pillar=|data-ushane-reset/.test(adminHtml)&&/data-pillars-view-only/.test(adminHtml),
+      'writes='+adminWrites+', tappable='+/data-ushane-pillar=/.test(adminHtml));
   })();
 
   /* ── M · the four production boxes add up ──────────────────────────── */
