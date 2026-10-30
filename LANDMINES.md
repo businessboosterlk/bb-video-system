@@ -2265,3 +2265,31 @@ sign out calls `app_session_end`. EVERY person got a NEW PIN (the old ones are i
 private sheet. Forgotten PIN: `select public.app_pin_set('video','NAME','new pin');` in the Supabase SQL editor. Check:
 `node ~/bb-systems/app-pin/checks/pin-door.check.mjs video` (database faked). Mould: ~/bb-systems/app-pin/. The data tables stay
 open to the public key; only the role floor closes them.
+
+## L-VID-058 · a replaced link came back · 30 Oct 2026
+**What the team saw.** "Once they add a link, the old link comes back." RAJEEWA swaps a final cut by deleting the old
+link and adding the new one (server logs: 9 swaps on 29 and 30 Oct, every delete answered 204, every old row gone).
+The database was right the whole time. The screens were not.
+
+**Four faults, all proven in a browser on the old code.**
+1. The video detail drew links from memory, up to 3 minutes old (longer on a hidden tab). A link someone else replaced
+   showed the old one.
+2. Two refreshes can be in flight at once: the 3 minute timer or the return to the tab (the editor copying the link
+   from Drive) starts a silent one, then the save starts another. Whichever answered LAST won, so an older answer put
+   the deleted link back. The walk reproduced exactly this.
+3. Add Link had no guard, so a double tap saved the link twice.
+4. `select('*')` on the links table stops at 1000 rows. 537 on 30 Oct, about 250 a month: links would have started
+   vanishing in December.
+The Command Centre added two of its own: the 4 minute refresh served its 8 minute read cache (the replaced link stayed
+old for up to 8 minutes for Thulaib and Shiara), and a refused delete vanished from the screen and came back on load.
+
+**The block.** Every open of a video reads its links fresh (both apps). fetchAll numbers each refresh; an answer older
+than the one already shown is thrown away, and `_linksGen` stops any refresh that began before a link write or a fresh
+read from writing its older list. Link writes hold `_pendingOps`. Add Link disables while saving and wants a full
+https link. A delete says when it removed nothing. Links are read in pages of 1000. The Command Centre clears its cache
+for the four video tables before every board refresh and only drops a link after the server confirms the delete.
+Automated by `~/bb-systems/qa/walk-links.mjs`: 2 of 10 on the old code (every fault check red), 10 of 10 after.
+
+**Rule.** Any list that two refreshes can write must keep the newest STARTED answer, never the last ARRIVED one. A
+detail view that people act on reads its own rows fresh. A read cache never serves a page that shows another app's
+writes.

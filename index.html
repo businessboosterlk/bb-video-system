@@ -1997,6 +1997,28 @@ function navTo(page){
 
 // === DATA FETCH ===
 let _pendingOps=0;
+/* LINKS COME BACK (L-VID-058, 30 Oct 2026). Two refreshes can be in flight at once: the
+   3 minute timer or the return to the tab (an editor copying a link from Drive) starts a
+   silent one, then a save starts another. Whichever ANSWERED last used to win, so an older
+   copy could land after a newer one and put a deleted link back. Now each refresh takes a
+   number when it starts, and an answer older than the one already shown is thrown away.
+   _linksGen moves on every link write and every fresh per video read, so a refresh that
+   started before that moment never writes its older link list over it. */
+let _fetchGen=0,_committedGen=0,_linksGen=0;
+/* Every link, in pages. Supabase stops an unpaged read at 1000 rows and the table grows by
+   about 250 a month (537 on 30 Oct), so a plain select would start dropping links silently
+   around December. Returns the same {data,error} shape as a single read. */
+async function readAllLinks(){
+  const PAGE=1000,seen=new Set(),all=[];
+  for(let from=0;from<50000;from+=PAGE){
+    const r=await sb.from('video_project_links').select('*').order('created_at',{ascending:false}).order('id',{ascending:false}).range(from,from+PAGE-1);
+    if(!r||r.error)return r||{data:null,error:{message:'no answer'}};
+    (r.data||[]).forEach(function(l){if(!seen.has(l.id)){seen.add(l.id);all.push(l);}});
+    if(!r.data||r.data.length<PAGE)break;
+  }
+  return {data:all,error:null};
+}
+function byNewestLink(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''))||(b.id-a.id);}
 let _silentRender=false;     /* true only while an auto-refresh repaints */
 let PIPELINE_ORDER={};       /* stage key -> card ids, in the order last shown */
 /* Every clients column the Video System is allowed to read. mrr and contact are
@@ -2004,6 +2026,7 @@ let PIPELINE_ORDER={};       /* stage key -> card ids, in the order last shown *
 const CLIENT_COLS='id,name,package,month,health,industry,start_date,renewal,notes,created_at,client_type,assigned_smm,plan_ready,monthly_posts,monthly_videos,monthly_stories,status,ended_on';
 async function fetchAll(silent=false){
   if(silent&&_pendingOps>0)return;
+  const _gen=++_fetchGen,_lg=_linksGen;
   try{
     const [pr,cr,tr,llr,slr,clr,tkr,inr,shr,pcr,cmtr,vtr]=await Promise.all([
       sb.from('video_projects').select('*').eq('is_archived',false).order('created_at',{ascending:false}),
@@ -2014,7 +2037,7 @@ async function fetchAll(silent=false){
          everyone. This system needs neither column. */
       sb.from('clients').select(CLIENT_COLS),
       sb.from('team_members').select('id, name, role, active'),
-      sb.from('video_project_links').select('*').order('created_at',{ascending:false}),
+      readAllLinks(),
       sb.from('smm_shoots').select('*').order('shoot_date',{ascending:true}),
       sb.from('video_chat_messages').select('id,body,author,created_at,client_id,deleted_at,edited_at').order('created_at',{ascending:true}),
       sb.from('tasks').select('*').order('created_at',{ascending:false}).limit(500),
@@ -2051,10 +2074,12 @@ async function fetchAll(silent=false){
       return;
     }
     const _keep=(r,prev,name)=>{if(!r||r.error){console.warn('[fetchAll] '+name+' read failed, kept the last copy',r?r.status:'',r&&r.error?r.error.message:'');return prev||[];}return r.data||[];};
+    if(_gen<_committedGen)return; /* a newer refresh already landed: this answer is older (L-VID-058) */
+    _committedGen=_gen;
     DATA.projects=pr.data||[];
     DATA.clients=cr.data||[];
     DATA.teamMembers=tr.data||[];
-    DATA.links=_keep(llr,DATA.links,'video_project_links');
+    if(_lg===_linksGen)DATA.links=_keep(llr,DATA.links,'video_project_links'); /* a link changed after this read began: keep the newer list */
     DATA.shoots=_keep(slr,DATA.shoots,'smm_shoots');
     DATA.chats=_keep(clr,DATA.chats,'video_chat_messages');
     DATA.tasks=_keep(tkr,DATA.tasks,'tasks');
@@ -2099,6 +2124,7 @@ async function fetchAll(silent=false){
     // }
     // Load daily pillar state from Supabase (shared across all devices)
     await loadPillarState();
+    if(_gen!==_committedGen)return; /* overtaken while finishing: the newer refresh renders */
     if(silent){
       // FLICKER FIX: if nothing the user can see has changed, skip the re-render
       // entirely. Also never re-render while a modal is open or a field is focused.
@@ -2128,6 +2154,7 @@ function _renderSignature(){
     parts.push('chats'+((DATA.chats||[]).length));
     parts.push('tasks'+((DATA.tasks||[]).length));
     parts.push('cmts'+((DATA.projectComments||[]).length));
+    parts.push('links'+(DATA.links||[]).map(function(l){return l.id}).join(','));
     return parts.join('|');
   }catch(e){return Math.random().toString();}
 }
@@ -3468,7 +3495,13 @@ async function openProjectDetail(id){
      a failed read, so stageTimingSection falls back to the window. */
   let ownHist=null;
   try{const hr=await sb.from('video_stage_history').select('video_project_id,stage,duration_seconds,entered_at,exited_at').eq('video_project_id',id).order('entered_at',{ascending:false});if(!hr.error)ownHist=hr.data||[]}catch(_){}
-  const allLinks=DATA.links.filter(l=>l.video_project_id===id);
+  /* FRESH, every open (L-VID-058). The list in memory can be 3 minutes old or older, so a
+     link another person replaced still showed the old one here. Read this video's links now;
+     only if that read fails, fall back to the copy in memory. */
+  let allLinks=null;
+  try{const lr=await sb.from('video_project_links').select('*').eq('video_project_id',id).order('created_at',{ascending:false});
+    if(lr&&!lr.error){allLinks=(lr.data||[]).slice().sort(byNewestLink);_linksGen++;DATA.links=DATA.links.filter(l=>l.video_project_id!==id).concat(allLinks).sort(byNewestLink);}}catch(_){}
+  if(!allLinks)allLinks=DATA.links.filter(l=>l.video_project_id===id);
   const rawLinks=allLinks.filter(l=>l.tag==='raw_footage');
   const finalLinks=allLinks.filter(l=>l.tag==='final_cut');
   const otherLinks=allLinks.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
@@ -3525,14 +3558,26 @@ function openAddLinkForm(projectId,tag){
   document.body.insertAdjacentHTML('beforeend',html);
   $('#modal2').onclick=async e=>{
     if(e.target.closest('[data-close2]')){$('#modal2').remove()}
-    if(e.target.closest('[data-save-link]')){
+    const sv=e.target.closest('[data-save-link]');
+    if(sv){
+      if(sv.disabled)return; /* a second tap while saving used to add the link twice */
       const url=$('#linkUrl').value.trim(),title=$('#linkTitle').value.trim();
       if(!url){toast('URL required','error');return}
-      try{const {error}=await sb.from('video_project_links').insert({video_project_id:projectId,url,label:title||null,tag,added_by:currentUser.name});if(error)throw error;toast('Link added','success');$('#modal2').remove();await fetchAll();openProjectDetail(projectId)}catch(err){toast('Failed to add link: '+(err.message||err.code||'unknown'),'error')}
+      if(!/^https?:\/\/\S+$/i.test(url)){toast('Paste the full link, starting with https://','error');return}
+      sv.disabled=true;sv.textContent='Adding…';_pendingOps++;_linksGen++;let saved=false;
+      try{const {error}=await sb.from('video_project_links').insert({video_project_id:projectId,url,label:title||null,tag,added_by:currentUser.name});if(error)throw error;saved=true}
+      catch(err){toast('Failed to add link: '+(err.message||err.code||'unknown'),'error');sv.disabled=false;sv.textContent='Add Link'}
+      finally{_pendingOps--;_linksGen++;}
+      if(saved){toast('Link added','success');$('#modal2').remove();await openProjectDetail(projectId);fetchAll();}
     }
   };
 }
-async function deleteLink(linkId,projectId){if(!confirm('Delete this link?'))return;try{const {error}=await sb.from('video_project_links').delete().eq('id',linkId);if(error)throw error;await fetchAll();openProjectDetail(projectId)}catch(err){toast('Delete failed','error')}}
+async function deleteLink(linkId,projectId){if(!confirm('Delete this link?'))return;_pendingOps++;_linksGen++;let done=false;
+  try{const {data,error}=await sb.from('video_project_links').delete().eq('id',linkId).select('id');if(error)throw error;
+    toast(data&&data.length?'Link deleted':'That link was already removed','success');done=true}
+  catch(err){toast('Delete failed: '+(err.message||err.code||'unknown'),'error')}
+  finally{_pendingOps--;_linksGen++;}
+  if(done){DATA.links=DATA.links.filter(l=>l.id!==linkId);await openProjectDetail(projectId);fetchAll();}}
 async function postComment(pid){
   const body=$('#newComment').value.trim();
   const img=PENDING_IMG['cmt-'+pid]||null;
