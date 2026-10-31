@@ -2320,3 +2320,21 @@ row "Pillars: an admin sees the ticks but a tap or Reset writes nothing"; walk `
 on the new code, 5 of 9 on the old (the admin checks fail there, as they must).
 
 **Rule.** A record that is one person's own report is written by that person only; everyone else gets a read.
+
+## L-VID-061 · The Team Chat frame on a phone: no gap, no pill, no version tag (31 Oct 2026)
+
+**What broke.** On Thulaib's iPhone the Team Chat page showed a big blank band above "October video 3", the "Alerts off,
+tap to turn on" pill sat over the chat and stayed after a tap and the "v23" version tag sat next to the mic. Three
+causes. iOS hands the whole screen's safe area insets to the framed page, so Booster padded for the island a second time.
+The frame was pinned top and bottom with `height:auto`, and iOS WebKit gives such a frame its default 150 px height. The
+push pill and the version marker are fixed to the bottom corners of the Video System, which is where the chat box lives.
+
+**The block.** On phones `.vteam-frame` is fixed with an explicit height, `calc(100dvh - var(--vteam-top))`, never top
+plus bottom. `vteamFit()` measures the top bar and sets `--vteam-top` on load, resize and orientation change.
+`body:has(#vteamFrame)` hides `#bbpush-pill` and `.version-marker`. The push block (canon
+`~/bb-systems/push/client/bb-push-block.CANON.html`) hides the pill for the session once tapped. Booster's page sets
+`html.embed{--sat:0px}` and `body{padding-bottom:0}`; its walk section 15 checks E1 (the inset rule) and E2 (the page is
+no taller than the frame). Seen on the iPhone 17 Simulator through a test page that copies the VS top bar.
+
+**Rule.** A framed page on a phone gets an explicit height and its own insets set to zero; nothing fixed to a corner may
+sit over a chat box.
