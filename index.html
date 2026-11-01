@@ -4842,7 +4842,20 @@ function renderTeamChat(){
 }
 /* L-VID-061: on a phone the frame starts exactly at the header's bottom edge, measured, never guessed (the header grows with
    the notch and the Dynamic Island). Re-measured on every resize and turn. */
-function vteamFit(){var t=document.querySelector('.topbar');if(t)document.documentElement.style.setProperty('--vteam-top',Math.round(t.getBoundingClientRect().bottom)+'px');}
+function vteamFit(){var t=document.querySelector('.topbar');if(t)document.documentElement.style.setProperty('--vteam-top',Math.round(t.offsetTop+t.offsetHeight)+'px');}
+/* L-VID-062 (1 Nov 2026, CEO: the screen must stay still): the keyboard must not move the top bar or the chat's own header.
+   The chat stops Safari sliding the page (its box is see-through for the one frame it takes focus), so here the keyboard only
+   makes the chat frame shorter, like WhatsApp. If Safari slides the page anyway, the top bar and frame follow the part you see.
+   Safari reports a closed keyboard about 0.4 s late, so the chat sends bb-team-kb {open:false} the moment its box lets go and
+   the frame gets its full height back at once; Safari's own late figures are ignored until they agree. */
+function vteamKbNote(e,f){var d=e&&e.data;return !!(f&&f.contentWindow&&e.source===f.contentWindow&&d&&d.type==='bb-team-kb'&&d.open===false);}
+(function(){var v=window.visualViewport;if(!v)return;var r=document.documentElement,closing=0;
+  function vv(){var f=document.getElementById('vteamFrame');if(!f){r.classList.remove('vv-on');return;}var off=Math.max(0,Math.round(v.offsetTop)),kb=off>0||v.height<window.innerHeight-1;
+    if(closing){if(kb&&Date.now()<closing)return;closing=0;}
+    r.style.setProperty('--vv-off',off+'px');r.style.setProperty('--vv-h',Math.round(v.height)+'px');r.classList.toggle('vv-on',kb);}
+  window.addEventListener('message',function(e){if(!vteamKbNote(e,document.getElementById('vteamFrame')))return;
+    closing=Date.now()+1200;r.style.setProperty('--vv-off','0px');r.classList.remove('vv-on');});
+  v.addEventListener('resize',vv);v.addEventListener('scroll',vv);})();
 window.addEventListener('resize',function(){if(document.getElementById('vteamFrame'))vteamFit();});
 window.addEventListener('orientationchange',function(){setTimeout(function(){if(document.getElementById('vteamFrame'))vteamFit();},250);});
 // === PAGE: OLD CLIENT CHAT (one chat per client, before 29 Oct 2026) ===
@@ -6988,6 +7001,8 @@ body:has(#vteamFrame) #bbpush-pill,body:has(#vteamFrame) .version-marker{display
 @media (max-width:768px),(orientation:landscape) and (max-height:500px) and (max-width:1024px){
   .vteam-wrap{margin:0}
   .vteam-frame{position:fixed;left:0;right:0;top:var(--vteam-top,calc(56px + var(--sat)));width:100%;height:calc(100vh - var(--vteam-top,calc(56px + var(--sat))));height:calc(100dvh - var(--vteam-top,calc(56px + var(--sat))));min-height:0;border-radius:0;z-index:5}
+  html.vv-on body:has(#vteamFrame) .topbar{transform:translateY(var(--vv-off,0px))}
+  html.vv-on .vteam-frame{transform:translateY(var(--vv-off,0px));height:calc(var(--vv-h,100dvh) - var(--vteam-top,calc(56px + var(--sat))))}
 }
 .bulk-action-bar{bottom:calc(24px + var(--sab))}
 @media(max-width:768px){.bulk-action-bar{bottom:calc(14px + var(--sab))}}
@@ -8013,6 +8028,15 @@ async function runSelfTest(){
    ok('Team Chat: only light or dark rides along, before the video hash (Hub look, 30 Oct 2026)',!badT.length,badT.join('; ')||'');
    ok('Team Chat: editors and full roles both have it in the menu',
       PAGES_EDITOR.some(p=>p.key==='team_chat')&&PAGES_FULL.some(p=>p.key==='team_chat'),'');
+  })();
+
+  /* ── H25 · L-VID-062, 1 Nov 2026: only the chat frame may say the keyboard has closed ── */
+  (function(){
+   const f=document.createElement('iframe');f.style.display='none';document.body.appendChild(f);const fw=f.contentWindow,yes={type:'bb-team-kb',open:false};
+   const cases=[[{source:fw,data:yes},f,true,'the chat frame'],[{source:window,data:yes},f,false,'the page itself'],[{source:fw,data:{type:'bb-team-kb',open:true}},f,false,'open true'],
+                [{source:fw,data:{type:'bb-theme',open:false}},f,false,'another note'],[{source:fw,data:yes},null,false,'no frame on screen'],[{source:fw,data:null},f,false,'empty note']];
+   const bad=cases.filter(c=>vteamKbNote(c[0],c[1])!==c[2]).map(c=>c[3]);f.remove();
+   ok('Team Chat: only the chat frame can say the keyboard has closed, nothing else moves the frame (L-VID-062)',!bad.length,bad.join('; ')||'');
   })();
 
   /* ── H23 · decision 105, 7 Oct 2026: nobody who has left can sign in ── */

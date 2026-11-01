@@ -2338,3 +2338,21 @@ no taller than the frame). Seen on the iPhone 17 Simulator through a test page t
 
 **Rule.** A framed page on a phone gets an explicit height and its own insets set to zero; nothing fixed to a corner may
 sit over a chat box.
+
+## L-VID-062 · The keyboard must not move the screen (1 Nov 2026)
+
+**What broke.** On the iPhone, tapping the Team Chat box slid the whole page up: the top bar and the chat's own header
+left the screen, then dropped back. Closing the keyboard left the box hanging in mid air for about 0.4 s. Two causes.
+Safari pans the page to show a focused box before any script hears about it (the scroll event arrives about 85 ms after
+the pan, so no script can undo it in time). And Safari reports the closed keyboard late through `visualViewport`.
+
+**The block.** Booster makes its box see-through for the one frame it takes focus inside the Video System, so Safari has
+nothing to pan to. Here the keyboard only makes the frame shorter (`vv-on`, `--vv-h`), like WhatsApp. The chat sends
+`bb-team-kb {open:false}` the moment its box lets go; `vteamKbNote()` accepts that note only from the chat frame, and the
+frame gets its full height back at once while Safari's late figures are ignored for 1.2 s. Measured on the iPhone 17
+Simulator by video: the header stayed at 126 points on every frame, and the box drops within about 50 ms of the keyboard
+closing (it was 380 ms). Self-test row "only the chat frame can say the keyboard has closed" fails by name when the
+guard is loosened. Booster's walk section 17 checks O10 and O11.
+
+**Rule.** On a phone the keyboard shrinks the chat, it never moves the screen. Only a note from the chat frame changes
+the frame.
