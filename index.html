@@ -2077,7 +2077,9 @@ async function fetchAll(silent=false){
     if(_gen<_committedGen)return; /* a newer refresh already landed: this answer is older (L-VID-058) */
     _committedGen=_gen;
     DATA.projects=pr.data||[];
-    DATA.clients=cr.data||[];
+    /* L-VID-065, 2 Nov 2026 (video head): every client list reads A to Z. Sorted ONCE here so every
+       dropdown, the Clients tab, the recap and the chat picker follow it without their own sort. */
+    DATA.clients=(cr.data||[]).slice().sort((a,b)=>String(a.name||'').trim().localeCompare(String(b.name||'').trim(),'en',{sensitivity:'base'}));
     DATA.teamMembers=tr.data||[];
     if(_lg===_linksGen)DATA.links=_keep(llr,DATA.links,'video_project_links'); /* a link changed after this read began: keep the newer list */
     DATA.shoots=_keep(slr,DATA.shoots,'smm_shoots');
@@ -4306,7 +4308,7 @@ function renderClients(){
     const target=videoTarget(c,selY,selM);
     const lastAct=proj.map(p=>p.updated_at||p.created_at).sort().pop();
     return {client:c,active,postedThisMonth,inProgress:md.inProgress,target,total:proj.length,lastAct};
-  }).sort((a,b)=>b.active-a.active);
+  }); /* L-VID-065: A to Z, the order DATA.clients already has (was busiest first) */
   // Summary: how many clients hit target this month
   const withTarget=rows.filter(r=>r.target>0);
   const hitTarget=withTarget.filter(r=>r.postedThisMonth>=r.target).length;
@@ -5088,6 +5090,9 @@ let _wpCells = {};
 let _wpCurStatus = 'pending';
 
 function wpCanEdit(){const r=(currentUser?.role||'').toLowerCase();return r==='admin'||r==='video_head';}
+/* L-VID-065, 2 Nov 2026 (video head): a team member ticks the done work on THEIR OWN row. Planning,
+   editing a line and moving it to the next day stay with the head and admins (wpCanEdit). */
+function wpCanTick(editor){if(wpCanEdit())return true;const me=(currentUser?.name||'').trim().toUpperCase();return !!me&&String(editor||'').trim().toUpperCase()===me;}
 function wpVisibleEditors(){
   const all=wpEditors();
   if(wpCanEdit())return all;
@@ -5499,9 +5504,9 @@ function wpGridRender(){
               const part=it.done>0&&!it.fin;
               const picking=_wpPick===ed+'-'+d+'-'+ix;
               return `<div class="wp-item${it.fin?' done':''}${part?' part':''}">`+
-                (canEdit?`<span class="wp-item-box" onclick="event.stopPropagation();wpToggleItem('${ed}',${d},${ix})" title="${it.fin?'Mark not done':'Mark all done'}">${vicon('check',12)}</span>`:'')+
+                (wpCanTick(ed)?`<span class="wp-item-box" onclick="event.stopPropagation();wpToggleItem('${ed}',${d},${ix})" title="${it.fin?'Mark not done':'Mark all done'}">${vicon('check',12)}</span>`:'')+
                 `<span class="wp-item-txt">${esc(it.text)}</span>`+
-                (it.planned>1?(canEdit?`<button class="wp-item-n${part?' part':''}${it.fin?' fin':''}" onclick="event.stopPropagation();wpPickCount('${ed}',${d},${ix})" title="How many of these are done">${it.done}/${it.planned}</button>`:`<span class="wp-item-n static">${it.done}/${it.planned}</span>`):'')+
+                (it.planned>1?(wpCanTick(ed)?`<button class="wp-item-n${part?' part':''}${it.fin?' fin':''}" onclick="event.stopPropagation();wpPickCount('${ed}',${d},${ix})" title="How many of these are done">${it.done}/${it.planned}</button>`:`<span class="wp-item-n static">${it.done}/${it.planned}</span>`):'')+
                 ((canEdit&&d<5&&!it.fin)?`<button class="wp-item-next" onclick="event.stopPropagation();wpMoveItemNextDay('${ed}',${d},${ix})" title="${it.planned>1&&it.done>0?'Move what is left to the next day':'Move to the next day'}">${vicon('send',12)}</button>`:'')+
               `</div>`+
               (picking?`<div class="wp-cnt-pick" onclick="event.stopPropagation()"><span class="wp-cnt-lbl">done</span>${Array.from({length:it.planned+1},function(_,k){return `<button class="${k===it.done?'on':''}" onclick="event.stopPropagation();wpSetCount('${ed}',${d},${ix},${k})">${k}</button>`}).join('')}</div>`:'');
@@ -5569,11 +5574,13 @@ function wpStripHtml(WS,visible){
 }
 let _wpPick=null;
 function wpPickCount(editor,day,idx){
+  if(!wpCanTick(editor))return;
   const key=editor+'-'+day+'-'+idx;
   _wpPick=(_wpPick===key)?null:key;
   wpGridRender();
 }
 async function wpSetCount(editor,day,idx,nv){
+  if(!wpCanTick(editor))return;
   const cell=_wpCells[editor+'-'+day];if(!cell)return;
   const items=wpItems(cell.content);
   if(!items[idx])return;
@@ -5798,6 +5805,7 @@ async function wpSaveCellRaw(editor,day,items,status,checked){
   return true;
 }
 async function wpToggleItem(editor,day,idx){
+  if(!wpCanTick(editor))return;
   const cell=_wpCells[editor+'-'+day];if(!cell)return;
   const items=wpItems(cell.content);
   if(!items[idx])return;
