@@ -3374,15 +3374,18 @@ async function moveProject(project,newStage){
   if(!_bulkRunning)renderPage();
   let succeeded=false;
   try{
-    const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
-    if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-en)/1000))}).eq('id',o.id)}
-    const histOk=await vshInsert(project.id,newStage,true);   /* DBG-003 follow-up, 7 Oct 2026: error checked, 23505 closes and retries once. L-VID-053: quiet, the toast waits for the card update */
+    /* L-VID-064, 2 Nov 2026: the CARD is saved first, the stage log second. The other
+       way round, a refused card (Rejected was missing from the database's stage list)
+       left a log row saying Rejected while the card snapped back: video 168 had seven. */
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
     if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
     else if(COMPLETED_STAGES.includes(old)||old==='posted')up.completed_at=null;
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
     succeeded=true;
+    const {data:open}=await sb.from('video_stage_history').select('*').eq('video_project_id',project.id).is('exited_at',null);
+    if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-en)/1000))}).eq('id',o.id)}
+    const histOk=await vshInsert(project.id,newStage,true);   /* DBG-003 follow-up, 7 Oct 2026: error checked, 23505 closes and retries once. L-VID-053: quiet, the toast waits for the card update */
     bbuNote(project, old, newStage);   /* only after the write is real */
     if(!_bulkRunning){
       /* NAME THE MONTH. A video counts for the month it is TAGGED for, never
@@ -3399,6 +3402,7 @@ async function moveProject(project,newStage){
     if(!histOk) vshWarnToast();   /* L-VID-053, 7 Oct 2026: only now is "the card itself is saved" true */
   }catch(err){
     console.error(err);
+    if(succeeded){ vshWarnToast(); return; }   /* L-VID-064: the card IS saved, only the log hiccupped; never say "Move failed" */
     project.current_stage=old;
     project.updated_at=oldUpdated;
     project.completed_at=oldCompleted;
