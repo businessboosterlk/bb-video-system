@@ -3467,7 +3467,7 @@ async function tsRecordEvent(project,from,to,a){
   }catch(e){
     console.warn('[team-score] review event not saved for video '+project.id+' ('+a.kind+'): '+((e&&e.code?e.code+' ':'')+((e&&e.message)||String(e))));
     try{if(window.bbReportDbError)window.bbReportDbError('bb_review_events','insert',e);}catch(_){}
-    if(Date.now()-_tsToastAt>3000){_tsToastAt=Date.now();toast(a.kind==='rating'?'Saved. The stars were not recorded':'Saved, but the reason was not recorded','error');}
+    if(Date.now()-_tsToastAt>3000){_tsToastAt=Date.now();toast(a.kind==='rating'?'Saved. The stars were not recorded.':'Saved. The reason was not recorded.','error');}
     return false;
   }
 }
