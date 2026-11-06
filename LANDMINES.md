@@ -2356,3 +2356,6 @@ guard is loosened. Booster's walk section 17 checks O10 and O11.
 
 **Rule.** On a phone the keyboard shrinks the chat, it never moves the screen. Only a note from the chat frame changes
 the frame.
+
+## L-VID-066 · Team Score: a reason on every send back, stars on the pass, a deadline on every video (6 Nov 2026)
+**What changed (bb_pending 1440).** Every move into Changes asks "Why is it going back?" (3+ characters) and every pass out of Video Head Review asks for 1 to 5 stars, before anything is written; the answer goes to `bb_review_events` AFTER the card and the stage log. The deadline is required, suggested 3 working days after the first entry into Editing, and a move into Editing with no deadline gets one in the same card write. **Lesson.** A sheet that opens over another sheet broke Back: BBF gave the first open overlay the Back press and kept one history entry for all, so Back closed the form under the reason sheet and a second Back left the app. BBF now treats the LAST open overlay as the top and keeps one history entry per open overlay. **Rule.** Any prompt that can open over a form needs its own history entry; test Back once AND twice with the form underneath. Walk: `~/bb-systems/team-score/checks/walk-video-review.mjs` (77 of 77 at 1440 and 390; the old copy fails).

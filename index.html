@@ -323,6 +323,23 @@ a:hover{text-decoration:underline}
 .m-sheet{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);animation:fadeIn .15s}
 .m-sheet-inner{background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;width:100%;max-width:420px;max-height:86vh;max-height:86dvh;overflow-y:auto;padding:16px 16px 18px;animation:slideUp .2s}
 .m-sheet-grip{display:none}
+/* Team Score sheets (L-VID-066): why it went back, and stars on the pass */
+.field-hint{font-size:12px;color:var(--text-3);margin-top:6px;line-height:1.35}
+.field-hint.err,.vs-ask-hint.err{color:var(--red)}
+.field-input[aria-invalid=true]{border-color:var(--red)}
+.vs-ask-title{font-size:17px;font-weight:700;color:var(--text);text-align:center;margin:4px 0 4px}
+.vs-ask-sub{font-size:13px;color:var(--text-3);text-align:center;margin-bottom:16px;overflow-wrap:anywhere}
+.vs-ask .vs-ask-reason{font-size:16px!important;min-height:104px;resize:vertical;line-height:1.4}
+.vs-ask-hint{font-size:13px;color:var(--text-3);margin:8px 0 16px;min-height:18px;text-align:center}
+.vs-stars{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:2px 0 0}
+.vs-star{min-width:44px;min-height:60px;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.vs-star-g{font-size:22px;line-height:1}
+.vs-star-n{font-size:12px;font-weight:600;line-height:1}
+.vs-star.on{color:var(--amber);border-color:var(--amber);background:var(--amber-soft)}
+.vs-ask-bar{display:flex;flex-direction:column;gap:8px}
+.vs-ask-bar .btn{width:100%;justify-content:center;min-height:48px;font-size:15px;touch-action:manipulation}
+.vs-ask-go:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;filter:grayscale(.3)}
+.vs-ask-cancel{background:none;color:var(--text-2)}
 .m-sheet-title{font-size:13px;font-weight:700;color:var(--text);text-align:center;margin-bottom:4px}
 .m-sheet-sub{font-size:11px;color:var(--text-3);text-align:center;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
 .m-stage-opt{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:11px 13px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:600;margin-bottom:7px;cursor:pointer;text-align:left;font-family:inherit}
@@ -2982,10 +2999,19 @@ async function bulkMoveProjects(newStage){
      silent failure, should the toggle ever reach an editor. */
   const _no=ids.map(id=>getProject(id)).filter(Boolean).map(p=>vidMoveRefusal(p.current_stage,newStage)).find(Boolean);
   if(_no){toast(_no,'error');return;}
+  /* Team Score (L-VID-066): one reason or one set of stars for the whole run,
+     asked once before it starts. Cancel moves nothing. */
+  const _sel=ids.map(id=>getProject(id)).filter(Boolean);
+  const pre={};
+  const _back=_sel.filter(p=>newStage==='changes'&&p.current_stage!=='changes');
+  if(_back.length){const a=await tsAskReason(_back[0].title,_back[0].current_stage,_back.length);if(!a){const b=$('#bulkMoveTo');if(b)b.value='';return;}pre.reason=a.reason;}
+  const _pass=_sel.filter(p=>tsIsPass(p.current_stage,newStage));
+  if(_pass.length){const a=await tsAskStars(_pass[0].title,newStage,_pass.length);if(!a){const b=$('#bulkMoveTo');if(b)b.value='';return;}pre.stars=a.stars;}
   await _runBulk(`Moved to ${lbl} —`, ids, async (pid)=>{
     const p=getProject(pid);
     if(!p||p.current_stage===newStage)return 'skip';
-    await moveProject(p,newStage);
+    const r=await moveProject(p,newStage,pre);
+    if(r===false)throw new Error('not moved');
   });
 }
 async function bulkDuplicateProjects(){
@@ -3335,7 +3361,118 @@ async function vshInsert(pid,stage,quiet){
   return false;
 }
 
-async function moveProject(project,newStage){
+/* ══ TEAM SCORE, 6 Nov 2026 (bb_pending 1440, L-VID-066) ═════════════════
+   Spec: ~/bb-systems/team-score/SPEC.md. Every move into Changes asks why and
+   every pass out of Video Head Review asks for stars, before anything is
+   written. Write order: card, stage log, then the review event. A refused event
+   keeps the move and says so. A move into Editing with no deadline gets one,
+   3 working days (Mon to Fri, Colombo) from the move, in the same card write. */
+const TS_SEND_BACK_FROM=['team_review','video_head_review','coo_check','rendering','editing'];
+const TS_CLIENT_FROM=['client_review','client_changes'];
+function tsStageIdx(k){return STAGES.findIndex(s=>s.key===k)}
+/* The five listed stages are send backs, the two client stages are client changes.
+   Any other stage (rare: Video Shot, Cutting, Add to Drive, Rejected) is a send back
+   before Client Review and a client change after it, so no reason is ever lost. */
+function tsChangeKind(from){
+  if(TS_SEND_BACK_FROM.includes(from))return 'send_back';
+  if(TS_CLIENT_FROM.includes(from))return 'client_change';
+  const i=tsStageIdx(from);
+  return (i>-1&&i<tsStageIdx('client_review'))?'send_back':'client_change';
+}
+function tsIsPass(from,to){
+  if(from!=='video_head_review'||to==='changes'||to==='rejected')return false;
+  return tsStageIdx(to)>tsStageIdx(from);
+}
+/* Calendar days in COLOMBO (UTC+05:30), whatever the device clock says. The
+   date is shifted by 5:30 and then read with the UTC getters, so a move at
+   02:00 Colombo is that Colombo day, never the UTC day before (H5). */
+function tsYmd(d){return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0')}
+function colomboDay(ms){return tsYmd(new Date((ms==null?Date.now():ms)+19800000))}
+function addWorkingDays(dayIso,n){
+  const d=new Date(dayIso+'T00:00:00Z');let k=0;
+  while(k<n){d.setUTCDate(d.getUTCDate()+1);const w=d.getUTCDay();if(w!==0&&w!==6)k++;}
+  return tsYmd(d);
+}
+function vsDeadlineFrom(ms){return addWorkingDays(colomboDay(ms),3)}
+function fmtDeadlineShort(iso){try{return new Date(iso+'T12:00:00Z').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'Asia/Colombo'})}catch(_){return iso}}
+/* First time the video reached Editing, from the history already loaded. */
+function vsFirstEditingMs(pid){
+  const rows=(DATA.stageHistory||[]).filter(h=>h.video_project_id===pid&&h.stage==='editing'&&h.entered_at);
+  if(!rows.length)return null;
+  return Math.min(...rows.map(h=>Date.parse(h.entered_at)));
+}
+/* The form's suggestion: new or never in Editing = today, else first entry into Editing. */
+function vsPrefillDeadline(existing){
+  if(!existing)return vsDeadlineFrom();
+  const ms=vsFirstEditingMs(existing.id);
+  return vsDeadlineFrom(ms==null?undefined:ms);
+}
+/* One sheet for the reason and the stars. Resolves {reason} or {stars}, or null
+   on Cancel, a tap outside or Back (BBF clicks the [data-close] Cancel). */
+function vsAsk(o){
+  return new Promise(resolve=>{
+    const prev=document.getElementById('vsAskSheet');if(prev)prev.remove();
+    const isStars=o.kind==='stars';
+    const w=document.createElement('div');
+    w.className='m-sheet vs-ask';w.id='vsAskSheet';w.dataset.ask=o.kind;
+    w.innerHTML='<div class="m-sheet-inner" role="dialog" aria-modal="true" aria-labelledby="vsAskTitle"><div class="m-sheet-grip"></div>'
+      +'<div class="vs-ask-title" id="vsAskTitle">'+esc(o.title)+'</div><div class="vs-ask-sub">'+esc(o.sub)+'</div>'
+      +(isStars
+        ?'<div class="vs-stars" role="radiogroup" aria-label="Stars">'+[1,2,3,4,5].map(n=>'<button type="button" class="vs-star" role="radio" aria-checked="false" aria-label="'+n+' star'+(n>1?'s':'')+'" data-stars="'+n+'"><span class="vs-star-g" aria-hidden="true">★</span><span class="vs-star-n">'+n+'</span></button>').join('')+'</div>'
+        :'<label class="field-label" for="vsAskReason">Reason</label><textarea class="field-textarea vs-ask-reason" id="vsAskReason" rows="3" maxlength="500" placeholder="'+esc(o.placeholder||'')+'"></textarea>')
+      +'<div class="vs-ask-hint" id="vsAskHint" aria-live="polite">'+esc(o.hint)+'</div>'
+      +'<div class="vs-ask-bar"><button type="button" class="btn btn-primary vs-ask-go" data-ask-go disabled>'+esc(o.go)+'</button>'
+      +'<button type="button" class="btn btn-ghost vs-ask-cancel" data-close>Cancel</button></div></div>';
+    document.body.appendChild(w);
+    let picked=0,done=false;
+    const go=w.querySelector('[data-ask-go]'),ta=w.querySelector('#vsAskReason'),hint=w.querySelector('#vsAskHint');
+    const valid=()=>isStars?picked>0:ta.value.trim().length>=3;
+    const finish=v=>{if(done)return;done=true;w.remove();resolve(v);};
+    if(ta){
+      ta.addEventListener('input',()=>{go.disabled=!valid();hint.classList.remove('err');});
+      if(window.matchMedia&&matchMedia('(pointer:fine)').matches)setTimeout(()=>{try{ta.focus({preventScroll:true})}catch(_){}},30);
+    }
+    w.addEventListener('click',e=>{
+      if(e.target===w||e.target.closest('[data-close]')){finish(null);return;}
+      const sb_=e.target.closest('[data-stars]');
+      if(sb_){picked=parseInt(sb_.dataset.stars);
+        w.querySelectorAll('[data-stars]').forEach(b=>{const n=parseInt(b.dataset.stars);b.classList.toggle('on',n<=picked);b.setAttribute('aria-checked',String(n===picked));});
+        go.disabled=false;hint.textContent=picked+' of 5';return;}
+      if(e.target.closest('[data-ask-go]')){
+        if(!valid()){hint.classList.add('err');return;}
+        finish(isStars?{stars:picked}:{reason:ta.value.trim()});
+      }
+    });
+  });
+}
+function tsAskReason(title,from,count){
+  return vsAsk({kind:'reason',title:'Why is it going back?',
+    sub:(count>1?count+' videos':title)+' · '+stageLabel(from)+' to Changes',
+    placeholder:'What needs fixing',hint:'Write at least 3 characters so the editor knows what to fix.',
+    go:count>1?'Send '+count+' back to Changes':'Send back to Changes'});
+}
+function tsAskStars(title,to,count){
+  return vsAsk({kind:'stars',title:'How good was this edit?',
+    sub:(count>1?count+' videos, same stars for each':title)+' · Video Head Review to '+stageLabel(to),
+    hint:'Pick 1 to 5 stars.',go:'Pass to '+stageLabel(to)});
+}
+let _tsToastAt=0;
+async function tsRecordEvent(project,from,to,a){
+  const row={system:'video',job_id:project.id,person_id:project.assigned_editor_id||null,kind:a.kind,from_stage:from,to_stage:to,by_name:currentUser.name};
+  if(a.kind==='rating')row.stars=a.stars;else row.reason=a.reason;
+  try{
+    const {error}=await sb.from('bb_review_events').insert(row);
+    if(error)throw error;
+    return true;
+  }catch(e){
+    console.warn('[team-score] review event not saved for video '+project.id+' ('+a.kind+'): '+((e&&e.code?e.code+' ':'')+((e&&e.message)||String(e))));
+    try{if(window.bbReportDbError)window.bbReportDbError('bb_review_events','insert',e);}catch(_){}
+    if(Date.now()-_tsToastAt>3000){_tsToastAt=Date.now();toast(a.kind==='rating'?'Saved. The stars were not recorded':'Saved, but the reason was not recorded','error');}
+    return false;
+  }
+}
+
+async function moveProject(project,newStage,pre){
   /* A move to the stage it is ALREADY in is not a move. Without this it wrote
      a history row, bumped updated_at, and the card jumped to the top of its own
      column, which reads as the board shuffling itself. It also polluted the
@@ -3344,7 +3481,7 @@ async function moveProject(project,newStage){
      action that caught cards already sitting in the target stage. */
   if(project.current_stage===newStage){
     if(!_bulkRunning)toast(`Already in ${STAGES.find(s=>s.key===newStage)?.label||newStage}`,'info');
-    return;
+    return false;
   }
   /* Decision 105, 7 Oct 2026: the editor gate lives HERE, in the one writer,
      not in each caller (L-VID-025 had it open). Drag and drop, the move menu,
@@ -3360,11 +3497,40 @@ async function moveProject(project,newStage){
   if(_refusal){
     if(_bulkRunning)throw new Error(_refusal);
     toast(_refusal,'error');
-    return;
+    return false;
+  }
+  /* Team Score (L-VID-066): ask before anything is written. An undo asks nothing
+     and records nothing; a bulk run brings one answer for all its videos in pre. */
+  let _ts=null;
+  if(!_u){
+    const _from=project.current_stage;
+    if(newStage==='changes'){
+      let reason=pre&&pre.reason;
+      if(!reason){
+        if(_bulkRunning)throw new Error('A reason is needed to send a video back');
+        const a=await tsAskReason(project.title,_from,1);if(!a)return false;reason=a.reason;
+      }
+      _ts={kind:tsChangeKind(_from),reason};
+    }else if(tsIsPass(_from,newStage)){
+      let stars=pre&&pre.stars;
+      if(!stars){
+        if(_bulkRunning)throw new Error('Stars are needed to pass a video');
+        const a=await tsAskStars(project.title,newStage,1);if(!a)return false;stars=a.stars;
+      }
+      _ts={kind:'rating',stars};
+    }
+    if(_ts&&!pre){
+      /* The sheet was open a while: a refresh may have replaced the card. */
+      const fresh=getProject(project.id);if(fresh)project=fresh;
+      if(project.current_stage!==_from){toast('This video moved while the sheet was open. Nothing changed.','error');return false;}
+    }
   }
   const old=project.current_stage;
   const oldUpdated=project.updated_at;
   const oldCompleted=project.completed_at;
+  const oldDeadline=project.deadline;
+  const autoDeadline=(newStage==='editing'&&!project.deadline)?vsDeadlineFrom():null;
+  if(autoDeadline)project.deadline=autoDeadline;
   project.current_stage=newStage;
   project.updated_at=new Date().toISOString(); // float the card to the top of its new column immediately
   /* Stamp the finish on the way IN and CLEAR it on the way OUT. Without the clear, a video
@@ -3382,6 +3548,7 @@ async function moveProject(project,newStage){
     const up={current_stage:newStage,updated_at:new Date().toISOString()};
     if(newStage==='add_to_drive')up.completed_at=new Date().toISOString();
     else if(COMPLETED_STAGES.includes(old)||old==='posted')up.completed_at=null;
+    if(autoDeadline)up.deadline=autoDeadline;   /* L-VID-066: same write as the move, card first */
     const {error}=await sb.from('video_projects').update(up).eq('id',project.id);
     if(error)throw error;
     succeeded=true;
@@ -3389,6 +3556,7 @@ async function moveProject(project,newStage){
     if(open&&open.length){const o=open[0];const ex=new Date();const en=new Date(o.entered_at);await sb.from('video_stage_history').update({exited_at:ex.toISOString(),duration_seconds:Math.max(0,Math.floor((ex-en)/1000))}).eq('id',o.id)}
     const histOk=await vshInsert(project.id,newStage,true);   /* DBG-003 follow-up, 7 Oct 2026: error checked, 23505 closes and retries once. L-VID-053: quiet, the toast waits for the card update */
     bbuNote(project, old, newStage);   /* only after the write is real */
+    if(_ts)await tsRecordEvent(project,old,newStage,_ts);   /* L-VID-066: third, after card and log; never throws */
     if(!_bulkRunning){
       /* NAME THE MONTH. A video counts for the month it is TAGGED for, never
          the month it was finished, so delivering an October video changes
@@ -3399,17 +3567,21 @@ async function moveProject(project,newStage){
           ? ' · counted for '+MONTHS[parseInt(project.target_month)-1]+(project.target_year?' '+project.target_year:'')
           : ' · NO MONTH SET, so it counts for nobody';
       }
+      if(autoDeadline)_extra+=' · deadline set to '+fmtDeadlineShort(autoDeadline);
       toast(`Moved to ${STAGES.find(s=>s.key===newStage)?.label}`+_extra,'success');
     }
     if(!histOk) vshWarnToast();   /* L-VID-053, 7 Oct 2026: only now is "the card itself is saved" true */
+    return true;
   }catch(err){
     console.error(err);
-    if(succeeded){ vshWarnToast(); return; }   /* L-VID-064: the card IS saved, only the log hiccupped; never say "Move failed" */
+    if(succeeded){ vshWarnToast(); return true; }   /* L-VID-064: the card IS saved, only the log hiccupped; never say "Move failed" */
     project.current_stage=old;
     project.updated_at=oldUpdated;
     project.completed_at=oldCompleted;
+    project.deadline=oldDeadline;
     if(!_bulkRunning)toast('Move failed','error');
     if(_bulkRunning)throw err; // let the bulk runner count the failure
+    return false;
   }finally{
     _pendingOps--;
     if(!_bulkRunning)await fetchAll(true);
@@ -3424,11 +3596,20 @@ function openProjectForm(existing=null){
     <div><label class="field-label">Title</label><input class="field-input" name="title" required value="${esc(existing?.title||'')}" autofocus></div>
     <div class="form-row"><div><label class="field-label">Client</label><select class="field-select" name="client_id"><option value="">— None —</option>${DATA.clients.map(c=>`<option value="${c.id}" ${existing?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div><label class="field-label">Assigned Editor</label><select class="field-select" name="assigned_editor_id"><option value="">Unassigned</option>${assignableEditors().map(m=>`<option value="${m.id}" ${existing?.assigned_editor_id===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div></div>
     <div class="form-row"><div><label class="field-label">Priority</label><select class="field-select" name="priority">${['low','medium','high','urgent'].map(p=>`<option value="${p}" ${(existing?.priority||'medium')===p?'selected':''}>${p[0].toUpperCase()+p.slice(1)}</option>`).join('')}</select></div><div><label class="field-label">Type</label><select class="field-select" name="type">${['reel','ad','testimonial','product','educational'].map(t=>`<option value="${t}" ${(existing?.type||'reel')===t?'selected':''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></div></div>
-    <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label">Deadline</label><input class="field-input" type="date" name="deadline" value="${existing?.deadline||''}"></div></div>
+    <div class="form-row"><div><label class="field-label">Stage</label><select class="field-select" name="current_stage">${STAGES.map(s=>`<option value="${s.key}" ${(existing?.current_stage||'video_shot')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div><div><label class="field-label" for="pfDeadline">Deadline <span style="color:var(--red,#ef4444)">*</span></label><input class="field-input" type="date" id="pfDeadline" name="deadline" required aria-describedby="pfDeadlineHint" value="${existing?.deadline||vsPrefillDeadline(existing)}"><div class="field-hint" id="pfDeadlineHint" data-ts-deadline>${existing?.deadline?'':'Suggested: 3 working days after it reached Editing'}</div></div></div>
     <div class="form-row"><div><label class="field-label">Month <span style="color:var(--red,#ef4444)">*</span> ${existing?.target_year?`<span class="muted">(${existing.target_year})</span>`:''}</label><select class="field-select" name="target_month" required><option value="" disabled ${!parseInt(existing?.target_month)?'selected':''}>— Select month —</option>${MONTHS.map((m,i)=>`<option value="${i+1}" ${parseInt(existing?.target_month)===i+1?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="field-label">Formula (optional)</label><input class="field-input" name="formula" value="${esc(existing?.formula||'')}"></div></div>
     <div><label class="field-label">Description / Notes</label><textarea class="field-textarea" name="description" rows="3">${esc(existing?.description||'')}</textarea></div>
   </div></form><div class="modal-footer">${ie&&(currentUser.role==='admin'||currentUser.role==='video_head')?`<button class="btn btn-ghost btn-danger" data-del="${existing.id}">Delete</button>`:''}<button class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" data-save="${ie?existing.id:''}">${ie?'Save':'Create'}</button></div></div></div>`;
   $('#modalRoot').innerHTML=html;
+  /* L-VID-066: a video with no deadline is suggested 3 working days after it FIRST
+     reached Editing. The loaded history is a window, so read its own rows and
+     refine the suggestion unless the head has already changed the date. */
+  if(ie&&!existing.deadline){
+    const inp=$('#pfDeadline');let touched=false;
+    if(inp){inp.addEventListener('input',()=>{touched=true;});inp.addEventListener('change',()=>{touched=true;});}
+    sb.from('video_stage_history').select('entered_at').eq('video_project_id',existing.id).eq('stage','editing').order('entered_at',{ascending:true}).limit(1)
+      .then(r=>{if(r.error||!r.data||!r.data.length||touched||!inp||!document.body.contains(inp))return;inp.value=vsDeadlineFrom(Date.parse(r.data[0].entered_at));}).catch(()=>{});
+  }
   $('#modalRoot').onclick=async e=>{
     if(e.target.closest('[data-close]'))closeModal();
     if(e.target.closest('[data-del]'))await deleteProject(parseInt(e.target.closest('[data-del]').dataset.del));
@@ -3439,6 +3620,13 @@ async function saveProject(id){
   const f=$('#projectForm');const fd=new FormData(f);
   const d={title:fd.get('title').trim(),client_id:fd.get('client_id')?parseInt(fd.get('client_id')):null,assigned_editor_id:fd.get('assigned_editor_id')?parseInt(fd.get('assigned_editor_id')):null,priority:fd.get('priority'),type:fd.get('type'),current_stage:fd.get('current_stage'),deadline:fd.get('deadline')||null,formula:fd.get('formula').trim()||null,description:fd.get('description').trim()||null};
   if(!d.title){toast('Title required','error');return}
+  /* L-VID-066: every saved video carries a deadline, or it can never be scored. */
+  if(!d.deadline){
+    const di=f.querySelector('[name=deadline]'),dh=$('#pfDeadlineHint');
+    if(di){di.setAttribute('aria-invalid','true');try{di.focus({preventScroll:false})}catch(_){}}
+    if(dh){dh.textContent='Pick a deadline. Every video needs the day its edit is due.';dh.classList.add('err');}
+    toast('Deadline required: pick the day the edit is due','error');return;
+  }
   // Month/year must ALWAYS be set so the video counts toward client readiness.
   // If left blank, default to the current month/year instead of blocking.
   let tm=fd.get('target_month')?parseInt(fd.get('target_month')):null;
@@ -3451,7 +3639,7 @@ async function saveProject(id){
   d.target_month=tm;
   d.target_year=ty;
   try{
-    if(id){const o=getProject(id);if(o&&o.current_stage!==d.current_stage)await moveProject(o,d.current_stage);d.updated_at=new Date().toISOString();const {error}=await sb.from('video_projects').update(d).eq('id',id);if(error)throw error;toast('Project updated','success')}
+    if(id){const o=getProject(id);if(o&&o.current_stage!==d.current_stage){const moved=await moveProject(o,d.current_stage);if(!moved)return;}/* L-VID-066: a cancelled or refused move saves nothing */d.updated_at=new Date().toISOString();const {error}=await sb.from('video_projects').update(d).eq('id',id);if(error)throw error;toast('Project updated','success')}
     else{d.created_by=currentUser.name;const {data:ins,error}=await sb.from('video_projects').insert(d).select().single();if(error)throw error;await vshInsert(ins.id,ins.current_stage);/* DBG-003 follow-up, 7 Oct 2026 */toast('Project created','success')}
     closeModal();await fetchAll();
   }catch(err){console.error(err);toast('Save failed: '+(err.message||''),'error')}
@@ -7132,7 +7320,11 @@ select::-ms-expand{display:none}
    is wrong behaviour, not a missing feature. */
 var BBF=(function(){
  var OVS='.modal-backdrop, .m-sheet';
- var lockedY=0, locked=false, lastFocus=null, histDepth=0, closing=false;
+ var lockedY=0, locked=false, lastFocus=null, histDepth=0, expectPop=0, expectTimer=null;
+ /* Our own history.go is answered by a popstate that must not close anything. */
+ function selfBack(k){expectPop++;clearTimeout(expectTimer);
+  expectTimer=setTimeout(function(){expectPop=0;},1500);
+  try{history.go(-k);}catch(e){expectPop=Math.max(0,expectPop-1);}}
  try{if('scrollRestoration' in history)history.scrollRestoration='manual';}catch(e){}
  /* AN OVERLAY IS OPEN WHEN IT IS VISIBLE, never when it carries a class.
     Modals here are added to and removed from the DOM, the mobile sheet toggles
@@ -7154,8 +7346,13 @@ var BBF=(function(){
   }
   return true;
  }
- function anyOpen(){var n=document.querySelectorAll(OVS),i;
-  for(i=0;i<n.length;i++)if(isOpen(n[i]))return n[i];return null;}
+ /* Team Score, 6 Nov 2026 (L-VID-066): a sheet can now open OVER another one
+    (the send back reason over the project form). The top overlay is the LAST
+    open one in the page, and every open overlay holds its own history entry,
+    so Back closes them one at a time and never leaves the app with a sheet up. */
+ function openList(){var n=document.querySelectorAll(OVS),out=[],i;
+  for(i=0;i<n.length;i++)if(isOpen(n[i]))out.push(n[i]);return out;}
+ function anyOpen(){var a=openList();return a.length?a[a.length-1]:null;}
  function lock(){if(locked)return;
   lockedY=window.scrollY||window.pageYOffset||0;
   document.body.style.top=(-lockedY)+'px';
@@ -7188,21 +7385,20 @@ var BBF=(function(){
   if(typeof closeModal==='function'){try{closeModal();return true;}catch(e){}}
   ov.classList.remove('on');ov.classList.remove('open');return true;}
  window.addEventListener('popstate',function(){
-  if(closing)return;                 /* this pop is the one our own close asked for */
+  if(expectPop>0){expectPop--;return;}   /* this pop is the one our own close asked for */
   if(histDepth>0){histDepth--;closeTop();}});
  window.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&anyOpen()){e.preventDefault();history.back();}});
  function sync(){
-  var ov=anyOpen();
-  if(ov&&!locked){lock();shield(ov);takeFocus(ov);
-   histDepth++;try{history.pushState({bbSheet:1},'');}catch(e){}}
+  var all=openList(),n=all.length,ov=n?all[n-1]:null;
+  if(ov&&!locked){lock();shield(ov);takeFocus(ov);}
   else if(!ov&&locked){release();giveBackFocus();
    /* Unlock synchronously, always. Deferring it behind a timer left the body
       pinned for whatever ran next, and that could then not scroll at all. */
-   unlock();
-   if(histDepth>0){histDepth--;closing=true;
-    try{history.back();}catch(e){}
-    setTimeout(function(){closing=false;},0);}}
+   unlock();}
+  /* One history entry per open overlay (L-VID-066). */
+  while(histDepth<n){histDepth++;try{history.pushState({bbSheet:1},'');}catch(e){}}
+  if(histDepth>n){var k=histDepth-n;histDepth=n;selfBack(k);}
  }
  /* ONE observer, never N edited open functions. Modals here are created by
     several functions in several places; watching the DOM covers every one that
@@ -7235,7 +7431,7 @@ var BBF=(function(){
  /* The check asks the module for its selector. A hand written selector inside
     a check is a selector that can be pointed at nothing and pass on silence. */
  return {start:start,hintKeyboards:hintKeyboards,anyOpen:anyOpen,sync:sync,ovs:OVS,
-         isLocked:function(){return locked;}};
+         isLocked:function(){return locked;},depth:function(){return histDepth;}};
 })();
 BBF.start();BBF.hintKeyboards();
 </script>
