@@ -1280,6 +1280,7 @@ const PAGES_FULL = [
   { key: 'tasks',         label: 'Tasks',          section: 'WORKSPACE' },
   { key: 'time_tracker',  label: 'Time Tracker',   section: 'WORKSPACE' },
   { key: 'weeklyplan',   label: 'Weekly Plan',    section: 'WORKSPACE' },
+  { key: 'my_score',      label: 'My score',       section: 'WORKSPACE' }, /* MYSCORE-1: your own Team Score week (6 Nov 2026) */
   { key: 'drive_links',   label: 'Drive Links',    section: 'WORKSPACE' },
   { key: 'recap',         label: 'Month Recap',    section: 'TEAM' },
   { key: 'clients',       label: 'Clients',        section: 'TEAM' },
@@ -1296,6 +1297,7 @@ const PAGES_EDITOR = [
   { key: 'tasks',        label: 'Task Book',     section: 'WORKSPACE' },
   { key: 'time_tracker', label: 'My Time',       section: 'WORKSPACE' },
   { key: 'weeklyplan',  label: 'Weekly Plan',   section: 'WORKSPACE' },
+  { key: 'my_score',     label: 'My score',      section: 'WORKSPACE' }, /* MYSCORE-1 */
   { key: 'team_chat',    label: 'Team Chat',     section: 'WORKSPACE' }, /* P1-23: editors share work from the video team chat */
   { key: 'inspo',        label: 'Inspo Hub ↗',   section: 'EXTRA' },
   { key: 'agents',       label: 'Agents',     section: 'EXTRA' },
@@ -1994,6 +1996,7 @@ function navIcon(key){
     team_chat:'<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>',
     inspo:'<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z"/></svg>',
   };
+  icons.my_score='<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978"/><path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978"/><path d="M18 9h1.5a1 1 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6 9H4.5a1 1 0 0 1 0-5H6"/></svg>'; /* Lucide trophy, the Command Centre's Team Score icon */
   icons.teambrief=icons.team; /* same approved Lucide-shape asset, never a hand-drawn path */
   return icons[key]||icons.dashboard;
 }
@@ -2205,10 +2208,19 @@ function _silentRerender(){
 
 // === ROUTER ===
 function renderPage(){
-  const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,weeklyplan:renderWeeklyPlan,drive_links:renderDriveLinks,clients:renderClients,recap:renderRecap,team:renderTeam,teambrief:renderTeamBrief,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub,agents:renderAgentsPage};
+  const map={dashboard:renderDashboard,my_dashboard:renderMyDashboard,pipeline:renderPipeline,shoot_pipeline:renderShootPipeline,tasks:renderTasks,time_tracker:renderTimeTracker,weeklyplan:renderWeeklyPlan,drive_links:renderDriveLinks,clients:renderClients,recap:renderRecap,team:renderTeam,teambrief:renderTeamBrief,analytics:renderAnalytics,team_chat:renderTeamChat,inspo:renderInspoHub,agents:renderAgentsPage,my_score:renderMyScore};
   const fn=map[currentPage]||renderDashboard;
   try{const r=fn();if(r&&typeof r.catch==='function')r.catch(err=>{console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">'+vicon('alert',34)+'</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'})}catch(err){console.error(err);$('#pageContent').innerHTML='<div class="empty-page"><div class="empty-page-icon">'+vicon('alert',34)+'</div><div class="empty-page-text">Render error: '+esc(err.message)+'</div></div>'}
   try{renderNotifications()}catch(_){}
+}
+
+// === PAGE: MY SCORE (MYSCORE-1, 6 Nov 2026) ===
+/* Drawn by msPage() in the MYSCORE block at the end of this file. A data refresh calls renderPage() again; the score
+   reads its own tables, so a page already on screen is left alone instead of flashing back to "Reading the board". */
+function renderMyScore(){
+  const pc=$('#pageContent');
+  if(pc&&pc.querySelector('#ms-body'))return;
+  if(typeof msPage==='function')return msPage(pc);
 }
 
 // === PAGE: MY DASHBOARD (editor personal view) ===
@@ -9800,3 +9812,387 @@ var BBSET=(function(){
 })();
 </script>
 <!-- @@BB_SETTINGS_END@@ -->
+<!-- @@BB_MYSCORE_CFG@@ -->
+<script>/* MYSCORE app settings: Video System. Read by the block below. */
+window.MS_APP = { sys: 'v', ov: 'modal-backdrop', url: SUPABASE_URL,
+  headers: function () { return { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }; },
+  me: function () {
+    if (typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
+    var n = String(currentUser.name).toLowerCase(), list = (typeof DATA !== 'undefined' && DATA && DATA.teamMembers) || [];
+    var hit = list.filter(function (m) { return String(m.name || '').toLowerCase() === n; });
+    var m = hit.filter(function (x) { return x.active !== false; })[0] || hit[0];
+    var id = m ? m.id : (typeof VIDEO_MEMBER_IDS !== 'undefined' ? VIDEO_MEMBER_IDS[String(currentUser.name).toUpperCase()] : null);
+    return id ? { id: Number(id), name: currentUser.name.charAt(0) + currentUser.name.slice(1).toLowerCase() } : null;
+  } };
+</script>
+<!-- @@BB_MYSCORE_BEGIN@@ MYSCORE-1 (6 Nov 2026, Thulaib approved bb_pending 1440).
+     My score: the signed-in person's OWN week, scored by the Midnight Masala engine (team-score/engine.js, copied byte for
+     byte, never edited) on jobs built by team-score/ts-adapter.js (also a byte copy). The drill-down is the Command Centre's
+     Team Score drill-down, copied. Reads only, writes nothing: anon REST, paged, named columns, never image_url, only the
+     week shown. This block is the same text in the Graphic and Video Systems; the source is
+     ~/bb-systems/team-score/my-score/block.html and install.py puts it in. The app's own settings live in MS_APP, written
+     just above this block. Every figure carries data-fig so ~/bb-systems/team-score/checks/myscore-recount.mjs can compare
+     what this page RENDERED with the reference engine. -->
+<style>
+.ms-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px;flex-wrap:wrap}
+.ms-sub{font-size:13px;color:var(--text-2);max-width:62ch;margin:0}
+.ms-select{min-width:280px;font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-height:44px}
+#ms-body{min-height:50vh}
+.ms-empty{padding:28px;text-align:center;color:var(--text-3);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+.ms-key{font-size:12px;color:var(--text-3);margin:12px 2px 0}
+.ms-foot{font-size:11.5px;color:var(--text-3);margin:8px 2px 0}
+.ms-card{display:grid;grid-template-columns:minmax(200px,1.2fr) minmax(170px,1fr) minmax(0,3fr) auto;gap:16px;align-items:center;width:100%;padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);color:var(--text);text-align:left;font:inherit;cursor:pointer;min-height:64px}
+.ms-card:hover{background:var(--surface-2)}
+.ms-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ms-who{font-size:15px;font-weight:600}
+.ms-who small{display:block;font-size:12px;font-weight:400;color:var(--text-3);margin-top:2px}
+.ms-score b{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.ms-why{display:block;font-size:12px;color:var(--text-3);margin-top:2px}
+.ms-band{display:inline-block;margin-left:8px;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);vertical-align:4px}
+.ms-band[data-band="excellent"]{color:var(--green);background:var(--green-soft)}
+.ms-band[data-band="verygood"]{color:var(--blue);background:var(--blue-soft)}
+.ms-band[data-band="satisfactory"],.ms-band[data-band="needswork"]{color:var(--amber);background:var(--amber-soft)}
+.ms-band[data-band="poor"]{color:var(--red);background:var(--red-soft)}
+.ms-cells{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ms-cell{font-size:14px;font-variant-numeric:tabular-nums}
+.ms-cell small{display:block;font-size:11px;color:var(--text-3)}
+.ms-lbl{display:block;font-size:11px;color:var(--text-3);margin-bottom:2px}
+.ms-go{font-size:12.5px;color:var(--accent);font-weight:600;white-space:nowrap}
+/* the drill-down sheet: a body-level overlay of the app's own kind (MS_APP.ov), so the app's overlay layer locks the page,
+   makes the background inert and closes it on Back */
+.ms-ov{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--shadow-modal)}
+.ms-ov[hidden]{display:none!important}
+.ms-sheet{background:var(--bg);border:1px solid var(--border);border-radius:16px;width:min(1180px,94vw);max-height:90dvh;display:flex;flex-direction:column;overflow:hidden}
+.ms-sheet-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.ms-sheet-hd h2{font-size:17px;font-weight:600;margin:0;color:var(--text)}
+.ms-sheet-hd .ms-cap{font-size:12px;color:var(--text-3);margin-top:2px}
+.ms-x{width:44px;height:44px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text);cursor:pointer;flex-shrink:0;padding:0}
+.ms-x svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ms-sheet-bd{overflow:auto;padding:18px;display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:22px;align-items:start;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.ms-side,.ms-main{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
+.ms-big{display:flex;align-items:flex-end;gap:12px}
+.ms-big strong{font-size:52px;line-height:1;font-weight:600;letter-spacing:-0.04em;font-variant-numeric:tabular-nums;color:var(--text)}
+.ms-big strong.ms-na{font-size:22px;letter-spacing:0}
+.ms-math{border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text-2);font-size:13px;line-height:1.6;margin:0}
+.ms-math span{color:var(--text);font-weight:600}
+.ms-facts{margin:0;display:grid;gap:10px}
+.ms-facts>div{display:grid;grid-template-columns:96px 1fr;gap:10px;font-size:13px}
+.ms-facts dt{color:var(--text-3)}
+.ms-facts dd{margin:0;color:var(--text)}
+.ms-h3{font-size:13px;font-weight:600;margin:0 0 6px;color:var(--text)}
+.ms-ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px;color:var(--text-2)}
+.ms-ul b{color:var(--text);font-weight:600}
+.ms-coach{margin:0;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--border);font-size:13px;color:var(--text)}
+.ms-tw{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:52vh}
+.ms-jobs{width:100%;border-collapse:collapse;font-size:12.5px}
+.ms-jobs th{position:sticky;top:0;background:var(--surface);text-align:left;font-weight:500;color:var(--text-3);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.ms-jobs td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top}
+.ms-jobs td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.ms-jobs .ms-ref{display:block;font-size:11px;color:var(--text-3)}
+.ms-chip{display:inline-block;font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);white-space:nowrap}
+.ms-chip[data-s="ontime"]{color:var(--green);background:var(--green-soft)}
+.ms-chip[data-s="late"],.ms-chip[data-s="overdue"]{color:var(--red);background:var(--red-soft)}
+.ms-chip[data-s="awaiting"]{color:var(--blue);background:var(--blue-soft)}
+@media(max-width:760px){
+  .ms-head{flex-direction:column;align-items:stretch;text-align:center}
+  .ms-sechead{justify-content:center;text-align:center} /* the app's own page heading, where it has one (Graphic): phone is centred */
+  .ms-select{width:100%;min-width:0}
+  .ms-card{grid-template-columns:1fr auto;grid-template-areas:"w s" "c c" "g g";row-gap:12px;padding:14px}
+  .ms-card .ms-who{grid-area:w}.ms-card .ms-score{grid-area:s;text-align:right}.ms-card .ms-cells{grid-area:c}.ms-card .ms-go{grid-area:g}
+  .ms-cells{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ms-ov{padding:0;align-items:stretch}
+  .ms-sheet{width:100%;max-height:none;height:100%;height:100dvh;border-radius:0;border:0}
+  .ms-sheet-hd{padding:calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px)}
+  .ms-sheet-bd{grid-template-columns:minmax(0,1fr);padding:16px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 24px) calc(env(safe-area-inset-left) + 16px)}
+  .ms-tw{max-height:none}
+  .ms-facts>div{grid-template-columns:1fr;gap:2px}
+}
+/* Phone: each job is a card of label and value pairs, never a table cut off at the right edge */
+@media(max-width:639.98px){
+  .ms-tw{border:0;border-radius:0;overflow:visible}
+  .ms-jobs,.ms-jobs tbody{display:block}
+  .ms-jobs thead{display:none}
+  .ms-jobs tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;padding:12px 14px;margin:0 0 10px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+  .ms-jobs td{display:block;padding:0;border:0;min-width:0;text-align:left}
+  .ms-jobs td.ms-t{grid-column:1/-1;font-size:13.5px;font-weight:600}
+  .ms-jobs td[data-l]::before{content:attr(data-l);display:block;font-size:11px;font-weight:400;color:var(--text-3);margin-bottom:2px}
+}
+</style>
+<script>
+/* MYSCORE-1. Every name starts ms so nothing collides with the app around it. */
+var MS_V = '1';
+var MS = { libs: null, weeks: {}, view: null, token: 0, rec: null };
+var MS_STATE = { completed: 'Completed', awaiting: 'Waiting for review', overdue: 'Overdue', in_progress: 'In progress', cancelled: 'Cancelled' };
+var MS_ICON_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+
+function msEsc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
+/* The Command Centre's formatter, the same rules. The recount carries them too and compares the text. */
+function msFmt(v, f) {
+  if (f === 'day') return v ? TS_ADAPTER.dayLabel(Date.parse(v)) : 'Not yet';
+  if (f === 'yesno') return v === null || v === undefined ? 'Not yet' : (v ? 'Yes' : 'No');
+  if (v === null || v === undefined || (typeof v === 'number' && isNaN(v))) return 'Not measurable';
+  if (f === '1dp') return Number(v).toFixed(1);
+  if (f === 'int') return String(Math.round(v));
+  return String(v);
+}
+function msPct(path, v) { return msFig(path, v, '1dp') + (v === null || v === undefined ? '' : '%'); }
+function msFig(path, v, f) { return '<span data-fig="' + msEsc(path) + '" data-fmt="' + f + '">' + msEsc(msFmt(v, f)) + '</span>'; }
+
+function msLoadScript(src) {
+  return new Promise(function (ok, no) { var s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = function () { no(new Error('could not load ' + src)); }; document.head.appendChild(s); });
+}
+function msEnsureLibs() {
+  if (window.MM_ENGINE && window.TS_ADAPTER) return Promise.resolve();
+  if (!MS.libs) {
+    MS.libs = Promise.all([msLoadScript('team-score/engine.js?v=' + MS_V), msLoadScript('team-score/ts-adapter.js?v=' + MS_V)]);
+    MS.libs.catch(function () { MS.libs = null; });
+  }
+  return MS.libs;
+}
+
+/* Paged, capped, read only. Throws on a refused read so the page says so instead of drawing zeros. */
+async function msGet(path) {
+  var out = [];
+  for (var off = 0; off < 20000; off += 1000) {
+    var url = MS_APP.url + '/rest/v1/' + path + (path.indexOf('?') > -1 ? '&' : '?') + 'limit=1000&offset=' + off;
+    var r = await fetch(url, { headers: MS_APP.headers() });
+    if (!r.ok) throw new Error(path.split('?')[0] + ' answered ' + r.status);
+    var d = await r.json();
+    out.push.apply(out, d);
+    if (d.length < 1000) break;
+  }
+  return out;
+}
+async function msGetIn(table, cols, idCol, ids, extra) {
+  var out = [], list = Array.from(ids);
+  for (var i = 0; i < list.length; i += 100) {
+    var part = list.slice(i, i + 100);
+    out.push.apply(out, await msGet(table + '?select=' + cols + '&' + idCol + '=in.(' + part.join(',') + ')' + (extra || '') + '&order=id.asc'));
+  }
+  return out;
+}
+function msEnc(ms) { return encodeURIComponent(new Date(ms).toISOString()); }
+
+var MS_T = {
+  g: { proj: 'graphic_projects', pcols: 'id,title,client_name,assigned_designer_id,deadline,created_at,is_archived', who: 'assigned_designer_id',
+       hist: 'graphic_stage_history', hkey: 'graphic_project_id', hcols: 'id,graphic_project_id,stage,entered_at', ev: 'graphic', team: 'Graphics' },
+  v: { proj: 'video_projects', pcols: 'id,title,assigned_editor_id,deadline,created_at,is_archived', who: 'assigned_editor_id',
+       hist: 'video_stage_history', hkey: 'video_project_id', hcols: 'id,video_project_id,stage,entered_at,moved_by', ev: 'video', team: 'Video' }
+};
+
+/* Only this person and only the week shown. Their jobs are the ones on their name, plus (Graphics) a job whose review event
+   names them and (Video) every video they ever held, because a send-back counts for whoever held the video at that moment.
+   Of those, the Command Centre's own week rule: due in the week, created in it, moved in it or with a review event in it,
+   each read with its full history up to the week's end. */
+async function msWeekData(startMs, pid) {
+  var sys = MS_APP.sys, T = MS_T[sys];
+  var wk = TS_ADAPTER.week(startMs + 3600e3);
+  var asOf = Math.min(wk.endMs, Date.now());
+  var key = pid + '.' + wk.startMs, hit = MS.weeks[key];
+  if (hit && (hit.asOf === wk.endMs || Date.now() - hit.at < 120000)) return hit;
+  var win = '&entered_at=gte.' + msEnc(wk.startMs) + '&entered_at=lte.' + msEnc(asOf);
+  var r = await Promise.all([
+    msGet(T.proj + '?select=' + T.pcols + '&' + T.who + '=eq.' + pid + '&order=id.asc'),
+    msGet(T.hist + '?select=' + T.hkey + win + '&order=id.asc'),
+    msGet('bb_review_events?select=job_id,person_id&system=eq.' + T.ev + '&created_at=gte.' + msEnc(wk.startMs) + '&created_at=lte.' + msEnc(asOf) + '&order=id.asc'),
+    sys === 'v' ? msGet('video_assignment_history?select=video_project_id&editor_id=eq.' + pid + '&order=id.asc') : Promise.resolve([])
+  ]);
+  var projects = r[0], have = new Set(projects.map(function (p) { return p.id; })), extra = new Set();
+  if (sys === 'g') r[2].forEach(function (e) { if (Number(e.person_id) === pid && !have.has(Number(e.job_id))) extra.add(Number(e.job_id)); });
+  else r[3].forEach(function (a) { if (!have.has(Number(a.video_project_id))) extra.add(Number(a.video_project_id)); });
+  if (extra.size) projects = projects.concat(await msGetIn(T.proj, T.pcols, 'id', extra));
+  var moved = new Set(r[1].map(function (h) { return Number(h[T.hkey]); }));
+  var evd = new Set(r[2].map(function (e) { return Number(e.job_id); }));
+  var ids = new Set();
+  projects.forEach(function (p) {
+    var d = TS_ADAPTER.dueIso(p.deadline), c = Date.parse(p.created_at);
+    if ((d && Date.parse(d) >= wk.startMs && Date.parse(d) <= asOf) || (c >= wk.startMs && c <= asOf) || moved.has(p.id) || evd.has(p.id)) ids.add(p.id);
+  });
+  var lte = function (col) { return '&' + col + '=lte.' + msEnc(asOf); };
+  var EV = 'id,system,job_id,person_id,kind,stars,reason,from_stage,to_stage,by_name,created_at';
+  var f = await Promise.all([
+    msGetIn(T.hist, T.hcols, T.hkey, ids, lte('entered_at')),
+    sys === 'v' ? msGetIn('video_assignment_history', 'id,video_project_id,editor_id,assigned_at,ended_at', 'video_project_id', ids, lte('assigned_at')) : Promise.resolve([]),
+    msGetIn('bb_review_events', EV, 'job_id', ids, '&system=eq.' + T.ev + lte('created_at'))
+  ]);
+  var mine = projects.filter(function (p) { return ids.has(p.id); });
+  var set = sys === 'g'
+    ? TS_ADAPTER.graphicJobs({ projects: mine, history: f[0], events: f[2] }, wk.startMs, asOf)
+    : TS_ADAPTER.videoJobs({ projects: mine, history: f[0], assignments: f[1], events: f[2] }, wk.startMs, asOf);
+  var out = { at: Date.now(), wk: wk, asOf: asOf, set: set, pid: pid };
+  MS.weeks[key] = out;
+  return out;
+}
+
+function msFillWeeks(sel) {
+  if (!sel || sel.options.length) return;
+  var now = TS_ADAPTER.week(Date.now()), html = '';
+  for (var i = 0; i <= 8; i++) {
+    var w = TS_ADAPTER.week(now.startMs - i * 7 * 86400e3 + 3600e3);
+    var lbl = i === 0 ? 'This week so far, ' + w.label : i === 1 ? 'Last week, ' + w.label : w.label;
+    html += '<option value="' + w.startMs + '"' + (i === 0 ? ' selected' : '') + '>' + msEsc(lbl) + '</option>';
+  }
+  sel.innerHTML = html;
+}
+
+/* The page. host is the element the app gives it; the week picked is kept while the page lives. */
+async function msPage(host) {
+  if (!host) return;
+  var keep = document.getElementById('ms-week'), was = keep && keep.value;
+  host.innerHTML = '<div class="ms-page"><div class="ms-head"><p class="ms-sub">Your own week, scored the same way the Command Centre scores the team. Only your work is in it.</p>'
+    + '<select id="ms-week" class="ms-select" aria-label="Week" onchange="msRender()"></select></div><div id="ms-body"><div class="ms-empty">Reading the board…</div></div></div>';
+  try { await msEnsureLibs(); } catch (e) { document.getElementById('ms-body').innerHTML = '<div class="ms-empty">' + msEsc(e.message) + '</div>'; return; }
+  var sel = document.getElementById('ms-week');
+  if (!sel) return;
+  msFillWeeks(sel);
+  if (was && sel.querySelector('option[value="' + was + '"]')) sel.value = was;
+  msRender();
+}
+
+function msWhy(s, sh) {
+  if (s.cohort === 0 && sh.noDeadline > 0) return 'Score starts when deadlines exist';
+  if (s.cohort === 0) return 'Nothing was due this week';
+  if (s.completed === 0) return 'Nothing due was completed';
+  if (s.ratingCount === 0) return 'No stars given yet';
+  return '';
+}
+function msBlankShown() { return { clientChanges: 0, rejected: 0, noDeadline: 0, finished: 0 }; }
+
+async function msRender() {
+  var body = document.getElementById('ms-body'), sel = document.getElementById('ms-week');
+  if (!body || !sel || !sel.value) return;
+  var me = MS_APP.me();
+  if (!me || !me.id) { body.innerHTML = '<div class="ms-empty">Your sign-in is not linked to a team member, so there is no score to show.</div>'; return; }
+  var tok = ++MS.token, sys = MS_APP.sys;
+  body.removeAttribute('data-asof');
+  body.innerHTML = '<div class="ms-empty">Reading the board…</div>';
+  var d;
+  try { d = await msWeekData(Number(sel.value), Number(me.id)); }
+  catch (e) { if (tok === MS.token) body.innerHTML = '<div class="ms-empty">The board could not be read: ' + msEsc(e.message) + '. Nothing is shown rather than a wrong figure.</div>'; return; }
+  if (tok !== MS.token) return;
+  var pid = Number(me.id), s = MM_ENGINE.score({ periodStart: d.wk.startIso }, d.set.jobs, d.asOf, { emp: pid });
+  var sh = d.set.shown[String(pid)] || msBlankShown();
+  MS.view = d; MS.rec = { p: { id: pid, name: me.name }, s: s, sh: sh, sys: sys };
+  var b = MM_ENGINE.bandFor(s.overall, 90), why = msWhy(s, sh), base = sys + '.' + pid;
+  var h = '<button type="button" class="ms-card" id="ms-card" data-sys="' + sys + '" data-pid="' + pid + '" onclick="msOpen()">'
+    + '<span class="ms-who">' + msEsc(me.name) + '<small>' + MS_T[sys].team + ', ' + (d.asOf < d.wk.endMs ? 'this week so far, ' : '') + msEsc(d.wk.label) + '</small></span>'
+    + '<span class="ms-score"><b>' + msFig(base + '.overall', s.overall, 'int') + '</b>'
+    + (s.overall === null ? '' : '<span class="ms-band" data-band="' + b.key + '">' + b.label + '</span>')
+    + (why ? '<span class="ms-why">' + msEsc(why) + '</span>' : '') + '</span><span class="ms-cells">';
+  if (sys === 'g') {
+    h += '<span class="ms-cell"><span class="ms-lbl">Completion</span>' + msPct(base + '.completionPct', s.completionPct) + '<small>' + msFig(base + '.completed', s.completed, 'raw') + ' of ' + msFig(base + '.cohort', s.cohort, 'raw') + '</small></span>'
+      + '<span class="ms-cell"><span class="ms-lbl">On time</span>' + msPct(base + '.ontimePct', s.ontimePct) + '<small>' + msFig(base + '.ontimeN', s.ontimeN, 'raw') + ' of ' + msFig(base + '.ontimeD', s.ontimeD, 'raw') + '</small></span>'
+      + '<span class="ms-cell"><span class="ms-lbl">Quality</span>' + msPct(base + '.qualityPct', s.qualityPct) + '<small>' + (s.ratingCount ? msFig(base + '.ratingCount', s.ratingCount, 'raw') + ' stars' : 'no stars given yet') + '</small></span>'
+      + '<span class="ms-cell"><span class="ms-lbl">Client changes</span>' + msFig(base + '.shown.clientChanges', sh.clientChanges, 'raw') + '<small>shown, not scored</small></span>';
+  } else {
+    h += '<span class="ms-cell"><span class="ms-lbl">Passed review</span>' + msFig(base + '.shown.finished', sh.finished, 'raw') + '</span>'
+      + '<span class="ms-cell"><span class="ms-lbl">Sent back</span>' + msFig(base + '.rejectionCount', s.rejectionCount, 'raw') + '</span>'
+      + '<span class="ms-cell"><span class="ms-lbl">Client changes</span>' + msFig(base + '.shown.clientChanges', sh.clientChanges, 'raw') + '<small>shown, not scored</small></span>'
+      + '<span class="ms-cell"><span class="ms-lbl">No deadline</span>' + msFig(base + '.shown.noDeadline', sh.noDeadline, 'raw') + '</span>';
+  }
+  h += '</span><span class="ms-go">See the jobs behind it</span></button>';
+  h += '<p class="ms-key">Score = 0.5 × completion + 0.3 × on time + 0.2 × quality. Excellent from 90, Very Good 80, Satisfactory 70, Needs Improvement 60.</p>';
+  if (sys === 'v' && s.cohort === 0 && sh.noDeadline > 0) h += '<p class="ms-foot">Your videos had no deadlines this week, so this shows counts and the score starts when deadlines exist.</p>';
+  body.innerHTML = h;
+  body.setAttribute('data-start', String(d.wk.startMs));
+  body.setAttribute('data-asof', String(d.asOf));
+}
+
+function msLost(v, w) { return v === null ? null : (100 - v) * w; }
+function msCoach(s, sh) {
+  if (s.cohort === 0 && sh.noDeadline > 0) return 'Put a deadline on each video when it is briefed, so this week can be scored.';
+  if (s.cohort === 0) return 'Nothing was due this week, so there is nothing to score.';
+  var parts = [['c', msLost(s.completionPct, 0.5)], ['o', msLost(s.ontimePct, 0.3)], ['q', msLost(s.qualityPct, 0.2)]].filter(function (x) { return x[1] !== null; });
+  parts.sort(function (a, b) { return b[1] - a[1]; });
+  var top = parts[0];
+  if (!top || top[1] === 0) return s.ratingCount === 0 ? 'Ask the head to give stars on approval, so quality can be read.' : 'Nothing lost this week. Keep it there.';
+  if (top[0] === 'c') return 'Close the open jobs first: ' + (s.cohort - s.completed) + ' of ' + s.cohort + ' due this week are not completed.';
+  if (top[0] === 'o') return 'Hand work in by the deadline: ' + (s.ontimeD - s.ontimeN) + ' of ' + s.ontimeD + ' completed jobs went in late.';
+  return 'Fewer send-backs: each one takes 5 points off quality.';
+}
+
+function msOpen() {
+  var rec = MS.rec, d = MS.view;
+  if (!rec || !d) return;
+  var ov = document.getElementById('ms-sheet');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = MS_APP.ov + ' ms-ov'; ov.id = 'ms-sheet'; ov.hidden = true;
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-labelledby', 'ms-sheet-title');
+    ov.innerHTML = '<div class="ms-sheet"><div class="ms-sheet-hd"><div><h2 id="ms-sheet-title"></h2><div class="ms-cap" id="ms-sheet-cap"></div></div>'
+      + '<button type="button" class="ms-x" data-close aria-label="Close" onclick="msClose()">' + MS_ICON_X + '</button></div><div class="ms-sheet-bd" id="ms-sheet-bd"></div></div>';
+    ov.addEventListener('click', function (e) { if (e.target === ov) msClose(); });
+    document.body.appendChild(ov);
+  }
+  var sys = rec.sys, pid = rec.p.id, s = rec.s, sh = rec.sh, base = sys + '.' + pid, set = d.set;
+  var b = MM_ENGINE.bandFor(s.overall, 90), why = msWhy(s, sh);
+  document.getElementById('ms-sheet-title').textContent = rec.p.name;
+  document.getElementById('ms-sheet-cap').textContent = MS_T[sys].team + ', ' + (d.asOf < d.wk.endMs ? 'this week so far, ' : '') + d.wk.label;
+  var side = '<div class="ms-big"><strong class="' + (s.overall === null ? 'ms-na' : '') + '">' + msFig(base + '.overall', s.overall, 'int') + '</strong>'
+    + (s.overall === null ? '' : '<span class="ms-band" data-band="' + b.key + '">' + b.label + '</span>') + '</div>';
+  if (s.overall === null) side += '<p class="ms-math">Not measurable yet: ' + msEsc(why.charAt(0).toLowerCase() + why.slice(1)) + '.</p>';
+  else side += '<p class="ms-math">0.5 × ' + msFig(base + '.completionPct', s.completionPct, '1dp') + ' + 0.3 × ' + msFig(base + '.ontimePct', s.ontimePct, '1dp')
+    + ' + 0.2 × ' + msFig(base + '.qualityPct', s.qualityPct, '1dp') + ' = ' + msFig(base + '.overall', s.overall, '1dp') + '</p>';
+  side += '<dl class="ms-facts">'
+    + '<div><dt>Completion</dt><dd>' + msFig(base + '.completed', s.completed, 'raw') + ' of ' + msFig(base + '.cohort', s.cohort, 'raw') + ' jobs due were completed: ' + msPct(base + '.completionPct', s.completionPct) + '</dd></div>'
+    + '<div><dt>On time</dt><dd>' + msFig(base + '.ontimeN', s.ontimeN, 'raw') + ' of ' + msFig(base + '.ontimeD', s.ontimeD, 'raw') + ' handed in by the deadline: ' + msPct(base + '.ontimePct', s.ontimePct) + '</dd></div>'
+    + '<div><dt>Quality</dt><dd>' + (s.ratingCount ? 'average of ' + msFig(base + '.ratingCount', s.ratingCount, 'raw') + ' star ratings, minus 5 for each of ' : 'Not measurable: no stars given yet. Send-backs this week: ')
+    + msFig(base + '.rejectionCount', s.rejectionCount, 'raw') + (s.ratingCount ? ' send-backs: ' + msPct(base + '.qualityPct', s.qualityPct) : '') + '</dd></div></dl>';
+  side += '<div><h3 class="ms-h3">What hurt the score</h3><ul class="ms-ul">'
+    + '<li>Completion: ' + msFig(base + '.open', s.cohort - s.completed, 'raw') + ' jobs due and not completed' + (s.completionPct === null ? '' : ', ' + msFig(base + '.lost.c', msLost(s.completionPct, 0.5), '1dp') + ' points') + '</li>'
+    + '<li>On time: ' + msFig(base + '.late', s.ontimeD - s.ontimeN, 'raw') + ' completed late' + (s.ontimePct === null ? '' : ', ' + msFig(base + '.lost.o', msLost(s.ontimePct, 0.3), '1dp') + ' points') + '</li>'
+    + '<li>Quality: ' + (s.qualityPct === null ? 'not scored yet, no stars given' : msFig(base + '.lost.q', msLost(s.qualityPct, 0.2), '1dp') + ' points') + '</li></ul></div>';
+  side += '<p class="ms-coach">' + msEsc(msCoach(s, sh)) + '</p>';
+  side += '<div><h3 class="ms-h3">Shown, not scored</h3><ul class="ms-ul">'
+    + '<li><b>' + msFig(base + '.shown.clientChanges', sh.clientChanges, 'raw') + '</b> client changes</li>'
+    + '<li><b>' + msFig(base + '.shown.finished', sh.finished, 'raw') + '</b> ' + (sys === 'g' ? 'approved this week' : 'passed review this week') + '</li>'
+    + (sys === 'v' ? '<li><b>' + msFig(base + '.shown.rejected', sh.rejected, 'raw') + '</b> rejected</li>' : '')
+    + '<li><b>' + msFig(base + '.shown.noDeadline', sh.noDeadline, 'raw') + '</b> worked on with no deadline</li></ul></div>';
+
+  var byRef = {}, passed = sys === 'g' ? 'Approved' : 'Passed';
+  set.jobs.forEach(function (j) { byRef[j.ref] = j; });
+  var main = '<div><h3 class="ms-h3">The jobs behind it</h3>';
+  if (s.rows.length) {
+    main += '<div class="ms-tw"><table class="ms-jobs"><thead><tr><th>Job</th><th>Due</th><th>Handed in</th><th>' + passed + '</th><th>On time</th><th>Stars</th><th>Send-backs</th></tr></thead><tbody>';
+    s.rows.forEach(function (r) {
+      var j = byRef[r.ref] || {}, rb = base + '.row.' + r.ref;
+      var chip = r.counted ? '<span class="ms-chip" data-s="' + (r.ontime ? 'ontime' : 'late') + '">' + msFig(rb + '.ontime', r.ontime, 'yesno') + '</span>'
+        : '<span class="ms-chip" data-s="' + r.state + '">' + msEsc(MS_STATE[r.state] || r.state) + '</span>';
+      main += '<tr><td class="ms-t">' + msEsc(r.title) + '<span class="ms-ref">' + msEsc(r.ref) + '</span></td>'
+        + '<td class="n" data-l="Due">' + msFig(rb + '.due', j.due, 'day') + '</td><td class="n" data-l="Handed in">' + msFig(rb + '.submittedAt', j.submittedAt, 'day') + '</td>'
+        + '<td class="n" data-l="' + passed + '">' + msFig(rb + '.approvedAt', j.approvedAt, 'day') + '</td><td data-l="On time">' + chip + '</td>'
+        + '<td class="n" data-l="Stars">' + (r.stars ? msFig(rb + '.stars', r.stars, 'raw') + ' of 5' : 'None') + '</td><td class="n" data-l="Send-backs">' + msFig(rb + '.rejections', r.rejections, 'raw') + '</td></tr>';
+    });
+    main += '</tbody></table></div>';
+  } else main += '<p class="ms-foot">' + (sh.noDeadline ? 'No job with a deadline was due this week.' : 'Nothing was due this week.') + '</p>';
+  main += '</div>';
+  var sbs = [];
+  set.jobs.forEach(function (j) {
+    if (j.assignee !== pid) return;
+    j.rejections.forEach(function (x) { var t = Date.parse(x.at); if (t >= d.wk.startMs && t <= d.asOf) sbs.push({ j: j, x: x, t: t }); });
+  });
+  sbs.sort(function (a, b) { return a.t - b.t; });
+  main += '<div><h3 class="ms-h3">Send-backs this week: ' + msFig(base + '.rejectionCount', s.rejectionCount, 'raw') + '</h3>';
+  if (sbs.length) {
+    main += '<ul class="ms-ul">' + sbs.map(function (e) {
+      return '<li><b>' + msEsc(TS_ADAPTER.dayLabel(e.t)) + '</b> ' + msEsc(e.j.title) + ' (' + msEsc(e.j.ref) + '). ' + msEsc(e.x.reason) + (e.x.by ? '. Sent back by ' + msEsc(e.x.by) : '') + '</li>';
+    }).join('') + '</ul>';
+  } else main += '<p class="ms-foot">None this week.</p>';
+  main += '</div><p class="ms-foot">' + (sys === 'g'
+    ? 'Graphics has no assignment history, so every job counts for the designer named on it today.'
+    : 'A video counts for the editor holding it when it was handed in. A send-back counts for the editor holding it at that moment.') + '</p>';
+  document.getElementById('ms-sheet-bd').innerHTML = '<div class="ms-side">' + side + '</div><div class="ms-main">' + main + '</div>';
+  ov.setAttribute('data-open', base);
+  ov.hidden = false;
+  ov.classList.add('open');
+  /* MS_APP.behind: an app whose overlay layer keeps its shell reachable (the Graphic System keeps #sidebar out of reach
+     of its shield) names the shell here, so a keyboard or screen reader cannot walk into the page under the sheet. */
+  if (MS_APP.behind) document.querySelectorAll(MS_APP.behind).forEach(function (e) { if (!e.hasAttribute('inert')) { e.setAttribute('inert', ''); e.setAttribute('data-ms-inert', ''); } });
+  var bd = document.getElementById('ms-sheet-bd'); if (bd) bd.scrollTop = 0;
+}
+function msClose() {
+  document.querySelectorAll('[data-ms-inert]').forEach(function (e) { e.removeAttribute('inert'); e.removeAttribute('data-ms-inert'); });
+  var ov = document.getElementById('ms-sheet'); if (ov) { ov.classList.remove('open'); ov.hidden = true; ov.removeAttribute('data-open'); }
+}
+</script>
+<!-- @@BB_MYSCORE_END@@ -->

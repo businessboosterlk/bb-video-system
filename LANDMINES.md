@@ -2359,3 +2359,13 @@ the frame.
 
 ## L-VID-066 · Team Score: a reason on every send back, stars on the pass, a deadline on every video (6 Nov 2026)
 **What changed (bb_pending 1440).** Every move into Changes asks "Why is it going back?" (3+ characters) and every pass out of Video Head Review asks for 1 to 5 stars, before anything is written; the answer goes to `bb_review_events` AFTER the card and the stage log. The deadline is required, suggested 3 working days after the first entry into Editing, and a move into Editing with no deadline gets one in the same card write. **Lesson.** A sheet that opens over another sheet broke Back: BBF gave the first open overlay the Back press and kept one history entry for all, so Back closed the form under the reason sheet and a second Back left the app. BBF now treats the LAST open overlay as the top and keeps one history entry per open overlay. **Rule.** Any prompt that can open over a form needs its own history entry; test Back once AND twice with the form underneath. Walk: `~/bb-systems/team-score/checks/walk-video-review.mjs` (77 of 77 at 1440 and 390; the old copy fails).
+
+## L-VID-067 · My score: each person's own Team Score week (6 Nov 2026, bb_pending 1440)
+**What changed.** Page `my_score` ("My score", WORKSPACE, in PAGES_FULL and PAGES_EDITOR) shows the signed-in editor's OWN week only,
+heads included, with the Command Centre's drill-down and week picker. Video shows its counts and "Score starts when deadlines exist"
+until deadlines are set. The block sits at the END of this file between `@@BB_MYSCORE_CFG@@` and `@@BB_MYSCORE_END@@` (marker
+MYSCORE-1), written ONLY by `python3 ~/bb-systems/team-score/my-score/install.py`; `team-score/engine.js` and `ts-adapter.js` are
+byte copies, never edited. **Lesson.** `DATA` and `currentUser` are `let`, so they are not on `window`: MS_APP reads them with
+`typeof`. A data refresh re-runs `renderPage()`, so `renderMyScore` leaves an open My score alone (`#ms-body` already there) or the
+picker would jump back to this week. **Rule.** Test pages that write on session restore (`team_login_logs`) with every non-GET
+answered in the browser. Checks: `myscore-recount.mjs` and `myscore-click.mjs --only v` in `~/bb-systems/team-score/checks/`.

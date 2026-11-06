@@ -6,7 +6,7 @@
    THE RULE THIS EXISTS TO KEEP: never cache the database. Live rows are the
    state of somebody's work, and a stale one gets acted on.
 */
-const CACHE = 'bb-video-system-v1';
+const CACHE = 'bb-video-system-v2';
 const SHELL = ['./', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
