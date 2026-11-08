@@ -31,7 +31,8 @@ const CARD = [
 ];
 
 async function page(b, opts, tasks) {
-  const ctx = await b.newContext({ ...opts, colorScheme: 'dark' });
+  const ctx = await b.newContext({ ...opts, clock: undefined, colorScheme: 'dark' });
+  if (opts.clock) await ctx.clock.install();
   await ctx.addInitScript(() => { sessionStorage.setItem('bb_video_user', JSON.stringify({ name: 'USHANE' })); sessionStorage.setItem('bb_video_pass', 'test-pass'); localStorage.setItem('bbvid_guide_seen', '1'); });
   const calls = [], reads = [];
   await ctx.route(/supabase\.co\//, async (route) => {
@@ -145,6 +146,20 @@ for (const [size, opts] of [['phone', { viewport: { width: 390, height: 844 }, d
   pass(`${L} no page errors`, errs.length === 0, errs.join(' | ').slice(0, 300));
   await p.evaluate(() => navTo('dashboard'));
   await p.screenshot({ path: `/private/tmp/claude-501/-Users-thulaibhassen-bb-command-centre--claude-worktrees-vigilant-cannon-efb76a/51ff8c77-f434-488b-840b-24afbe57c7b8/scratchpad/vid-card-${size}.png` });
+  await ctx.close();
+}
+/* sign out: the old card goes quiet (no task reads, nothing marked seen), even after its 60 s timer */
+{
+  const { ctx, p, calls, reads, errs } = await page(b, { viewport: { width: 1440, height: 900 }, clock: true }, CARD);
+  pass('sign out: Ushane had the card before signing out', await p.locator('#ho-card-mount .ho-card').count() === 1);
+  await p.evaluate(() => logout()); await p.waitForTimeout(400);
+  const r0 = reads.length, s0 = calls.filter(x => x.name === 'bb_handoff_seen').length;
+  await p.clock.runFor(61000);
+  await p.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')); });
+  await p.waitForTimeout(600);
+  pass('sign out: 61 s later, zero task reads', reads.length === r0, `reads ${r0} then ${reads.length}`);
+  pass('sign out: 61 s later, zero bb_handoff_seen calls', calls.filter(x => x.name === 'bb_handoff_seen').length === s0, `seen ${s0} then ${calls.filter(x => x.name === 'bb_handoff_seen').length}`);
+  pass('sign out: no page errors', errs.length === 0, errs.join(' | ').slice(0, 300));
   await ctx.close();
 }
 /* signed out: no card */

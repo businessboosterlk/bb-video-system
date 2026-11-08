@@ -10732,8 +10732,10 @@ const hoCard = (function() {
     return c ? c.name : '';
   }
   function deps() {
+    var m = mount; /* a card made for one login goes quiet once that login ends */
     return { me: function () { var u = user(); return u ? u.name : ''; }, myId: myId, today: today,
-      get: function (p) { return call(p); }, rpc: function (n, b) { return call('rpc/' + n, b); },
+      get: function (p) { return m === mount ? call(p) : Promise.resolve([]); },
+      rpc: function (n, b) { return m === mount ? call('rpc/' + n, b) : Promise.reject(new Error('signed out')); },
       clientName: clientName, toast: function (m) { if (typeof toast === 'function') toast(m, 'success'); } };
   }
   function place() {
