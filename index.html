@@ -57,7 +57,11 @@ window.__ST_LOG=[];
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';document.head.appendChild(s)"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin="anonymous" onerror="this.onerror=null;var s=document.createElement('script');s.crossOrigin='anonymous';s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';document.head.appendChild(s)"></script>
+<script>/* BUILD 5 speed: with the SDK deferred the page paints sooner, so a kept session hides the sign-in screen from the
+   first paint. setupLogin lifts this at once; the timer is a floor in case the start code never runs. */
+try{if(sessionStorage.getItem('bb_video_user')&&sessionStorage.getItem('bb_video_pass')){document.documentElement.classList.add('vid-restoring');setTimeout(function(){document.documentElement.classList.remove('vid-restoring')},16000);}}catch(e){}</script>
+<style>html.vid-restoring #loginScreen{visibility:hidden}</style>
 <style>
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1687,6 +1691,10 @@ function toggleNotifPanel(events){
 
 // === SUPABASE INIT ===
 async function initSupabase(){
+  /* BUILD 5 speed, 8 Nov 2026: the SDK loads with defer so it no longer holds the first paint. A deferred script runs
+     before DOMContentLoaded, so it is normally here already. When jsdelivr fails, the unpkg copy is added late, so
+     wait for it (up to 15 s) instead of starting with no client. */
+  if(!window.supabase)await new Promise(res=>{const t0=Date.now();(function w(){if(window.supabase||Date.now()-t0>15000)return res();setTimeout(w,50)})()});
   if(!window.supabase){console.error('SDK not loaded');return}
   /* persistSession:false is load bearing. Removing the shared signIn does NOT
      log anybody out: Supabase stores the session in localStorage, so every
@@ -1715,6 +1723,7 @@ async function initSupabase(){
 
 // === LOGIN ===
 function setupLogin(){
+  document.documentElement.classList.remove('vid-restoring');
   const dEl=$('#loginDate');if(dEl)dEl.textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   $('#loginBtn').onclick=doLogin;
   ['#loginName','#loginPin'].forEach(s=>{const el=$(s);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()})});
