@@ -7490,6 +7490,7 @@ async function runSelfTest(){
   /* ── stage age: the tile colours and the clock behind them ───────────── */
   (window.BBAGE?BBAGE.selfcheck():[{name:'Stage age: module present',pass:false,detail:'BBAGE is missing'}]).forEach(function(c){ok(c.name,c.pass,c.detail);});
   (window.BBWORK?BBWORK.selfcheck():[{name:'Work time: module present',pass:false,detail:'BBWORK is missing'}]).forEach(function(c){ok(c.name,c.pass,c.detail);});
+  (window.BBHO?BBHO.selfcheck():[{name:'From card: module present',pass:false,detail:'BBHO is missing'}]).forEach(function(c){ok(c.name,c.pass,c.detail);});
   if(window.BBWORK){const _x=await BBWORK.crosscheck();ok(_x.name,_x.pass,_x.detail);}
   /* ── A · boot integrity ─────────────────────────────────────────────── */
   ok('Boot: core globals present',
@@ -10196,3 +10197,572 @@ function msClose() {
 }
 </script>
 <!-- @@BB_MYSCORE_END@@ -->
+<!-- @@BBHO_FROM_CARD@@ BEGIN
+     FROM THULAIB / FROM SHIARA CARD (THULAIB CC HANDOFF, 8 Nov 2026). Tasks Thulaib or Shiara sent the signed-in person,
+     with Done, Stuck and Carry on, under the page head of their first screen. ho.css and h5-card.js are pasted byte for
+     byte from bb-command-centre handoff/parts; change them there, never here. The glue after them is this system's own. -->
+<style>
+/* the sheet: the page's .modal-overlay, kept clear of the island and the home bar */
+#ho-sheet{padding:max(12px,var(--sat)) 12px max(12px,var(--sab))}
+#ho-sheet .modal.ho-sheet{max-width:560px;display:flex;flex-direction:column;max-height:calc(100dvh - var(--sat) - var(--sab) - 24px)}
+#ho-sheet .modal-body{max-height:none;flex:1 1 auto;min-height:0}
+#ho-sheet .modal-close{width:44px;height:44px;font-size:20px;touch-action:manipulation}
+.ho-in{font-size:16px!important;min-height:44px;width:100%;box-sizing:border-box;touch-action:manipulation}
+textarea.ho-in{min-height:88px;line-height:1.45}
+.ho-field .form-label{font-size:12.5px}
+.ho-people{display:flex;flex-wrap:wrap;gap:8px}
+.ho-chip{min-height:44px;padding:6px 16px;border-radius:22px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font:inherit;font-size:15px;font-weight:600;cursor:pointer;touch-action:manipulation;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15}
+.ho-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.ho-chip-note{font-size:11px;font-weight:500;opacity:.8;margin-top:1px}
+.ho-read{font-size:13.5px;color:var(--text-2);margin:0;line-height:1.45}
+.ho-read:empty{display:none}
+.ho-err{font-size:13.5px;color:var(--red);margin:0;line-height:1.45}
+.ho-err[hidden]{display:none}
+/* one action bar: primary full width, secondary in equal pairs, quiet cancel last */
+.modal-foot.ho-bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;justify-content:stretch}
+.ho-bar>*{min-height:44px;width:100%;box-sizing:border-box;justify-content:center;align-items:center;touch-action:manipulation;font-size:15px;text-decoration:none;white-space:normal;text-align:center}
+.ho-bar .ho-main,.ho-bar .ho-wide{grid-column:1/-1}
+.ho-bar a.ho-wa:last-of-type:nth-of-type(odd){grid-column:1/-1}
+.ho-bar .ho-quiet{background:none;border:0;color:var(--text-3);font-weight:600}
+.ho-bar button:disabled{opacity:.45;cursor:default}
+.ho-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ho-pair>button,.ho-card .ho-wide{min-height:44px;width:100%;justify-content:center;touch-action:manipulation;font-size:15px}
+.ho-pair>button:disabled,.ho-card .ho-wide:disabled{opacity:.45;cursor:default}
+/* the topbar button */
+.ho-send{min-height:36px;padding:0 14px;touch-action:manipulation}
+.ho-send svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round}
+@media (max-width:600px){.ho-send{min-width:40px;min-height:40px;padding:0;justify-content:center}.ho-send span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}}
+/* the From card and the Stuck strip */
+.ho-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+.ho-card[hidden],#ho-card-mount[hidden]{display:none}
+.ho-card-title{font-size:17px;font-weight:600;color:var(--text);margin:0;letter-spacing:-.01em;line-height:1.3}
+.ho-card-sub{font-size:13px;color:var(--text-3);margin:2px 0 10px}
+.ho-task,.ho-stuck{border-top:1px solid var(--border);padding:12px 0;display:flex;flex-direction:column;gap:8px}
+.ho-task:last-child,.ho-stuck:last-child{padding-bottom:0}
+.ho-t-title,.ho-st-title{font-size:15px;font-weight:600;color:var(--text);line-height:1.4}
+.ho-t-meta,.ho-st-who{font-size:13px;color:var(--text-2);line-height:1.45}
+.ho-late{color:var(--red);font-weight:600}
+.ho-t-note{font-size:13.5px;color:var(--text-2);line-height:1.5}
+.ho-t-stuck,.ho-st-line{background:var(--amber-soft);border-radius:8px;padding:8px 10px;font-size:13.5px;color:var(--text);line-height:1.45}
+.ho-t-stuck p{margin:0}
+.ho-t-reply,.ho-st-reply{border-left:3px solid var(--accent);padding:4px 10px;font-size:13.5px;color:var(--text);line-height:1.45}
+.ho-done .ho-t-title{color:var(--text-3);text-decoration:line-through}
+.ho-t-form{flex-direction:column;gap:8px}
+@media (min-width:900px){.ho-card .ho-pair,.ho-card .ho-wide,.ho-t-form,.ho-st-in{max-width:460px}}
+</style>
+<style>
+/* glue: Video System. This page has no .form-input and its buttons carry .btn for shape, so the card's
+   buttons and line get the same shape here. */
+.ho-card button.btn-primary,.ho-card button.btn-ghost{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;font-weight:600;padding:0 14px}
+.ho-card button.btn-ghost{border:1px solid var(--border-strong);color:var(--text)}
+.ho-card .form-input{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px;color:var(--text)}
+</style>
+<script>
+/* H5 From Thulaib card. Crew part (handoff-js-part, DeepSeek V4 Pro) with Claude's fixes: rows found by data-id
+   (nth-child counted the title and the line above), the error codes read anywhere in the message, no 60 s
+   repaint while a Done or Stuck line is being typed. */
+const hoCard = (function() {
+  function capitalise(s) {
+    if (!s) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  }
+
+  function formatDate(yyyymmdd) {
+    if (!yyyymmdd) return '';
+    const d = new Date(yyyymmdd + 'T00:00:00Z');
+    if (isNaN(d)) return '';
+    /* Claude fix: Chrome's en-GB puts a comma after the weekday; the house date is 'Fri 13 Nov' */
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()] + ' ' + d.getUTCDate() + ' '
+      + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
+  }
+
+  function senderName(row) {
+    return capitalise(row.sent_by);
+  }
+
+  function isLate(row, today) {
+    return row.due && row.due < today;
+  }
+
+  function isStuck(row) {
+    return !!row.stuck_at;
+  }
+
+  function hasReply(row) {
+    return row.stuck_reply && row.stuck_reply_at && row.stuck_reply_at >= row.stuck_at;
+  }
+
+  function isDone(row) {
+    return row.done;
+  }
+
+  function isOpen(row) {
+    return !row.done;
+  }
+
+  return function hoCard(mount, deps) {
+    const me = deps.me();
+    const myId = deps.myId();
+    const today = deps.today();
+    let rows = [];
+    let seenSet = new Set();
+    let reloadTimer = null;
+    let reloading = false;
+    let openFormRowId = null;
+
+    function stopTimer() {
+      if (reloadTimer) {
+        clearInterval(reloadTimer);
+        reloadTimer = null;
+      }
+    }
+
+    function startTimer() {
+      stopTimer();
+      if (document.visibilityState === 'visible') {
+        reloadTimer = setInterval(() => {
+          if (document.visibilityState === 'visible') {
+            reload();
+          }
+        }, 60000);
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        reload();
+        startTimer();
+      } else {
+        stopTimer();
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    async function reload(force) {
+      if (reloading) return;
+      if (openFormRowId !== null && force !== true) return;
+      reloading = true;
+      try {
+        const path = `tasks?select=id,title,due,client_id,notes,sent_by,seen_at,stuck_note,stuck_at,stuck_reply,stuck_reply_at,done,done_note,completed_at,created_at&sent_to_id=eq.${myId}&cancelled_at=is.null&or=(done.is.false,completed_at.gte.${today}T00:00:00%2B05:30)&order=created_at.asc`;
+        const data = await deps.get(path);
+        if (!data || data.length === 0) {
+          mount.innerHTML = '';
+          mount.hidden = true;
+          rows = [];
+          return;
+        }
+        mount.hidden = false;
+        rows = data;
+
+        // Mark unseen rows as seen
+        for (const row of rows) {
+          if (row.seen_at === null && !row.done && !seenSet.has(row.id)) {
+            seenSet.add(row.id);
+            deps.rpc('bb_handoff_seen', { p_id: row.id, p_who: me, p_carry_on: false }).catch(() => {});
+          }
+        }
+
+        paint();
+      } catch (e) {
+        // Silently fail reload
+      } finally {
+        reloading = false;
+      }
+    }
+
+    function paint() {
+      mount.innerHTML = '';
+      const section = document.createElement('section');
+      section.className = 'ho-card';
+
+      const senders = new Set(rows.map(r => r.sent_by));
+      let titleText = '';
+      if (senders.size === 1) {
+        titleText = `From ${capitalise([...senders][0])}`;
+      } else if (senders.size === 2) {
+        titleText = `From ${capitalise([...senders][0])} and ${capitalise([...senders][1])}`;
+      } else {
+        titleText = 'From Thulaib and Shiara';
+      }
+
+      const h2 = document.createElement('h2');
+      h2.className = 'ho-card-title';
+      h2.textContent = titleText;
+      section.appendChild(h2);
+
+      const openCount = rows.filter(r => isOpen(r)).length;
+      const sub = document.createElement('p');
+      sub.className = 'ho-card-sub';
+      if (openCount === 0) {
+        sub.textContent = 'All done for today';
+      } else if (openCount === 1) {
+        sub.textContent = '1 to do';
+      } else {
+        sub.textContent = `${openCount} to do`;
+      }
+      section.appendChild(sub);
+
+      const openRows = rows.filter(r => isOpen(r));
+      const doneRows = rows.filter(r => isDone(r));
+      const sortedRows = [...openRows, ...doneRows];
+
+      for (const row of sortedRows) {
+        const taskDiv = document.createElement('div');
+        taskDiv.className = 'ho-task';
+        taskDiv.dataset.id = String(row.id);
+        if (isDone(row)) {
+          taskDiv.classList.add('ho-done');
+        }
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'ho-t-title';
+        titleDiv.textContent = row.title;
+        taskDiv.appendChild(titleDiv);
+
+        if (isOpen(row)) {
+          const metaParts = [];
+          if (senders.size > 1) {
+            metaParts.push(`From ${senderName(row)}`);
+          }
+          if (row.client_id) {
+            const clientName = deps.clientName(row.client_id);
+            if (clientName) metaParts.push(clientName);
+          }
+          if (row.due) {
+            if (isLate(row, today)) {
+              const span = document.createElement('span');
+              span.className = 'ho-late';
+              span.textContent = `was due ${formatDate(row.due)}`;
+              const metaDiv = document.createElement('div');
+              metaDiv.className = 'ho-t-meta';
+              if (metaParts.length) {
+                metaDiv.textContent = metaParts.join(' · ') + ' · ';
+                metaDiv.appendChild(span);
+              } else {
+                metaDiv.appendChild(span);
+              }
+              taskDiv.appendChild(metaDiv);
+            } else {
+              metaParts.push(`by ${formatDate(row.due)}`);
+            }
+          }
+          if (metaParts.length && (!row.due || !isLate(row, today))) {
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'ho-t-meta';
+            metaDiv.textContent = metaParts.join(' · ');
+            taskDiv.appendChild(metaDiv);
+          }
+
+          if (row.notes) {
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'ho-t-note';
+            noteDiv.textContent = row.notes;
+            taskDiv.appendChild(noteDiv);
+          }
+
+          if (isStuck(row)) {
+            const stuckDiv = document.createElement('div');
+            stuckDiv.className = 'ho-t-stuck';
+            const lines = row.stuck_note.split('\n');
+            lines.forEach((line, i) => {
+              const p = document.createElement('p');
+              p.textContent = (i === 0 ? 'You said: ' : '') + line;
+              stuckDiv.appendChild(p);
+            });
+            taskDiv.appendChild(stuckDiv);
+
+            if (hasReply(row)) {
+              const replyDiv = document.createElement('div');
+              replyDiv.className = 'ho-t-reply';
+              replyDiv.textContent = `${senderName(row)}: ${row.stuck_reply}`;
+              taskDiv.appendChild(replyDiv);
+
+              const carryBtn = document.createElement('button');
+              carryBtn.className = 'btn-primary ho-wide';
+              carryBtn.textContent = 'Carry on';
+              carryBtn.style.touchAction = 'manipulation';
+              carryBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                carryBtn.disabled = true;
+                try {
+                  await deps.rpc('bb_handoff_seen', { p_id: row.id, p_who: me, p_carry_on: true });
+                  deps.toast('Back on it');
+                  await reload();
+                } catch (err) {
+                  showError(taskDiv, err.message);
+                } finally {
+                  carryBtn.disabled = false;
+                }
+              });
+              taskDiv.appendChild(carryBtn);
+            }
+
+            const pairDiv = document.createElement('div');
+            pairDiv.className = 'ho-pair';
+
+            const doneBtn = document.createElement('button');
+            /* Claude fix: once Carry on is the primary, Done steps back so the row has one primary */
+            doneBtn.className = hasReply(row) ? 'btn-ghost' : 'btn-primary';
+            doneBtn.textContent = 'Done';
+            doneBtn.style.touchAction = 'manipulation';
+            doneBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              openForm(row.id, 'done');
+            });
+            pairDiv.appendChild(doneBtn);
+
+            const stuckBtn = document.createElement('button');
+            stuckBtn.className = 'btn-ghost';
+            stuckBtn.textContent = 'Stuck';
+            stuckBtn.style.touchAction = 'manipulation';
+            stuckBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              openForm(row.id, 'stuck');
+            });
+            pairDiv.appendChild(stuckBtn);
+
+            taskDiv.appendChild(pairDiv);
+          } else {
+            const pairDiv = document.createElement('div');
+            pairDiv.className = 'ho-pair';
+
+            const doneBtn = document.createElement('button');
+            doneBtn.className = 'btn-primary';
+            doneBtn.textContent = 'Done';
+            doneBtn.style.touchAction = 'manipulation';
+            doneBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              openForm(row.id, 'done');
+            });
+            pairDiv.appendChild(doneBtn);
+
+            const stuckBtn = document.createElement('button');
+            stuckBtn.className = 'btn-ghost';
+            stuckBtn.textContent = 'Stuck';
+            stuckBtn.style.touchAction = 'manipulation';
+            stuckBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              openForm(row.id, 'stuck');
+            });
+            pairDiv.appendChild(stuckBtn);
+
+            taskDiv.appendChild(pairDiv);
+          }
+
+          // Form container
+          const formContainer = document.createElement('div');
+          formContainer.className = 'ho-t-form';
+          formContainer.style.display = 'none';
+          taskDiv.appendChild(formContainer);
+
+        } else {
+          // Done row
+          const metaDiv = document.createElement('div');
+          metaDiv.className = 'ho-t-meta';
+          let metaText = 'Done';
+          if (row.done_note) {
+            metaText += ' · ' + row.done_note;
+          }
+          metaDiv.textContent = metaText;
+          taskDiv.appendChild(metaDiv);
+        }
+
+        section.appendChild(taskDiv);
+      }
+
+      mount.appendChild(section);
+    }
+
+    function openForm(rowId, type) {
+      if (openFormRowId === rowId) return;
+      closeForm();
+      openFormRowId = rowId;
+
+      const taskDiv = taskEl(rowId);
+      if (!taskDiv) return;
+      const formContainer = taskDiv.querySelector('.ho-t-form');
+      if (!formContainer) return;
+      formContainer.innerHTML = '';
+      formContainer.style.display = 'flex';
+
+      const input = document.createElement('input');
+      input.className = 'form-input ho-in';
+      input.style.fontSize = '16px';
+      input.maxLength = 1000;
+      if (type === 'done') {
+        input.placeholder = 'What I did (optional)';
+      } else {
+        input.placeholder = 'What is in the way';
+        input.required = true;
+      }
+      formContainer.appendChild(input);
+
+      const errP = document.createElement('p');
+      errP.className = 'ho-err';
+      errP.style.display = 'none';
+      formContainer.appendChild(errP);
+
+      const pairDiv = document.createElement('div');
+      pairDiv.className = 'ho-pair';
+
+      const submitBtn = document.createElement('button');
+      submitBtn.className = 'btn-primary';
+      submitBtn.textContent = type === 'done' ? 'Mark done' : 'Send';
+      submitBtn.style.touchAction = 'manipulation';
+      submitBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const value = input.value.trim();
+        if (type === 'stuck' && !value) {
+          errP.textContent = 'Say what is in the way first.';
+          errP.style.display = 'block';
+          return;
+        }
+        errP.style.display = 'none';
+        submitBtn.disabled = true;
+        try {
+          if (type === 'done') {
+            await deps.rpc('bb_handoff_done', { p_id: rowId, p_who: me, p_note: value || null });
+            const row = rows.find(r => r.id === rowId);
+            deps.toast(`Done. ${senderName(row)} can see it`);
+          } else {
+            await deps.rpc('bb_handoff_stuck', { p_id: rowId, p_who: me, p_note: value });
+            const row = rows.find(r => r.id === rowId);
+            deps.toast(`Sent to ${senderName(row)}`);
+          }
+          closeForm();
+          await reload(true);
+        } catch (err) {
+          showError(taskDiv, err.message);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+      pairDiv.appendChild(submitBtn);
+
+      const backBtn = document.createElement('button');
+      backBtn.className = 'btn-ghost';
+      backBtn.textContent = 'Back';
+      backBtn.style.touchAction = 'manipulation';
+      backBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeForm();
+      });
+      pairDiv.appendChild(backBtn);
+
+      formContainer.appendChild(pairDiv);
+    }
+
+    function closeForm() {
+      if (openFormRowId === null) return;
+      const taskDiv = taskEl(openFormRowId);
+      if (taskDiv) {
+        const formContainer = taskDiv.querySelector('.ho-t-form');
+        if (formContainer) {
+          formContainer.style.display = 'none';
+          formContainer.innerHTML = '';
+        }
+      }
+      openFormRowId = null;
+    }
+
+    function taskEl(rowId) {
+      return mount.querySelector('.ho-task[data-id="' + String(Number(rowId)) + '"]');
+    }
+
+    function showError(taskDiv, message) {
+      let errEl = taskDiv.querySelector('.ho-err');
+      if (!errEl) {
+        errEl = document.createElement('p');
+        errEl.className = 'ho-err';
+        taskDiv.appendChild(errEl);
+      }
+      const m = String(message || '');
+      const code = (m.match(/HO_[A-Z_]+/) || [''])[0];
+      const plain = {
+        HO_CAP: 'Today\'s limit of 200 sent tasks is reached.',
+        HO_NOT_YOURS: 'This task is not yours to change.',
+        HO_STATE: 'This task has already moved on. Refresh to see it.',
+        HO_NOT_FOUND: 'This task is no longer there.'
+      };
+      const displayMsg = code === 'HO_BAD_INPUT' ? m.slice(m.indexOf(':') + 1).trim()
+        : (plain[code] || 'That did not go through. Check the connection and try again.');
+      errEl.textContent = displayMsg;
+      errEl.style.display = 'block';
+    }
+
+    mount.innerHTML = '';
+    mount.hidden = true;
+    startTimer();
+    reload();
+
+    return {
+      reload: reload
+    };
+  };
+})();
+
+// glue: Video System (Claude, 8 Nov 2026). The crew's V1 draft read window.currentUser and window.hoCard, which a
+// let or const global never is, so it was rewritten here. Mounts the From card under the page head of the person's
+// first screen (dashboard or my_dashboard). The mount is one element kept across renders, because every render and
+// the 3 minute refresh rewrite #pageContent. Writes only through the card's bb_handoff_* calls.
+(function () {
+  'use strict';
+  var mount = null, card = null, who = null;
+  function user() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser : null; }
+  function myId() {
+    var u = user(); if (!u) return null;
+    var n = String(u.name).toUpperCase(), list = (typeof DATA !== 'undefined' && DATA && DATA.teamMembers) || [];
+    var hit = list.filter(function (m) { return String(m.name || '').toUpperCase() === n; });
+    var m = hit.filter(function (x) { return x.active !== false; })[0] || hit[0];
+    var id = m ? m.id : (typeof VIDEO_MEMBER_IDS !== 'undefined' ? VIDEO_MEMBER_IDS[n] : null);
+    return id ? Number(id) : null;
+  }
+  function today() { return new Date(Date.now() + 19800000).toISOString().slice(0, 10); }
+  async function call(path, body) {
+    var h = { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }, o = { headers: h, cache: 'no-store' };
+    if (body) { h['Content-Type'] = 'application/json'; o.method = 'POST'; o.body = JSON.stringify(body); }
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + path, o), t = await r.text(), j = null;
+    try { j = t ? JSON.parse(t) : null; } catch (e) { j = null; }
+    if (!r.ok) throw new Error((j && j.message) || ('HTTP ' + r.status));
+    return j;
+  }
+  function clientName(id) {
+    var c = ((typeof DATA !== 'undefined' && DATA && DATA.clients) || []).find(function (x) { return Number(x.id) === Number(id); });
+    return c ? c.name : '';
+  }
+  function deps() {
+    return { me: function () { var u = user(); return u ? u.name : ''; }, myId: myId, today: today,
+      get: function (p) { return call(p); }, rpc: function (n, b) { return call('rpc/' + n, b); },
+      clientName: clientName, toast: function (m) { if (typeof toast === 'function') toast(m, 'success'); } };
+  }
+  function place() {
+    var u = user(), pc = document.getElementById('pageContent'); if (!pc) return;
+    if (who && (!u || u.name !== who)) { if (mount) mount.remove(); mount = null; card = null; who = null; }
+    var page = typeof currentPage !== 'undefined' ? currentPage : '';
+    var loaded = typeof DATA !== 'undefined' && DATA && (DATA.teamMembers || []).length; /* after the first fetchAll, so names resolve */
+    if (!u || !loaded || !myId() || (page !== 'dashboard' && page !== 'my_dashboard')) { if (mount && mount.parentNode) mount.remove(); return; }
+    if (!mount) { mount = document.createElement('div'); mount.id = 'ho-card-mount'; mount.hidden = true; }
+    var head = pc.querySelector(':scope > .page-head');
+    if (head ? head.nextElementSibling !== mount : pc.firstElementChild !== mount) pc.insertBefore(mount, head ? head.nextElementSibling : pc.firstChild);
+    if (!card) { who = u.name; card = hoCard(mount, deps()); }
+  }
+  function selfcheck() {
+    var R = [], ok = function (n, p, d) { R.push({ name: 'From card: ' + n, pass: !!p, detail: d || '' }); };
+    var all = document.querySelectorAll('#ho-card-mount'), m = all[0], h = m && m.previousElementSibling;
+    ok('the card code is in the page', typeof hoCard === 'function', typeof hoCard);
+    ok('the card is mounted at most once', all.length <= 1, all.length + ' found');
+    ok('the card sits under the page head', !m || !m.parentNode || !h || h.classList.contains('page-head'), m ? 'mounted' : 'not on this page');
+    ok('the Colombo day reads YYYY-MM-DD', /^\d{4}-\d\d-\d\d$/.test(today()), today());
+    return R;
+  }
+  window.BBHO = { selfcheck: selfcheck, reload: function () { if (card) card.reload(true); } };
+  function wire() {
+    var pc = document.getElementById('pageContent');
+    if (pc) new MutationObserver(place).observe(pc, { childList: true });
+    setInterval(function () { if (!card || !user()) place(); }, 1000);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+})();
+</script>
+<!-- @@BBHO_FROM_CARD@@ END -->
