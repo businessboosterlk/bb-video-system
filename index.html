@@ -929,7 +929,7 @@ body:has(.m-sheet,.modal-backdrop) #bbpush-pill{display:none!important}
   <div class="gd-wrap" id="gdWrap" hidden role="dialog" aria-modal="true" aria-labelledby="gdH">
     <div class="gd-top">
       <div class="gd-dots" id="gdDots"></div>
-      <button class="gd-skip" id="gdSkip" onclick="gdEnd()">Skip</button>
+      <button class="gd-skip" id="gdSkip" data-close onclick="gdEnd()">Skip</button>
     </div>
     <div class="gd-body">
       <div class="gd-ic" id="gdIc"></div>
@@ -1832,11 +1832,11 @@ function gdCards(){
 }
 let GD_I=0;
 function gdOpen(){const w=document.getElementById('gdWrap');if(!w)return;
-  GD_I=0;w.hidden=false;document.body.style.overflow='hidden';gdRender();}
+  GD_I=0;w.hidden=false;const ap=document.getElementById('app');if(ap)ap.classList.remove('nav-open');document.body.style.overflow='hidden';gdRender();if(window.BBF)BBF.sync();}
 function gdEnd(){const w=document.getElementById('gdWrap');if(!w)return;
   w.hidden=true;document.body.style.overflow='';
   try{localStorage.setItem('bbvid_guide_seen','1');}catch(e){}
-  renderGuideRow();}
+  renderGuideRow();if(window.BBF)BBF.sync();}
 function gdGo(d){const n=gdCards().length;
   if(GD_I+d>=n){gdEnd();return;}
   GD_I=Math.max(0,GD_I+d);gdRender();}
@@ -5211,8 +5211,8 @@ window.openProjectForm=openProjectForm;window.openProjectDetail=openProjectDetai
    ============================================================ */
 (function(){
   function appEl(){return document.getElementById('app');}
-  function closeDrawer(){var a=appEl();if(a)a.classList.remove('nav-open');}
-  function toggleDrawer(){var a=appEl();if(a)a.classList.toggle('nav-open');}
+  function closeDrawer(){var a=appEl();if(a)a.classList.remove('nav-open');if(window.BBF)BBF.sync();}
+  function toggleDrawer(){var a=appEl();if(a)a.classList.toggle('nav-open');if(window.BBF)BBF.sync();}
   var mb=document.getElementById('mMenuBtn');
   if(mb)mb.addEventListener('click',function(e){e.stopPropagation();toggleDrawer();});
   var ov=document.getElementById('mNavOverlay');
@@ -7331,7 +7331,12 @@ select::-ms-expand{display:none}
    panels are deliberately excluded: freezing the whole page behind a dropdown
    is wrong behaviour, not a missing feature. */
 var BBF=(function(){
- var OVS='.modal-backdrop, .m-sheet';
+ /* 8 Nov 2026 (BUILD 5 click path): the How this works guide is a full screen sheet too, so Back closes it instead of
+    leaving the app. It matches only while shown, so at rest the self test still finds no overlay and opens a real one.
+    gdOpen and gdEnd call BBF.sync, because showing it is an attribute change the body observer does not see.
+    The phone menu drawer is the same: open, it holds a history entry, so Back shuts the menu and stays in the app.
+    It matches through .nav-open, never through its fade, so a closing drawer is closed at once. */
+ var OVS='.modal-backdrop, .m-sheet, .gd-wrap:not([hidden]), .app.nav-open .m-nav-overlay';
  var lockedY=0, locked=false, lastFocus=null, histDepth=0, expectPop=0, expectTimer=null;
  /* Our own history.go is answered by a popstate that must not close anything. */
  function selfBack(k){expectPop++;clearTimeout(expectTimer);
@@ -7392,6 +7397,7 @@ var BBF=(function(){
  /* Back closes the sheet, it does not leave the app. On Android this is the
     loudest tell that something is a web page. */
  function closeTop(){var ov=anyOpen();if(!ov)return false;
+  if(ov.classList.contains('m-nav-overlay')){ov.click();return true;}  /* the drawer shuts on a tap of its shade */
   var btn=ov.querySelector('[data-close],[onclick*="close"],[onclick*="Close"]');
   if(btn){btn.click();return true;}
   if(typeof closeModal==='function'){try{closeModal();return true;}catch(e){}}

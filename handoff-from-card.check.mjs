@@ -166,6 +166,32 @@ for (const [size, opts] of [['phone', { viewport: { width: 390, height: 844 }, d
   pass('sign out: no page errors', errs.length === 0, errs.join(' | ').slice(0, 300));
   await ctx.close();
 }
+/* BUILD 5 click path (8 Nov 2026): Back shuts the phone menu and the How this works guide and stays in the app.
+   Both used to leave the app on the first Back, because neither held a history entry. */
+{
+  const { ctx, p, errs } = await page(b, { viewport: { width: 402, height: 874 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }, []);
+  const url = p.url();
+  const st = async () => p.url() !== url ? { left: true } : p.evaluate(() => ({ nav: document.getElementById('app').classList.contains('nav-open'), gd: !document.getElementById('gdWrap').hidden, lock: document.body.classList.contains('sheet-open') }));
+  await p.locator('#mMenuBtn').click(); await p.waitForTimeout(450);
+  const o = await st();
+  await p.evaluate(() => history.back()); await p.waitForTimeout(1400);
+  const s1 = await st();
+  pass('phone Back once shuts the open menu and stays in the app', o.nav && !s1.left && !s1.nav && !s1.lock, JSON.stringify([o, s1]));
+  if (!s1.left) {
+    await p.locator('#mMenuBtn').click(); await p.waitForTimeout(450);
+    await p.locator('#sidebarNav [data-nav="pipeline"]').click(); await p.waitForTimeout(900);
+    const s2 = await st();
+    pass('phone a menu item shuts the menu and opens its page', !s2.left && !s2.nav && await p.evaluate(() => currentPage) === 'pipeline', JSON.stringify(s2));
+    if (await p.evaluate(() => !document.getElementById('app').classList.contains('nav-open'))) { await p.locator('#mMenuBtn').click(); await p.waitForTimeout(450); }
+    await p.locator('.gd-reopen').click(); await p.waitForTimeout(500);
+    const g = await st();
+    await p.evaluate(() => history.back()); await p.waitForTimeout(1200);
+    const g1 = await st();
+    pass('phone Back once shuts the How this works guide and stays in the app', g.gd && !g1.left && !g1.gd && !g1.lock, JSON.stringify([g, g1]));
+  } else pass('phone the menu and guide walk could not go on', false, 'Back left the app');
+  pass('phone menu and guide: no page errors', errs.length === 0, errs.join(' | ').slice(0, 300));
+  await ctx.close();
+}
 /* signed out: no card */
 {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
