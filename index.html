@@ -10709,6 +10709,7 @@ const hoCard = (function() {
 (function () {
   'use strict';
   var mount = null, card = null, who = null;
+  var PHONE = window.matchMedia ? window.matchMedia('(max-width:768px)') : null;
   function user() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser : null; }
   function myId() {
     var u = user(); if (!u) return null;
@@ -10746,7 +10747,11 @@ const hoCard = (function() {
     if (!u || !loaded || !myId() || (page !== 'dashboard' && page !== 'my_dashboard')) { if (mount && mount.parentNode) mount.remove(); return; }
     if (!mount) { mount = document.createElement('div'); mount.id = 'ho-card-mount'; mount.hidden = true; }
     var head = pc.querySelector(':scope > .page-head');
-    if (head ? head.nextElementSibling !== mount : pc.firstElementChild !== mount) pc.insertBefore(mount, head ? head.nextElementSibling : pc.firstChild);
+    /* Thulaib, 8 Nov 2026 (bb_pending 1594): on a phone the card goes above Agent Alerts, which is 430px tall there
+       and pushed the card off the first screen. The desk keeps it under the page head. */
+    var alerts = PHONE && PHONE.matches ? pc.querySelector(':scope > #bbv-agent-alerts-section') : null;
+    if (alerts) { if (alerts.previousElementSibling !== mount) pc.insertBefore(mount, alerts); }
+    else if (head ? head.nextElementSibling !== mount : pc.firstElementChild !== mount) pc.insertBefore(mount, head ? head.nextElementSibling : pc.firstChild);
     if (!card) { who = u.name; card = hoCard(mount, deps()); }
   }
   function selfcheck() {
@@ -10754,7 +10759,9 @@ const hoCard = (function() {
     var all = document.querySelectorAll('#ho-card-mount'), m = all[0], h = m && m.previousElementSibling;
     ok('the card code is in the page', typeof hoCard === 'function', typeof hoCard);
     ok('the card is mounted at most once', all.length <= 1, all.length + ' found');
-    ok('the card sits under the page head', !m || !m.parentNode || !h || h.classList.contains('page-head'), m ? 'mounted' : 'not on this page');
+    var nx = m && m.nextElementSibling, onPhone = !!(PHONE && PHONE.matches);
+    ok(onPhone ? 'the card sits above Agent Alerts on a phone' : 'the card sits under the page head',
+      !m || !m.parentNode || (onPhone && nx && nx.id === 'bbv-agent-alerts-section') || !h || h.classList.contains('page-head'), m ? 'mounted' : 'not on this page');
     ok('the Colombo day reads YYYY-MM-DD', /^\d{4}-\d\d-\d\d$/.test(today()), today());
     return R;
   }
@@ -10762,6 +10769,7 @@ const hoCard = (function() {
   function wire() {
     var pc = document.getElementById('pageContent');
     if (pc) new MutationObserver(place).observe(pc, { childList: true });
+    if (PHONE) { if (PHONE.addEventListener) PHONE.addEventListener('change', place); else if (PHONE.addListener) PHONE.addListener(place); }
     setInterval(function () { if (!card || !user()) place(); }, 1000);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();

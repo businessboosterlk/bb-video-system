@@ -73,7 +73,11 @@ for (const [size, opts] of [['phone', { viewport: { width: 390, height: 844 }, d
   const { ctx, p, calls, reads, errs } = await page(b, opts, CARD);
   const card = p.locator('#ho-card-mount .ho-card');
   pass(`${L} Ushane lands on the dashboard`, await p.evaluate(() => currentPage) === 'dashboard' && /Welcome back, USHANE/.test(await p.textContent('#pageContent .page-title')));
-  pass(`${L} the card sits right under the page head`, await p.evaluate(() => { const m = document.getElementById('ho-card-mount'); return !!m && !m.hidden && m.previousElementSibling && m.previousElementSibling.classList.contains('page-head'); }));
+  /* Thulaib, 8 Nov 2026 (bb_pending 1594): on a phone the card sits above Agent Alerts; on the desk under the page head */
+  const PLACED = (ph) => { const m = document.getElementById('ho-card-mount'); if (!m) return false; const a = document.getElementById('bbv-agent-alerts-section'); return ph ? (!!a && m.nextElementSibling === a) : (!!m.previousElementSibling && m.previousElementSibling.classList.contains('page-head')); };
+  const ph = size === 'phone';
+  pass(`${L} ${ph ? 'the card sits above Agent Alerts' : 'the card sits right under the page head'}`, await p.evaluate(([f, ph]) => { const m = document.getElementById('ho-card-mount'); return !!m && !m.hidden && eval(f)(ph); }, [PLACED.toString(), ph]));
+  if (ph) { const t = await p.evaluate(() => [document.getElementById('ho-card-mount').getBoundingClientRect().top, document.getElementById('bbv-agent-alerts-section').getBoundingClientRect().top]); pass(`${L} the card is drawn above Agent Alerts`, t[0] < t[1], t.map(Math.round).join(' < ')); }
   const shape = await p.evaluate(() => [...document.querySelectorAll('#pageContent > *')].filter(x => x.id !== 'ho-card-mount').map(x => x.className).join('|'));
   pass(`${L} the rest of the first screen is the same as with no card`, shape === base.kids, shape.slice(0, 120));
   pass(`${L} card shows From Thulaib`, (await card.locator('.ho-card-title').textContent().catch(() => '')) === 'From Thulaib');
@@ -133,12 +137,12 @@ for (const [size, opts] of [['phone', { viewport: { width: 390, height: 844 }, d
   const r0 = reads.length;
   await p.evaluate(() => { window.__hoMount = document.getElementById('ho-card-mount'); renderPage(); });
   await p.waitForTimeout(300);
-  pass(`${L} after a refresh the same card is back under the head, with no new read`, await p.evaluate(() => { const m = document.getElementById('ho-card-mount'); return m === window.__hoMount && m.previousElementSibling.classList.contains('page-head') && document.querySelectorAll('#ho-card-mount').length === 1; }) && reads.length === r0, `reads ${r0} then ${reads.length}`);
+  pass(`${L} after a refresh the same card is back in its place, with no new read`, await p.evaluate(([f, ph]) => { const m = document.getElementById('ho-card-mount'); return m === window.__hoMount && eval(f)(ph) && document.querySelectorAll('#ho-card-mount').length === 1; }, [PLACED.toString(), ph]) && reads.length === r0, `reads ${r0} then ${reads.length}`);
   /* another page: the card is not there; back to the dashboard: it is */
   await p.evaluate(() => navTo('pipeline')); await p.waitForTimeout(600);
   pass(`${L} the Pipeline page has no card`, await p.locator('#ho-card-mount').count() === 0);
   await p.evaluate(() => navTo('dashboard')); await p.waitForTimeout(600);
-  pass(`${L} back on the dashboard the card is there again`, await p.locator('#pageContent > .page-head + #ho-card-mount .ho-card').count() === 1);
+  pass(`${L} back on the dashboard the card is there again, in its place`, await p.locator('#pageContent > #ho-card-mount .ho-card').count() === 1 && await p.evaluate(([f, ph]) => eval(f)(ph), [PLACED.toString(), ph]));
   /* the page's own self test: the card's checks pass */
   const st = await p.evaluate(async () => { const r = await runSelfTest(); return r.results.filter(x => /^From card/.test(x.name)).map(x => ({ n: x.name, p: x.pass, d: x.detail })); });
   pass(`${L} runSelfTest runs the 4 From card checks and all pass`, st.length === 4 && st.every(x => x.p), st.filter(x => !x.p).map(x => x.n + ' ' + x.d).join('; '));
