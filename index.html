@@ -3020,12 +3020,11 @@ async function bulkMoveProjects(newStage){
      silent failure, should the toggle ever reach an editor. */
   const _no=ids.map(id=>getProject(id)).filter(Boolean).map(p=>vidMoveRefusal(p.current_stage,newStage)).find(Boolean);
   if(_no){toast(_no,'error');return;}
-  /* Team Score (L-VID-066): one reason or one set of stars for the whole run,
-     asked once before it starts. Cancel moves nothing. */
+  /* Team Score (L-VID-066): one set of stars for the whole run, asked once
+     before it starts. Cancel moves nothing. L-VID-068 (Ushane): a bulk move
+     into Changes asks for nothing, same as a single one. */
   const _sel=ids.map(id=>getProject(id)).filter(Boolean);
   const pre={};
-  const _back=_sel.filter(p=>newStage==='changes'&&p.current_stage!=='changes');
-  if(_back.length){const a=await tsAskReason(_back[0].title,_back[0].current_stage,_back.length);if(!a){const b=$('#bulkMoveTo');if(b)b.value='';return;}pre.reason=a.reason;}
   const _pass=_sel.filter(p=>tsIsPass(p.current_stage,newStage));
   if(_pass.length){const a=await tsAskStars(_pass[0].title,newStage,_pass.length);if(!a){const b=$('#bulkMoveTo');if(b)b.value='';return;}pre.stars=a.stars;}
   await _runBulk(`Moved to ${lbl} —`, ids, async (pid)=>{
@@ -3383,25 +3382,20 @@ async function vshInsert(pid,stage,quiet){
 }
 
 /* ══ TEAM SCORE, 6 Nov 2026 (bb_pending 1440, L-VID-066) ═════════════════
-   Spec: ~/bb-systems/team-score/SPEC.md. Every move into Changes asks why and
-   every pass out of Video Head Review asks for stars, before anything is
-   written. Write order: card, stage log, then the review event. A refused event
-   keeps the move and says so. A move into Editing with no deadline gets one,
-   3 working days (Mon to Fri, Colombo) from the move, in the same card write. */
-const TS_SEND_BACK_FROM=['team_review','video_head_review','coo_check','rendering','editing'];
-const TS_CLIENT_FROM=['client_review','client_changes'];
+   Spec: ~/bb-systems/team-score/SPEC.md. A real pass out of Video Head Review
+   asks for stars before anything is written. Write order: card, stage log, then
+   the review event. A refused event keeps the move and says so. A move into
+   Editing with no deadline gets one, 3 working days (Mon to Fri, Colombo) from
+   the move, in the same card write.
+   L-VID-068, 9 Nov 2026 (Ushane): the reason sheet on every move into Changes
+   is gone. Team Score counts send-backs from stage history, so the count still
+   stands and the report reads "No reason recorded". */
 function tsStageIdx(k){return STAGES.findIndex(s=>s.key===k)}
-/* The five listed stages are send backs, the two client stages are client changes.
-   Any other stage (rare: Video Shot, Cutting, Add to Drive, Rejected) is a send back
-   before Client Review and a client change after it, so no reason is ever lost. */
-function tsChangeKind(from){
-  if(TS_SEND_BACK_FROM.includes(from))return 'send_back';
-  if(TS_CLIENT_FROM.includes(from))return 'client_change';
-  const i=tsStageIdx(from);
-  return (i>-1&&i<tsStageIdx('client_review'))?'send_back':'client_change';
-}
 function tsIsPass(from,to){
-  if(from!=='video_head_review'||to==='changes'||to==='rejected')return false;
+  /* L-VID-068, 9 Nov 2026 (Ushane): Video Head Review to Team Review is a routine
+     hand-over, not the pass, so it asks for nothing. Stars stay on the real pass
+     out of Video Head Review (COO Check and beyond). */
+  if(from!=='video_head_review'||to==='changes'||to==='rejected'||to==='team_review')return false;
   return tsStageIdx(to)>tsStageIdx(from);
 }
 /* Calendar days in COLOMBO (UTC+05:30), whatever the device clock says. The
@@ -3466,12 +3460,6 @@ function vsAsk(o){
     });
   });
 }
-function tsAskReason(title,from,count){
-  return vsAsk({kind:'reason',title:'Why is it going back?',
-    sub:(count>1?count+' videos':title)+' · '+stageLabel(from)+' to Changes',
-    placeholder:'What needs fixing',hint:'Write at least 3 characters so the editor knows what to fix.',
-    go:count>1?'Send '+count+' back to Changes':'Send back to Changes'});
-}
 function tsAskStars(title,to,count){
   return vsAsk({kind:'stars',title:'How good was this edit?',
     sub:(count>1?count+' videos, same stars for each':title)+' · Video Head Review to '+stageLabel(to),
@@ -3521,18 +3509,12 @@ async function moveProject(project,newStage,pre){
     return false;
   }
   /* Team Score (L-VID-066): ask before anything is written. An undo asks nothing
-     and records nothing; a bulk run brings one answer for all its videos in pre. */
+     and records nothing; a bulk run brings one answer for all its videos in pre.
+     L-VID-068 (Ushane): a move into Changes asks for nothing any more. */
   let _ts=null;
   if(!_u){
     const _from=project.current_stage;
-    if(newStage==='changes'){
-      let reason=pre&&pre.reason;
-      if(!reason){
-        if(_bulkRunning)throw new Error('A reason is needed to send a video back');
-        const a=await tsAskReason(project.title,_from,1);if(!a)return false;reason=a.reason;
-      }
-      _ts={kind:tsChangeKind(_from),reason};
-    }else if(tsIsPass(_from,newStage)){
+    if(tsIsPass(_from,newStage)){
       let stars=pre&&pre.stars;
       if(!stars){
         if(_bulkRunning)throw new Error('Stars are needed to pass a video');
@@ -4169,9 +4151,12 @@ function renderDriveLinks(){
   const raw=pool.filter(l=>l.tag==='raw_footage');
   const fin=pool.filter(l=>l.tag==='final_cut');
   const other=pool.filter(l=>!['raw_footage','final_cut'].includes(l.tag));
-  const stageCount=function(k){
-    return mine.filter(function(l){const p=dlProject(l.video_project_id);return !!p&&p.current_stage===k}).length;
-  };
+  /* L-VID-068, 9 Nov 2026 (Ushane): a stage chip counts the VIDEOS sitting in
+     that stage, not their link rows, so Client Review reads like the board and
+     a video moved in yesterday with no link yet still counts and still shows. */
+  const inClientP=function(p){return !driveClient||(p.client_id!=null?String(p.client_id):'none')===driveClient;};
+  const liveInStage=function(k){return (DATA.projects||[]).filter(function(p){return p.current_stage===k&&inClientP(p)});};
+  const stageCount=function(k){return liveInStage(k).length;};
   $('#pageSub').textContent=`${raw.length} raw · ${fin.length} final · ${other.length} other`+
     (driveStage?(' · '+((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)):'')+
     (driveClient?(' · '+(driveClient==='none'?'no client':((getClient(parseInt(driveClient))||{}).name||'client'))):'');
@@ -4186,7 +4171,27 @@ function renderDriveLinks(){
      filtered to nothing with no way to see why. */
   if(driveClient&&!perClient[driveClient])driveClient='';
   const renderRows=arr=>arr.length?`<table class="tbl"><thead><tr><th>Client and project</th><th>Link title</th><th>URL</th><th>Added by</th><th>When</th></tr></thead><tbody>${arr.map(l=>{const p=dlProject(l.video_project_id);const cl=p?getClient(p.client_id):null;const st=p?(STAGES.find(x=>x.key===p.current_stage)||{}):null;
-      return `<tr class="clickable" data-pid="${l.video_project_id}"><td><div class="dl-client">${esc(cl?cl.name:'no client')}</div><div class="dl-title">${esc(p?.title||'—')}</div>${(!driveStage&&st&&st.label)?`<span class="dl-stagetag"><span class="stage-dot s-${p.current_stage}"></span>${esc(st.label)}</span>`:''}</td><td>${esc(l.label||'(no title)')}</td><td><a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a></td><td class="muted">${esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
+      return `<tr class="clickable" data-pid="${l.video_project_id}"><td><div class="dl-client">${esc(cl?cl.name:'no client')}</div><div class="dl-title">${esc(p?.title||'—')}</div>${(!driveStage&&st&&st.label)?`<span class="dl-stagetag"><span class="stage-dot s-${p.current_stage}"></span>${esc(st.label)}</span>`:''}</td><td>${l._nolink?'<span class="muted">—</span>':esc(l.label||'(no title)')}</td><td>${l._nolink?`<span class="muted">No ${driveTab==='final_cut'?'final video':driveTab==='raw_footage'?'raw clip':'other'} link yet</span>`:`<a href="${esc(l.url)}" target="_blank">${esc((l.url||'').slice(0,50))}${l.url&&l.url.length>50?'…':''}</a>`}</td><td class="muted">${l._nolink?'':esc(l.added_by||'')}</td><td class="muted">${fmtDateTime(l.created_at)}</td></tr>`}).join('')}</tbody></table>`:'<div class="link-empty">No links yet</div>';
+  /* L-VID-068, 9 Nov 2026 (Ushane): with a stage chosen the section used to list
+     LINK rows only, ordered by link date, so a video moved into Client Review
+     yesterday with no final link yet was invisible and videos with old links sank.
+     It now lists the VIDEOS in that stage, newest move first, each with its links
+     of the chosen type or one line saying no link yet. */
+  let tableRows;
+  const activeList=driveTab==='raw_footage'?raw:driveTab==='final_cut'?fin:other;
+  if(driveStage){
+    const stageProjects=liveInStage(driveStage).slice()
+      .sort(function(a,b){return String(b.updated_at||'').localeCompare(String(a.updated_at||''));});
+    const byPid={};activeList.forEach(function(l){(byPid[l.video_project_id]=byPid[l.video_project_id]||[]).push(l);});
+    const ordered=[];
+    stageProjects.forEach(function(p){
+      if(byPid[p.id]){ordered.push.apply(ordered,byPid[p.id]);delete byPid[p.id];}
+      else ordered.push({_nolink:true,video_project_id:p.id,created_at:p.updated_at});
+    });
+    /* links whose video is archived or otherwise off the live board still show, after */
+    Object.keys(byPid).forEach(function(k){ordered.push.apply(ordered,byPid[k]);});
+    tableRows=ordered.length?renderRows(ordered):'<div class="link-empty">No videos in this stage</div>';
+  }else tableRows=renderRows(activeList);
   $('#pageContent').innerHTML=`<div class="page-head"><div><div class="page-title">Drive Links</div><div class="page-sub">All raw footage and final video links across projects</div></div></div>
     <div class="dl-filter">
       <select class="filter-select" id="dlClient" aria-label="Filter by client">
@@ -4196,12 +4201,12 @@ function renderDriveLinks(){
       ${(driveClient||driveStage)?'<button class="btn btn-ghost btn-sm" data-action="dl-clear">Clear filters</button>':''}
     </div>
     <div class="dl-stages">
-      <button class="dl-chip${driveStage?'':' on'}" data-stage="">All stages <span class="dl-n">${mine.length}</span></button>
+      <button class="dl-chip${driveStage?'':' on'}" data-stage="">All stages <span class="dl-n">${STAGES.reduce(function(n,st){return n+stageCount(st.key)},0)}</span></button>
       ${STAGES.map(st=>{const c=stageCount(st.key);return c?`<button class="dl-chip${driveStage===st.key?' on':''}" data-stage="${st.key}"><span class="stage-dot s-${st.key}"></span>${st.label} <span class="dl-n">${c}</span></button>`:''}).join('')}
     </div>
     ${driveStage?`<div class="dl-why">${vicon('alert',13)}<span>Showing <b>${driveWantsFinal(driveStage)?'final videos':'raw clips'}</b>, because a video at <b>${esc((STAGES.find(x=>x.key===driveStage)||{}).label||driveStage)}</b> is ${driveWantsFinal(driveStage)?'finished work, not footage':'still being built from footage'}. Tap another tab to override.</span></div>`:''}
     <div class="tabs"><div class="tab ${driveTab==='raw_footage'?'active':''}" data-tab="raw_footage">Raw Clips (${raw.length})</div><div class="tab ${driveTab==='final_cut'?'active':''}" data-tab="final_cut">Final Videos (${fin.length})</div><div class="tab ${driveTab==='other'?'active':''}" data-tab="other">Other (${other.length})</div></div>
-    ${renderRows(driveTab==='raw_footage'?raw:driveTab==='final_cut'?fin:other)}
+    ${tableRows}
   `;
   const sel=document.getElementById('dlClient');
   if(sel)sel.onchange=function(){driveClient=sel.value;renderDriveLinks();};
